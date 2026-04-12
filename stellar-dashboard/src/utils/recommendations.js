@@ -1,22 +1,25 @@
-export function generateRecommendations({ cases, sensors, assets, ingestionTimeline }) {
+export function generateRecommendations({ cases, connectors, sensors, tenants, assets, ingestionTimeline }) {
   const recs = []
 
-  // 1. Sensor Coverage
-  const totalSensors = sensors.length
-  const offlineSensors = sensors.filter(s => s.status === 'offline').length
-  const offlinePct = totalSensors > 0 ? (offlineSensors / totalSensors) * 100 : 0
+  // Compatibilidade: aceita connectors ou sensors (legado)
+  const allConnectors = connectors ?? sensors ?? []
+
+  // 1. Connector Coverage
+  const totalConnectors = allConnectors.length
+  const offlineConnectors = allConnectors.filter(c => !c.active && c.status === 'offline').length
+  const offlinePct = totalConnectors > 0 ? (offlineConnectors / totalConnectors) * 100 : 0
   if (offlinePct > 20) {
     recs.push({
-      id: 'sensor-coverage',
+      id: 'connector-coverage',
       priority: offlinePct > 50 ? 'critical' : 'warning',
-      title: 'Sensor Connectivity Issues Detected',
-      description: `${offlineSensors} of ${totalSensors} sensors (${offlinePct.toFixed(0)}%) are currently offline, reducing your visibility coverage.`,
+      title: 'Conectores Inativos Detectados',
+      description: `${offlineConnectors} de ${totalConnectors} conectores (${offlinePct.toFixed(0)}%) estão inativos, reduzindo a cobertura de visibilidade.`,
       steps: [
-        'Identify offline sensors in the Sensors page',
-        'Check network connectivity to affected sensor hosts',
-        'Verify sensor service is running: `systemctl status stellar-sensor`',
-        'Review firewall rules for sensor communication ports',
-        'Contact Stellar Cyber support if sensors remain offline after 30 minutes',
+        'Identifique os conectores inativos na página de Sensores',
+        'Verifique a conectividade de rede dos conectores afetados',
+        'Confirme as credenciais e permissões de cada conector',
+        'Revise as regras de firewall para portas de comunicação',
+        'Contate o suporte Stellar Cyber se os conectores permanecerem offline por mais de 30 minutos',
       ],
       impact: Math.min(100, offlinePct * 1.5),
       category: 'Infrastructure',
@@ -47,7 +50,7 @@ export function generateRecommendations({ cases, sensors, assets, ingestionTimel
   }
 
   // 3. Case Backlog
-  const openCases = cases.filter(c => c.status === 'open').length
+  const openCases = cases.filter(c => ['new', 'open'].includes((c.status || '').toLowerCase())).length
   if (openCases > 50) {
     recs.push({
       id: 'case-backlog',
@@ -68,7 +71,7 @@ export function generateRecommendations({ cases, sensors, assets, ingestionTimel
 
   // 4. Critical cases open > 24h
   const staleCritical = cases.filter(c => {
-    if (c.severity !== 'critical') return false
+    if ((c.severity || '').toLowerCase() !== 'critical') return false
     const hrs = (Date.now() - new Date(c.createdAt).getTime()) / 3600000
     return hrs > 24
   })
@@ -90,27 +93,29 @@ export function generateRecommendations({ cases, sensors, assets, ingestionTimel
     })
   }
 
-  // 5. Asset Blind Spots
-  const staleAssets = assets.filter(a => {
-    if (!a.lastSeen) return true
-    const hrs = (Date.now() - new Date(a.lastSeen).getTime()) / 3600000
+  // 5. Connectors sem dados recentes (> 48h)
+  const allTenants = tenants ?? assets ?? []
+  const staleConnectors = allConnectors.filter(c => {
+    const ts = c.lastDataReceived || c.lastActivity || c.lastSeen
+    if (!ts) return true
+    const hrs = (Date.now() - new Date(ts).getTime()) / 3600000
     return hrs > 48
   })
-  if (staleAssets.length > 0 && assets.length > 0) {
-    const pct = ((staleAssets.length / assets.length) * 100).toFixed(0)
+  if (staleConnectors.length > 0 && allConnectors.length > 0) {
+    const pct = ((staleConnectors.length / allConnectors.length) * 100).toFixed(0)
     recs.push({
-      id: 'asset-blind-spots',
-      priority: pct > 30 ? 'warning' : 'info',
-      title: `${staleAssets.length} Assets Not Recently Active`,
-      description: `${pct}% of monitored assets have not reported activity in the last 48 hours — potential visibility blind spots.`,
+      id: 'stale-connectors',
+      priority: Number(pct) > 30 ? 'warning' : 'info',
+      title: `${staleConnectors.length} Conectores Sem Dados Recentes`,
+      description: `${pct}% dos conectores não reportaram atividade nas últimas 48 horas — possível ponto cego de visibilidade.`,
       steps: [
-        'Review the asset list in the Assets page',
-        'Verify agents or sensors are deployed on stale assets',
-        'Check if assets have been decommissioned and remove from inventory',
-        'Enable automated asset discovery to detect new unmonitored assets',
+        'Revise a lista de conectores na página de Sensores',
+        'Verifique credenciais e status de cada conector afetado',
+        'Cheque se a fonte de log ainda está ativa e exportando dados',
+        'Ative o monitoramento automático de conectores inativos',
       ],
-      impact: Math.min(85, staleAssets.length * 2),
-      category: 'Asset Coverage',
+      impact: Math.min(85, staleConnectors.length * 2),
+      category: 'Data Coverage',
     })
   }
 

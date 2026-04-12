@@ -5,7 +5,16 @@ import { Monitor } from 'lucide-react'
 export default function Assets() {
   const { data, loading } = useData()
 
-  const assets = data.assets.length > 0 ? data.assets : Array.from({ length: 12 }, (_, i) => ({
+  const assets = (data.tenants ?? []).length > 0
+    ? data.tenants.map(t => ({
+        id: t.id,
+        name: t.name,
+        type: `${t.dsNum} conector${t.dsNum !== 1 ? 'es' : ''}`,
+        ip: t.custId?.slice(0, 8) + '…',
+        lastSeen: t.createdAt,
+        status: 'active',
+      }))
+    : Array.from({ length: 12 }, (_, i) => ({
     id: `AST-${i + 1}`,
     name: `Asset-${i + 1}.corp.local`,
     type: ['endpoint', 'server', 'network', 'cloud'][i % 4],

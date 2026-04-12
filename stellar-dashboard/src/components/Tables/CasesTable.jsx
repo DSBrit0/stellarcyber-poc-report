@@ -59,8 +59,11 @@ export default function CasesTable({ cases, loading }) {
   }
 
   function exportCSV() {
-    const headers = ['Case ID', 'Name', 'Severity', 'Status', 'Assets Affected', 'Created At']
-    const rows = sorted.map(c => [c.id, `"${c.name}"`, c.severity, c.status, c.assetsAffected, c.createdAt])
+    const headers = ['Case ID', 'Nome', 'Severidade', 'Status', 'Tenant', 'Score', 'Criado Em']
+    const rows = sorted.map(c => [
+      c.id, `"${c.name}"`, c.severity, c.status,
+      `"${c.tenantName || ''}"`, c.score ?? '', c.createdAt,
+    ])
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -69,12 +72,13 @@ export default function CasesTable({ cases, loading }) {
   }
 
   const cols = [
-    { key: 'id', label: 'Case ID' },
-    { key: 'name', label: 'Name' },
-    { key: 'severity', label: 'Severity' },
-    { key: 'status', label: 'Status' },
-    { key: 'assetsAffected', label: 'Assets' },
-    { key: 'createdAt', label: 'Created' },
+    { key: 'id',            label: 'Case ID'  },
+    { key: 'name',          label: 'Nome'     },
+    { key: 'severity',      label: 'Severidade' },
+    { key: 'status',        label: 'Status'   },
+    { key: 'tenantName',    label: 'Tenant'   },
+    { key: 'score',         label: 'Score'    },
+    { key: 'createdAt',     label: 'Criado'   },
   ]
 
   if (loading) {
@@ -93,15 +97,15 @@ export default function CasesTable({ cases, loading }) {
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-200">Open Cases</h3>
-          <p className="text-xs text-gray-500 mt-0.5">{filtered.length} cases</p>
+          <h3 className="text-sm font-semibold text-gray-200">Casos de Segurança</h3>
+          <p className="text-xs text-gray-500 mt-0.5">{filtered.length} casos</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
-              placeholder="Search cases..."
+              placeholder="Buscar casos..."
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               className="text-xs rounded-lg pl-8 pr-3 py-2 w-48 outline-none"
@@ -149,7 +153,7 @@ export default function CasesTable({ cases, loading }) {
           <tbody>
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-10 text-gray-500">No cases found</td>
+                <td colSpan={7} className="text-center py-10 text-gray-500">Nenhum caso encontrado</td>
               </tr>
             ) : (
               paginated.map(c => (
@@ -158,13 +162,20 @@ export default function CasesTable({ cases, loading }) {
                   className="transition-colors hover:bg-white/[0.03]"
                   style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
                 >
-                  <td className="py-2.5 px-3 font-mono" style={{ color: '#00d4ff' }}>{c.id}</td>
+                  <td className="py-2.5 px-3 font-mono text-xs" style={{ color: '#00d4ff' }}>
+                    {String(c.id).slice(0, 12)}
+                  </td>
                   <td className="py-2.5 px-3 text-gray-300 max-w-[200px] truncate">{c.name}</td>
                   <td className="py-2.5 px-3"><SeverityBadge severity={c.severity} /></td>
                   <td className="py-2.5 px-3">
                     <span className="capitalize text-gray-400">{c.status}</span>
                   </td>
-                  <td className="py-2.5 px-3 text-gray-400">{c.assetsAffected}</td>
+                  <td className="py-2.5 px-3 text-gray-500 max-w-[120px] truncate">
+                    {c.tenantName || '—'}
+                  </td>
+                  <td className="py-2.5 px-3 text-gray-400">
+                    {c.score != null ? c.score.toFixed(1) : '—'}
+                  </td>
                   <td className="py-2.5 px-3 text-gray-500">{formatDate(c.createdAt)}</td>
                 </tr>
               ))

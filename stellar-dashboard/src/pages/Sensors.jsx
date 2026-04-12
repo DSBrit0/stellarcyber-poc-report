@@ -5,14 +5,23 @@ import { formatRelative } from '../utils/formatters'
 export default function Sensors() {
   const { data, loading } = useData()
 
-  const sensors = data.sensors.length > 0 ? data.sensors : Array.from({ length: 8 }, (_, i) => ({
-    id: `SNS-${i + 1}`,
-    name: `Sensor-${i + 1}`,
-    status: i % 4 === 3 ? 'offline' : 'online',
-    type: ['network', 'endpoint', 'cloud', 'ot'][i % 4],
-    location: ['Headquarters', 'Data Center', 'AWS us-east-1', 'Branch'][i % 4],
-    lastSeen: new Date(Date.now() - Math.random() * 2 * 3600000).toISOString(),
-  }))
+  const sensors = (data.connectors ?? []).length > 0
+    ? data.connectors.map(c => ({
+        id: c.id,
+        name: c.name,
+        status: c.active ? 'online' : 'offline',
+        type: c.type || c.category || 'unknown',
+        location: c.category || c.type || '—',
+        lastSeen: c.lastActivity || c.lastDataReceived,
+      }))
+    : Array.from({ length: 8 }, (_, i) => ({
+        id: `SNS-${i + 1}`,
+        name: `Connector-${i + 1}`,
+        status: i % 4 === 3 ? 'offline' : 'online',
+        type: ['saas', 'cloud', 'endpoint', 'network'][i % 4],
+        location: ['SaaS', 'Cloud', 'Endpoint', 'Network'][i % 4],
+        lastSeen: new Date(Date.now() - Math.random() * 2 * 3600000).toISOString(),
+      }))
 
   const online = sensors.filter(s => s.status === 'online').length
   const offline = sensors.filter(s => s.status !== 'online').length

@@ -1,20 +1,27 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
-import { fetchCases, fetchAssets, fetchSensors, fetchIngestionStats, fetchIngestionTimeline } from '../services/api'
+import {
+  fetchCases,
+  fetchTenants,
+  fetchConnectors,
+  fetchIngestionStats,
+  fetchIngestionTimeline,
+} from '../services/api'
 import { useAuth } from './AuthContext'
 
 const DataContext = createContext(null)
 
 export function DataProvider({ children }) {
   const { auth } = useAuth()
+
   const [data, setData] = useState({
     cases: [],
-    assets: [],
-    sensors: [],
+    tenants: [],      // substituiu "assets" — lista de tenants da instância
+    connectors: [],   // substituiu "sensors" — fontes de log / conectores
     ingestionStats: [],
     ingestionTimeline: [],
   })
-  const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState({})
+  const [loading, setLoading]       = useState(false)
+  const [errors, setErrors]         = useState({})
   const [lastRefresh, setLastRefresh] = useState(null)
   const intervalRef = useRef(null)
 
@@ -25,20 +32,21 @@ export function DataProvider({ children }) {
 
     const results = await Promise.allSettled([
       fetchCases(auth),
-      fetchAssets(auth),
-      fetchSensors(auth),
+      fetchTenants(auth),
+      fetchConnectors(auth),
       fetchIngestionStats(auth),
       fetchIngestionTimeline(auth),
     ])
 
-    const keys = ['cases', 'assets', 'sensors', 'ingestionStats', 'ingestionTimeline']
+    const keys = ['cases', 'tenants', 'connectors', 'ingestionStats', 'ingestionTimeline']
     const newData = {}
+
     results.forEach((result, i) => {
       if (result.status === 'fulfilled') {
         newData[keys[i]] = result.value
       } else {
-        newErrors[keys[i]] = result.reason?.message || 'Failed to fetch'
-        newData[keys[i]] = data[keys[i]] // keep stale data
+        newErrors[keys[i]] = result.reason?.message || 'Falha ao buscar dados'
+        newData[keys[i]] = data[keys[i]]  // mantém dados anteriores em caso de erro
       }
     })
 
@@ -46,9 +54,9 @@ export function DataProvider({ children }) {
     setErrors(newErrors)
     setLastRefresh(new Date())
     setLoading(false)
-  }, [auth])
+  }, [auth]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-refresh every 5 minutes
+  // Busca inicial + auto-refresh a cada 5 minutos
   useEffect(() => {
     if (!auth) return
     fetchAll()

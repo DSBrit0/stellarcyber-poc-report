@@ -1,40 +1,60 @@
 import axios from 'axios'
+import { debug, info, warn, error as logError, validateLoginFields, validateAuthResponse, logApiError } from '../utils/logger'
 
-export async function authenticate({ url, username, password, tenant, jwtToken }) {
-  // Demo mode — bypass auth entirely
-  if (jwtToken === 'DEMO_MODE_TOKEN') return 'DEMO_MODE_TOKEN'
+/**
+ * Autentica na instância Stellar Cyber via HTTP Basic Auth.
+ *
+ * Endpoint: POST <baseUrl>/connect/api/v1/access_token
+ * Auth:     Basic  username:password  (Base64)
+ *
+ * Resposta: { access_token: "eyJ...", exp: <unix_timestamp> }
+ *
+ * O access_token JWT é usado como Bearer em todas as chamadas subsequentes.
+ * O tenant_id NÃO é utilizado na autenticação — apenas para filtrar dados.
+ */
+export async function authenticate({ url, username, password, jwtToken }) {
+  // Demo mode
+  if (jwtToken === 'DEMO_MODE_TOKEN') {
+    info('auth', 'Modo demo ativado — sem chamada real à API')
+    return 'DEMO_MODE_TOKEN'
+  }
 
-  // If a JWT token is manually provided, use it directly
+  // JWT manual
   if (jwtToken && jwtToken.trim()) {
+    info('auth', 'Token JWT manual fornecido — bypass do login')
     return jwtToken.trim()
   }
 
-  const endpoint = `${url.replace(/\/$/, '')}/connect/token`
+  // 1. Validar campos antes de chamar a API
+  const { valid, errors } = validateLoginFields({ url, username, password })
+  if (!valid) {
+    throw new Error(errors[0])
+  }
 
-  const params = new URLSearchParams()
-  params.append('grant_type', 'password')
-  params.append('username', username)
-  params.append('password', password)
-  params.append('tenant', tenant)
+  const baseUrl  = url.replace(/\/$/, '')
+  const endpoint = `${baseUrl}/connect/api/v1/access_token`
+
+  debug('auth', 'Iniciando autenticação', { endpoint, username })
 
   try {
-    const res = await axios.post(endpoint, params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    const res = await axios.post(endpoint, null, {
+      auth: { username: username.trim(), password },
+      timeout: 15000,
     })
-    const token = res.data?.access_token
-    if (!token) throw new Error('No access token returned from server')
+
+    // 2. Validar resposta
+    const { token } = validateAuthResponse(res.data, res.status)
     return token
+
   } catch (err) {
-    if (err.response) {
-      const status = err.response.status
-      if (status === 401) throw new Error('Invalid credentials — check username/password')
-      if (status === 403) throw new Error('Access denied — insufficient permissions')
-      if (status === 404) throw new Error('Auth endpoint not found — check URL')
-      throw new Error(`Server error (${status}): ${err.response.data?.message || 'Unknown error'}`)
+    // Erros já tratados (validação de campos ou validateAuthResponse)
+    if (err.message && !err.response && !err.code) {
+      logError('auth', err.message)
+      throw err
     }
-    if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED') {
-      throw new Error('Cannot reach the server — check the URL and network connectivity')
-    }
-    throw new Error(err.message || 'Connection failed')
+
+    // 3. Checar e logar erros de API/rede
+    const friendly = logApiError(err, 'auth')
+    throw new Error(friendly)
   }
 }
