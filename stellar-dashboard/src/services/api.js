@@ -41,11 +41,11 @@ function demoCases() {
   }))
 }
 
-function demoTenants() {
+function demoAssets() {
   return [
-    { id: 'T1', name: 'HQ Tenant',     custId: 'abc001', dsNum: 12, userNum: 45, createdAt: new Date(Date.now() - 30 * 86400000).toISOString() },
-    { id: 'T2', name: 'Branch Office', custId: 'abc002', dsNum: 5,  userNum: 12, createdAt: new Date(Date.now() - 20 * 86400000).toISOString() },
-    { id: 'T3', name: 'Cloud Tenant',  custId: 'abc003', dsNum: 8,  userNum: 30, createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
+    { id: 'A1', name: 'HQ Assets',      custId: 'abc001', dsNum: 12, userNum: 45, createdAt: new Date(Date.now() - 30 * 86400000).toISOString() },
+    { id: 'A2', name: 'Branch Assets',  custId: 'abc002', dsNum: 5,  userNum: 12, createdAt: new Date(Date.now() - 20 * 86400000).toISOString() },
+    { id: 'A3', name: 'Cloud Assets',   custId: 'abc003', dsNum: 8,  userNum: 30, createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
   ]
 }
 
@@ -99,28 +99,10 @@ export async function fetchCases(auth) {
   }
 }
 
-// ─── Tenants ──────────────────────────────────────────────────────────────────
-
-export async function fetchTenants(auth) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchTenants → demo'); return demoTenants() }
-  try {
-    debug('api', `GET ${ENDPOINTS.TENANTS}`)
-    const res    = await createApiClient(auth).get(ENDPOINTS.TENANTS)
-    const raw    = res.data
-    const items  = raw?.data ?? (Array.isArray(raw) ? raw : [])
-    const result = normalizeTenants(items)
-    info('api', `fetchTenants ✅ ${result.length} tenants`)
-    return result
-  } catch (err) {
-    handleError(err, ENDPOINTS.TENANTS)
-  }
-}
-
 // ─── Assets ───────────────────────────────────────────────────────────────────
-// Tries ENDPOINTS.ASSETS first; falls back to ENDPOINTS.TENANTS if not available.
 
 export async function fetchAssets(auth) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchAssets → demo'); return demoTenants() }
+  if (IS_DEMO(auth)) { debug('api', 'fetchAssets → demo'); return demoAssets() }
   try {
     const params = { cust_id: auth.tenant }
     debug('api', `GET ${ENDPOINTS.ASSETS}`, params)
@@ -128,14 +110,11 @@ export async function fetchAssets(auth) {
     const res    = await createApiClient(auth).get(ENDPOINTS.ASSETS, { params })
     const raw    = res.data
     const items  = raw?.data ?? raw?.assets ?? (Array.isArray(raw) ? raw : [])
-    if (items.length === 0) throw new Error('empty')
     const result = normalizeAssets(items)
     info('api', `fetchAssets ✅ ${result.length} assets`)
     return result
-  } catch {
-    // Assets endpoint not available — fall back to tenants as asset proxy
-    warn('api', `${ENDPOINTS.ASSETS} not available — falling back to tenants`)
-    return fetchTenants(auth)
+  } catch (err) {
+    handleError(err, ENDPOINTS.ASSETS)
   }
 }
 
@@ -209,20 +188,6 @@ function normalizeSeverity(val) {
   if (['medium',   '2', 'p3'].includes(s)) return 'Medium'
   if (['low',      '1', 'p4'].includes(s)) return 'Low'
   return 'Medium'
-}
-
-function normalizeTenants(items) {
-  return items.map((t, i) => ({
-    id:        t.cust_id || `T-${i}`,
-    name:      t.cust_name || t.name || `Tenant ${i + 1}`,
-    custId:    t.cust_id || '',
-    dsNum:     t.ds_num || 0,
-    userNum:   t.user_num || 0,
-    orgId:     t.org_id || '',
-    createdAt: t.created_at
-      ? (typeof t.created_at === 'number' ? new Date(t.created_at * 1000).toISOString() : t.created_at)
-      : null,
-  }))
 }
 
 function normalizeAssets(items) {

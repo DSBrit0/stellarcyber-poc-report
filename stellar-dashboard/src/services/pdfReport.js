@@ -174,7 +174,6 @@ const ALL_TACTICS = [
 export function generatePDFReport({
   auth,
   cases           = [],
-  tenants         = [],
   connectors      = [],
   recommendations = [],
   generatedAt     = new Date(),
@@ -346,7 +345,6 @@ export function generatePDFReport({
       [s.kpiOpenCases,     String(openCases.length)],
       [s.kpiCritCases,     String(critCases.length)],
       [s.kpiMitreCov,      `${mitreCovPct}% (${i(s.kpiTacticsFmt, { detected: detectedTactics.size, total: ALL_TACTICS.length })})`],
-      [s.kpiTenants,       String(tenants.length)],
       [s.kpiFinalVerdict,  verdict],
     ],
     columnStyles: {
@@ -393,7 +391,6 @@ export function generatePDFReport({
       [s.envInstance, trunc(auth?.url || '—', 60)],
       [s.envUser,     auth?.username || '—'],
       [s.envSensors,  i(s.connIntegrated, { n: connectors.length })],
-      [s.envTenants,  i(s.entitiesMonitored, { n: tenants.length })],
       [s.envPeriod,   period],
     ],
     columnStyles: {

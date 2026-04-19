@@ -6,7 +6,6 @@ export const API_PREFIX = '/connect/api/v1'
 export const ENDPOINTS = {
   ACCESS_TOKEN: `${API_PREFIX}/access_token`,
   CASES:        `${API_PREFIX}/cases`,
-  TENANTS:      `${API_PREFIX}/tenants`,
   ASSETS:       `${API_PREFIX}/assets`,
   CONNECTORS:   `${API_PREFIX}/connectors`,
   EVENTS:       `${API_PREFIX}/events`,

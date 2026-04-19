@@ -56,7 +56,7 @@ export default function Report() {
     return e => setPocMeta(prev => ({ ...prev, [key]: e.target.value }))
   }
 
-  const { cases, tenants, connectors, ingestionTimeline } = data
+  const { cases, assets, connectors, ingestionTimeline } = data
 
   const recommendations = generateRecommendations({ cases, connectors, ingestionTimeline })
 
@@ -67,7 +67,7 @@ export default function Report() {
   const mitreRecs  = recommendations.filter(r => r.category === 'MITRE ATT&CK').length
 
   const hasErrors = Object.keys(errors).length > 0
-  const apiOk     = !hasErrors && cases.length + tenants.length + connectors.length > 0
+  const apiOk     = !hasErrors && cases.length + connectors.length > 0
 
   async function handleDownload() {
     setGenerating(true)
@@ -76,7 +76,6 @@ export default function Report() {
       downloadPDFReport({
         auth,
         cases,
-        tenants,
         connectors,
         recommendations,
         generatedAt: new Date(),
@@ -167,9 +166,9 @@ export default function Report() {
 
       {/* Data summary */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <SummaryCard icon={Shield}    color="#ff4444" label={t('report.cases')}           value={cases.length}           sub={`${openCases} · ${critCases} ${t('report.critical')}`}         loading={loading} error={!!errors.cases} />
-        <SummaryCard icon={Layers}    color="#00d4ff" label={t('report.assets')}           value={tenants.length}         sub={t('report.tenantsMonitored')}                                  loading={loading} error={!!errors.tenants} />
-        <SummaryCard icon={Radio}     color="#22c55e" label={t('report.sensors')}          value={connectors.length}      sub={`${activeConn} ${t('report.active') ?? 'ativos'}`}             loading={loading} error={!!errors.connectors} />
+        <SummaryCard icon={Shield}    color="#ff4444" label={t('report.cases')}           value={cases.length}           sub={`${openCases} · ${critCases} ${t('report.critical')}`}              loading={loading} error={!!errors.cases} />
+        <SummaryCard icon={Layers}    color="#00d4ff" label={t('report.assets')}           value={assets.length}          sub={t('report.assetsMonitored')}                                        loading={loading} error={!!errors.assets} />
+        <SummaryCard icon={Radio}     color="#22c55e" label={t('report.sensors')}          value={connectors.length}      sub={`${activeConn} ${t('report.active')}`}                             loading={loading} error={!!errors.connectors} />
         <SummaryCard icon={Lightbulb} color="#f59e0b" label={t('report.recommendations')} value={recommendations.length} sub={`${critRecs} ${t('report.critical')} · ${mitreRecs} ${t('report.mitre')}`} loading={loading} error={false} />
       </div>
 

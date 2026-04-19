@@ -15,7 +15,7 @@ export function DataProvider({ children }) {
 
   const [data, setData] = useState({
     cases:             [],
-    tenants:           [],
+    assets:            [],
     connectors:        [],
     ingestionStats:    [],
     ingestionTimeline: [],
@@ -38,7 +38,7 @@ export function DataProvider({ children }) {
       fetchIngestionTimeline(auth),
     ])
 
-    const keys = ['cases', 'tenants', 'connectors', 'ingestionStats', 'ingestionTimeline']
+    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline']
     const newData = {}
 
     for (let i = 0; i < results.length; i++) {

@@ -32,7 +32,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KPICard icon={AlertTriangle} label={t('dashboard.openCases')}        value={openCases}                               color="#ff4444" loading={loading} />
         <KPICard icon={Database}      label={t('dashboard.dataIngested')}     value={formatBytes(totalGB)}                    color="#00d4ff" loading={loading} />
-        <KPICard icon={Building2}     label={t('dashboard.tenants')}          value={data.tenants.length}                     color="#22c55e" loading={loading} />
+        <KPICard icon={Building2}     label={t('dashboard.assets')}           value={data.assets.length}                      color="#22c55e" loading={loading} />
         <KPICard icon={Plug}          label={t('dashboard.activeConnectors')} value={activeConnectors}                        color="#7c3aed" loading={loading} />
         <KPICard icon={Clock}         label={t('dashboard.lastEvent')}        value={lastEvent ? formatRelative(lastEvent.timestamp) : '—'} color="#f59e0b" loading={loading} />
       </div>

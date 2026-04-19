@@ -7,7 +7,7 @@ export default function Assets() {
   const { data, loading } = useData()
   const { t } = useLocale()
 
-  const assets = (data.tenants ?? []).map(t => ({
+  const assets = (data.assets ?? []).map(t => ({
     id:      t.id,
     name:    t.name,
     type:    `${t.dsNum} ${t.dsNum === 1 ? '' : ''}`,
