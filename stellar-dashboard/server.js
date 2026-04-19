@@ -1,19 +1,25 @@
+import 'dotenv/config'
 import express from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const PORT = 8080
+
+const PORT = process.env.PORT || 8080
+const HOST = process.env.HOST || '0.0.0.0'
 
 const app = express()
 
-// ── Static build ─────────────────────────────────────────────────────────────
+// ── Static build ──────────────────────────────────────────────────────────────
 app.use(express.static(join(__dirname, 'dist')))
 
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get('/health', (_req, res) => res.json({ status: 'ok' }))
+
 // ── Dynamic reverse proxy ─────────────────────────────────────────────────────
-// Frontend requests /proxy/* with header X-Proxy-Target: <stellar-cyber-url>
-// Server strips /proxy and forwards the request server-side (no browser CORS).
+// Frontend envia /proxy/* com header X-Proxy-Target: <url-da-instancia>
+// O servidor repassa a requisição server-side, evitando bloqueio de CORS.
 app.use(
   '/proxy',
   (req, res, next) => {
@@ -24,7 +30,7 @@ app.use(
     next()
   },
   createProxyMiddleware({
-    target: 'http://localhost',           // overridden per-request by router
+    target: 'http://localhost',
     router: req => req.headers['x-proxy-target'],
     changeOrigin: true,
     pathRewrite: { '^/proxy': '' },
@@ -42,11 +48,13 @@ app.use(
   })
 )
 
-// ── SPA fallback ─────────────────────────────────────────────────────────────
+// ── SPA fallback ──────────────────────────────────────────────────────────────
 app.get('*', (_req, res) => {
   res.sendFile(join(__dirname, 'dist', 'index.html'))
 })
 
-app.listen(PORT, () => {
-  console.log(`Stellar Dashboard → http://localhost:${PORT}`)
+// ── Start ─────────────────────────────────────────────────────────────────────
+app.listen(PORT, HOST, () => {
+  console.log(`Stellar Dashboard → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`)
+  console.log(`Acessível em → http://<ip-do-servidor>:${PORT}`)
 })
