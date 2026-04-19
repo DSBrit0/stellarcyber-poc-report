@@ -12,7 +12,7 @@ cd "$DIR"
 git pull origin main
 
 echo "==> Instalando dependências..."
-npm install --omit=dev
+npm install
 
 echo "==> Gerando build..."
 npm run build
