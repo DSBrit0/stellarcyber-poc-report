@@ -1,60 +1,127 @@
 import axios from 'axios'
-import { debug, info, warn, error as logError, validateLoginFields, validateAuthResponse, logApiError } from '../utils/logger'
+import { ENDPOINTS, HTTP } from './endpoints'
+import {
+  debug, info, warn, error as logError,
+  validateLoginFields, validateAuthResponse, logApiError,
+} from '../utils/logger'
 
 /**
- * Autentica na instância Stellar Cyber via HTTP Basic Auth.
+ * Step 1 — Authenticate with username + password via HTTP Basic Auth.
  *
- * Endpoint: POST <baseUrl>/connect/api/v1/access_token
- * Auth:     Basic  username:password  (Base64)
- *
- * Resposta: { access_token: "eyJ...", exp: <unix_timestamp> }
- *
- * O access_token JWT é usado como Bearer em todas as chamadas subsequentes.
- * O tenant_id NÃO é utilizado na autenticação — apenas para filtrar dados.
+ * Returns:
+ *   { token, exp, payload, mfaRequired: false }  — auth complete
+ *   { token: null, mfaRequired: true, sessionToken? } — MFA challenge received
  */
 export async function authenticate({ url, username, password, jwtToken }) {
-  // Demo mode
   if (jwtToken === 'DEMO_MODE_TOKEN') {
-    info('auth', 'Modo demo ativado — sem chamada real à API')
-    return 'DEMO_MODE_TOKEN'
+    info('auth', 'Demo mode — skipping real auth')
+    return { token: 'DEMO_MODE_TOKEN', exp: null, payload: null, mfaRequired: false }
   }
 
-  // JWT manual
   if (jwtToken && jwtToken.trim()) {
-    info('auth', 'Token JWT manual fornecido — bypass do login')
-    return jwtToken.trim()
+    info('auth', 'Manual JWT token provided — bypass login')
+    return { token: jwtToken.trim(), exp: null, payload: null, mfaRequired: false }
   }
 
-  // 1. Validar campos antes de chamar a API
   const { valid, errors } = validateLoginFields({ url, username, password })
-  if (!valid) {
-    throw new Error(errors[0])
-  }
+  if (!valid) throw new Error(errors[0])
 
-  const baseUrl  = url.replace(/\/$/, '')
-  const endpoint = `${baseUrl}/connect/api/v1/access_token`
+  const base     = url.replace(/\/$/, '')
+  const endpoint = `${base}${ENDPOINTS.ACCESS_TOKEN}`
 
-  debug('auth', 'Iniciando autenticação', { endpoint, username })
+  debug('auth', 'Starting authentication', { endpoint, username })
 
   try {
     const res = await axios.post(endpoint, null, {
       auth: { username: username.trim(), password },
-      timeout: 15000,
+      timeout: HTTP.AUTH_TIMEOUT,
     })
 
-    // 2. Validar resposta
-    const { token } = validateAuthResponse(res.data, res.status)
-    return token
+    // Detect explicit MFA requirement in the response body
+    if (res.data?.mfa_required || res.data?.otp_required || res.data?.requires_mfa) {
+      info('auth', 'MFA required by instance response')
+      return { token: null, exp: null, mfaRequired: true, sessionToken: res.data?.session_token ?? null }
+    }
+
+    const { token, exp, payload } = validateAuthResponse(res.data, res.status)
+    return { token, exp, payload, mfaRequired: false }
 
   } catch (err) {
-    // Erros já tratados (validação de campos ou validateAuthResponse)
+    // Some instances signal MFA requirement via a 401 body
+    if (err.response?.status === 401) {
+      const body   = err.response.data ?? {}
+      const errStr = String(body?.error ?? body?.error_description ?? '').toLowerCase()
+      if (body?.mfa_required || body?.otp_required || errStr.includes('mfa') || errStr.includes('otp')) {
+        info('auth', 'MFA required — detected from 401 response')
+        return { token: null, exp: null, mfaRequired: true }
+      }
+    }
+
     if (err.message && !err.response && !err.code) {
       logError('auth', err.message)
       throw err
     }
 
-    // 3. Checar e logar erros de API/rede
-    const friendly = logApiError(err, 'auth')
-    throw new Error(friendly)
+    throw new Error(logApiError(err, 'auth'))
   }
+}
+
+/**
+ * Step 2 — Submit the OTP/2FA code to complete authentication.
+ *
+ * Tries two strategies in order:
+ *   1. POST access_token with otp as query parameter
+ *   2. POST access_token with otp in JSON body
+ *
+ * Throws a descriptive error if both strategies fail.
+ */
+export async function verifyOTP({ url, username, password, otpCode }) {
+  if (!otpCode?.trim()) throw new Error('Código de autenticação é obrigatório.')
+
+  const base     = url.replace(/\/$/, '')
+  const endpoint = `${base}${ENDPOINTS.ACCESS_TOKEN}`
+  const otp      = otpCode.trim()
+
+  debug('auth', 'Verifying OTP', { endpoint, username })
+
+  // Strategy 1: OTP as query parameter
+  try {
+    const res = await axios.post(`${endpoint}?otp=${encodeURIComponent(otp)}`, null, {
+      auth: { username: username.trim(), password },
+      timeout: HTTP.AUTH_TIMEOUT,
+    })
+    if (res.data?.access_token) {
+      const { token, exp, payload } = validateAuthResponse(res.data, res.status)
+      info('auth', 'OTP verified via query param')
+      return { token, exp, payload }
+    }
+  } catch (err) {
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      throw new Error('Código de autenticação inválido. Verifique o código e tente novamente.')
+    }
+    warn('auth', 'OTP query-param strategy failed', { status: err.response?.status })
+  }
+
+  // Strategy 2: OTP in JSON body
+  try {
+    const res = await axios.post(endpoint, { otp }, {
+      auth: { username: username.trim(), password },
+      timeout: HTTP.AUTH_TIMEOUT,
+    })
+    if (res.data?.access_token) {
+      const { token, exp, payload } = validateAuthResponse(res.data, res.status)
+      info('auth', 'OTP verified via JSON body')
+      return { token, exp, payload }
+    }
+  } catch (err) {
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      throw new Error('Código de autenticação inválido. Verifique o código e tente novamente.')
+    }
+    warn('auth', 'OTP JSON-body strategy failed', { status: err.response?.status })
+  }
+
+  throw new Error(
+    'Não foi possível verificar o código MFA via API. ' +
+    'Se sua instância usa SSO ou MFA baseado em SAML, acesse via interface web.'
+  )
 }

@@ -1,22 +1,22 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, AlertTriangle, Monitor, Radio,
-  Lightbulb, Settings, ShieldCheck, X, ChevronRight
+  Lightbulb, Settings, ShieldCheck, X, ChevronRight, FileText,
 } from 'lucide-react'
 
 const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/cases', icon: AlertTriangle, label: 'Cases' },
-  { to: '/assets', icon: Monitor, label: 'Assets' },
-  { to: '/sensors', icon: Radio, label: 'Sensors' },
-  { to: '/recommendations', icon: Lightbulb, label: 'Recommendations' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/report',          icon: FileText,        label: 'Relatório PDF' },
+  /*{ to: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/cases',           icon: AlertTriangle,   label: 'Cases' },
+  { to: '/assets',          icon: Monitor,         label: 'Assets' },
+  { to: '/sensors',         icon: Radio,           label: 'Sensors' },
+  { to: '/recommendations', icon: Lightbulb,       label: 'Recommendations' },*/
+  { to: '/settings',        icon: Settings,        label: 'Settings' },
 ]
 
 export default function Sidebar({ open, onClose }) {
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div
           className="fixed inset-0 z-20 bg-black/60 lg:hidden"
@@ -85,7 +85,7 @@ export default function Sidebar({ open, onClose }) {
         {/* Footer */}
         <div className="px-5 py-4 text-xs text-gray-600" style={{ borderTop: '1px solid rgba(0,212,255,0.08)' }}>
           <div>Stellar Cyber Dashboard</div>
-          <div className="mt-0.5" style={{ color: '#00d4ff44' }}>v1.0.0</div>
+          <div className="mt-0.5" style={{ color: '#00d4ff44' }}>v2.0.0</div>
         </div>
       </aside>
     </>

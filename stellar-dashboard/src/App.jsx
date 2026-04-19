@@ -5,6 +5,7 @@ import { DataProvider } from './context/DataContext'
 import Sidebar from './components/Layout/Sidebar'
 import Header from './components/Layout/Header'
 import Login from './pages/Login'
+import Report from './pages/Report'
 import Dashboard from './pages/Dashboard'
 import Cases from './pages/Cases'
 import Assets from './pages/Assets'
@@ -45,7 +46,7 @@ class ErrorBoundary extends Component {
 function ProtectedLayout() {
   const { auth } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [darkMode, setDarkMode] = useState(true)
+  const [darkMode, setDarkMode]       = useState(true)
 
   if (!auth) return <Navigate to="/" replace />
 
@@ -66,13 +67,14 @@ function ProtectedLayout() {
           <main className="flex-1 overflow-y-auto">
             <ErrorBoundary>
               <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/cases" element={<Cases />} />
-                <Route path="/assets" element={<Assets />} />
-                <Route path="/sensors" element={<Sensors />} />
+                <Route path="/report"          element={<Report />} />
+                <Route path="/dashboard"       element={<Dashboard />} />
+                <Route path="/cases"           element={<Cases />} />
+                <Route path="/assets"          element={<Assets />} />
+                <Route path="/sensors"         element={<Sensors />} />
                 <Route path="/recommendations" element={<Recommendations />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/settings"        element={<Settings />} />
+                <Route path="*"                element={<Navigate to="/report" replace />} />
               </Routes>
             </ErrorBoundary>
           </main>
@@ -84,7 +86,7 @@ function ProtectedLayout() {
 
 function LoginRoute() {
   const { auth } = useAuth()
-  if (auth) return <Navigate to="/dashboard" replace />
+  if (auth) return <Navigate to="/report" replace />
   return <Login />
 }
 
@@ -93,8 +95,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<LoginRoute />} />
-          <Route path="/*" element={<ProtectedLayout />} />
+          <Route path="/"   element={<LoginRoute />} />
+          <Route path="/*"  element={<ProtectedLayout />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

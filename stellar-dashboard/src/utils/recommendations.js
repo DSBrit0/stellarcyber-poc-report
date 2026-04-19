@@ -1,13 +1,14 @@
+import { correlateMitre } from './mitreMapping'
+
 export function generateRecommendations({ cases, connectors, sensors, tenants, assets, ingestionTimeline }) {
   const recs = []
 
-  // Compatibilidade: aceita connectors ou sensors (legado)
   const allConnectors = connectors ?? sensors ?? []
 
   // 1. Connector Coverage
-  const totalConnectors = allConnectors.length
+  const totalConnectors  = allConnectors.length
   const offlineConnectors = allConnectors.filter(c => !c.active && c.status === 'offline').length
-  const offlinePct = totalConnectors > 0 ? (offlineConnectors / totalConnectors) * 100 : 0
+  const offlinePct       = totalConnectors > 0 ? (offlineConnectors / totalConnectors) * 100 : 0
   if (offlinePct > 20) {
     recs.push({
       id: 'connector-coverage',
@@ -21,13 +22,13 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
         'Revise as regras de firewall para portas de comunicação',
         'Contate o suporte Stellar Cyber se os conectores permanecerem offline por mais de 30 minutos',
       ],
-      impact: Math.min(100, offlinePct * 1.5),
+      impact:   Math.min(100, offlinePct * 1.5),
       category: 'Infrastructure',
     })
   }
 
   // 2. Data Gap Detection
-  const lastEvent = ingestionTimeline[0]
+  const lastEvent = ingestionTimeline?.[0]
   if (lastEvent) {
     const hrsAgo = (Date.now() - new Date(lastEvent.timestamp).getTime()) / 3600000
     if (hrsAgo > 2) {
@@ -43,7 +44,7 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
           'Review disk space and queue depth on ingestion nodes',
           'Restart the ingestion service if necessary',
         ],
-        impact: Math.min(100, hrsAgo * 10),
+        impact:   Math.min(100, hrsAgo * 10),
         category: 'Data Pipeline',
       })
     }
@@ -64,7 +65,7 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
         'Close or merge duplicate/low-confidence cases',
         'Review alert tuning to reduce false positives',
       ],
-      impact: Math.min(100, openCases * 0.8),
+      impact:   Math.min(100, openCases * 0.8),
       category: 'Operations',
     })
   }
@@ -88,13 +89,12 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
         'Document all response actions taken',
         'Notify stakeholders per your escalation matrix',
       ],
-      impact: 95,
+      impact:   95,
       category: 'Incident Response',
     })
   }
 
-  // 5. Connectors sem dados recentes (> 48h)
-  const allTenants = tenants ?? assets ?? []
+  // 5. Connectors without recent data (> 48h)
   const staleConnectors = allConnectors.filter(c => {
     const ts = c.lastDataReceived || c.lastActivity || c.lastSeen
     if (!ts) return true
@@ -114,12 +114,15 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
         'Cheque se a fonte de log ainda está ativa e exportando dados',
         'Ative o monitoramento automático de conectores inativos',
       ],
-      impact: Math.min(85, staleConnectors.length * 2),
+      impact:   Math.min(85, staleConnectors.length * 2),
       category: 'Data Coverage',
     })
   }
 
-  // All good
+  // 6. MITRE ATT&CK-enriched recommendations from open cases
+  const mitreRecs = generateMitreRecommendations(cases)
+  recs.push(...mitreRecs)
+
   if (recs.length === 0) {
     recs.push({
       id: 'all-good',
@@ -131,7 +134,7 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
         'Review weekly case trends for emerging patterns',
         'Schedule a quarterly security posture review',
       ],
-      impact: 5,
+      impact:   5,
       category: 'General',
     })
   }
@@ -139,5 +142,53 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
   return recs.sort((a, b) => {
     const order = { critical: 0, warning: 1, info: 2 }
     return (order[a.priority] ?? 3) - (order[b.priority] ?? 3)
+  })
+}
+
+/**
+ * Groups open cases by MITRE ATT&CK technique and returns one recommendation per technique.
+ * Each recommendation includes the MITRE technique, tactic, risk, and mitigation.
+ */
+function generateMitreRecommendations(cases) {
+  const techniqueMap = new Map()
+
+  for (const c of cases) {
+    if (['closed', 'resolved'].includes((c.status || '').toLowerCase())) continue
+    const correlation = correlateMitre(c.name || c.description || '')
+    if (!correlation) continue
+
+    const key = correlation.technique.id
+    if (!techniqueMap.has(key)) {
+      techniqueMap.set(key, { correlation, cases: [] })
+    }
+    techniqueMap.get(key).cases.push(c)
+  }
+
+  return Array.from(techniqueMap.values()).map(({ correlation, cases: affected }) => {
+    const hasCritical = affected.some(c => c.severity?.toLowerCase() === 'critical')
+    const hasHigh     = affected.some(c => c.severity?.toLowerCase() === 'high')
+
+    return {
+      id:       `mitre-${correlation.technique.id}`,
+      priority: hasCritical ? 'critical' : 'warning',
+      title:    `${correlation.technique.id}: ${correlation.technique.name}`,
+      description:
+        `${affected.length} caso(s) associado(s) à tática ${correlation.tactic.name} (${correlation.tactic.id}). ` +
+        correlation.risk,
+      steps: [
+        correlation.mitigation,
+        `Revise ${affected.length} caso(s) afetado(s) na página de Cases`,
+        `Referência MITRE ATT&CK: attack.mitre.org/techniques/${correlation.technique.id.replace('.', '/')}`,
+      ],
+      impact:   hasCritical ? 90 : hasHigh ? 70 : 50,
+      category: 'MITRE ATT&CK',
+      mitre: {
+        technique:     correlation.technique,
+        tactic:        correlation.tactic,
+        risk:          correlation.risk,
+        mitigation:    correlation.mitigation,
+        affectedCases: affected.length,
+      },
+    }
   })
 }
