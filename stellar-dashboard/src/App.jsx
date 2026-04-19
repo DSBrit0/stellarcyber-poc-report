@@ -2,6 +2,7 @@ import { useState, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { DataProvider } from './context/DataContext'
+import { LocaleProvider } from './i18n'
 import Sidebar from './components/Layout/Sidebar'
 import Header from './components/Layout/Header'
 import Login from './pages/Login'
@@ -93,12 +94,14 @@ function LoginRoute() {
 export default function App() {
   return (
     <BrowserRouter>
+      <LocaleProvider>
       <AuthProvider>
         <Routes>
           <Route path="/"   element={<LoginRoute />} />
           <Route path="/*"  element={<ProtectedLayout />} />
         </Routes>
       </AuthProvider>
+      </LocaleProvider>
     </BrowserRouter>
   )
 }

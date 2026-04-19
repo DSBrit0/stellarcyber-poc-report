@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LogOut, RotateCcw, Shield, Terminal, Trash2, Download, RefreshCw, ChevronDown } from 'lucide-react'
+import { useLocale, LOCALE_OPTIONS } from '../i18n'
+import { LogOut, RotateCcw, Shield, Terminal, Trash2, Download, RefreshCw, ChevronDown, Globe } from 'lucide-react'
 import {
   getLogs, filterLogs, clearLogs, exportLogsJSON, exportLogsText, Level,
 } from '../utils/logger'
 
-// ─── Página de Configurações + Logs ──────────────────────────────────────────
-
 export default function Settings() {
   const { auth, disconnect } = useAuth()
-  const navigate             = useNavigate()
+  const { t, locale, setLocale } = useLocale()
+  const navigate              = useNavigate()
   const [confirmed, setConfirmed] = useState(false)
   const [showLogs, setShowLogs]   = useState(false)
 
@@ -23,24 +23,49 @@ export default function Settings() {
   return (
     <div className="p-4 md:p-6 space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-lg font-bold text-gray-100">Configurações</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Conexão e diagnóstico da aplicação</p>
+        <h2 className="text-lg font-bold text-gray-100">{t('settings.title')}</h2>
+        <p className="text-xs text-gray-500 mt-0.5">{t('settings.subtitle')}</p>
       </div>
 
       {/* Conexão atual */}
       <div className="glass rounded-xl p-5 space-y-1">
         <div className="flex items-center gap-2 mb-3">
           <Shield size={15} style={{ color: '#00d4ff' }} />
-          <h3 className="text-sm font-semibold text-gray-200">Conexão Atual</h3>
+          <h3 className="text-sm font-semibold text-gray-200">{t('settings.connectionTitle')}</h3>
         </div>
-        <InfoRow label="URL da Instância" value={auth?.url} />
-        <InfoRow label="Usuário"          value={auth?.username} />
-        <InfoRow label="Token (preview)"  value={auth?.token ? `${auth.token.slice(0, 24)}…` : '—'} mono />
+        <InfoRow label={t('settings.instanceUrl')} value={auth?.url} />
+        <InfoRow label={t('settings.username')}    value={auth?.username} />
+        <InfoRow label={t('settings.tokenPreview')} value={auth?.token ? `${auth.token.slice(0, 24)}…` : '—'} mono />
+      </div>
+
+      {/* Idioma */}
+      <div className="glass rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe size={15} style={{ color: '#7c3aed' }} />
+          <h3 className="text-sm font-semibold text-gray-200">{t('settings.languageTitle')}</h3>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {LOCALE_OPTIONS.map(opt => (
+            <button
+              key={opt.code}
+              onClick={() => setLocale(opt.code)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              style={{
+                background: locale === opt.code ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${locale === opt.code ? 'rgba(0,212,255,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                color: locale === opt.code ? '#00d4ff' : '#94a3b8',
+              }}
+            >
+              <span>{opt.flag}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Ações */}
       <div className="glass rounded-xl p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-200 mb-1">Ações</h3>
+        <h3 className="text-sm font-semibold text-gray-200 mb-1">{t('settings.actionsTitle')}</h3>
 
         <button
           onClick={() => { disconnect(); navigate('/') }}
@@ -52,7 +77,7 @@ export default function Settings() {
           }}
         >
           <RotateCcw size={14} />
-          Reconectar com novas credenciais
+          {t('settings.reconnect')}
         </button>
 
         <button
@@ -65,7 +90,7 @@ export default function Settings() {
           }}
         >
           <LogOut size={14} />
-          {confirmed ? 'Clique novamente para confirmar' : 'Desconectar'}
+          {confirmed ? t('settings.disconnectConfirm') : t('settings.disconnect')}
         </button>
       </div>
 
@@ -77,7 +102,7 @@ export default function Settings() {
         >
           <div className="flex items-center gap-2">
             <Terminal size={15} style={{ color: '#7c3aed' }} />
-            <span className="text-sm font-semibold text-gray-200">Logs de Diagnóstico</span>
+            <span className="text-sm font-semibold text-gray-200">{t('settings.logsTitle')}</span>
           </div>
           <ChevronDown
             size={15}
@@ -91,9 +116,7 @@ export default function Settings() {
         {showLogs && <LogPanel />}
       </div>
 
-      <p className="text-xs text-gray-600">
-        Credenciais e tokens ficam apenas em memória e são apagados ao desconectar ou fechar a aba.
-      </p>
+      <p className="text-xs text-gray-600">{t('settings.securityNote')}</p>
     </div>
   )
 }
@@ -108,6 +131,7 @@ const LEVEL_COLORS = {
 }
 
 function LogPanel() {
+  const { t } = useLocale()
   const [entries, setEntries]   = useState([])
   const [minLevel, setMinLevel] = useState(Level.DEBUG)
   const [search, setSearch]     = useState('')
@@ -137,6 +161,10 @@ function LogPanel() {
     return acc
   }, {})
 
+  const entryLabel = entries.length === 1
+    ? t('settings.entry1', { n: entries.length })
+    : t('settings.entryN', { n: entries.length })
+
   return (
     <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
 
@@ -144,7 +172,6 @@ function LogPanel() {
       <div className="flex flex-wrap items-center gap-2 px-5 py-3"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.15)' }}>
 
-        {/* Filtro de nível */}
         <select
           value={minLevel}
           onChange={e => setMinLevel(e.target.value)}
@@ -156,17 +183,15 @@ function LogPanel() {
           ))}
         </select>
 
-        {/* Busca */}
         <input
           type="text"
-          placeholder="Filtrar mensagens…"
+          placeholder={t('settings.filterPlaceholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="flex-1 text-xs rounded-lg px-3 py-1.5 outline-none min-w-[120px]"
           style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#cbd5e1' }}
         />
 
-        {/* Contadores */}
         <div className="flex gap-1.5 ml-auto">
           {Object.entries(counts).map(([lvl, n]) => {
             const c = LEVEL_COLORS[lvl]
@@ -179,20 +204,19 @@ function LogPanel() {
           })}
         </div>
 
-        {/* Botões */}
-        <button onClick={refresh} title="Atualizar"
+        <button onClick={refresh} title={t('settings.refreshLogs')}
           className="p-1.5 rounded-lg transition-colors hover:bg-white/5" style={{ color: '#64748b' }}>
           <RefreshCw size={13} />
         </button>
-        <button onClick={() => exportLogsJSON()} title="Exportar JSON"
+        <button onClick={() => exportLogsJSON()} title={t('settings.exportJson')}
           className="p-1.5 rounded-lg transition-colors hover:bg-white/5" style={{ color: '#64748b' }}>
           <Download size={13} />
         </button>
-        <button onClick={() => exportLogsText()} title="Exportar TXT"
+        <button onClick={() => exportLogsText()} title={t('settings.exportTxt')}
           className="text-xs px-2 py-1.5 rounded-lg transition-colors hover:bg-white/5" style={{ color: '#64748b' }}>
           TXT
         </button>
-        <button onClick={handleClear} title="Limpar logs"
+        <button onClick={handleClear} title={t('settings.clearLogs')}
           className="p-1.5 rounded-lg transition-colors hover:bg-red-900/20" style={{ color: '#ef4444' }}>
           <Trash2 size={13} />
         </button>
@@ -201,7 +225,7 @@ function LogPanel() {
       {/* Lista de logs */}
       <div className="overflow-y-auto font-mono text-xs" style={{ maxHeight: 420 }}>
         {entries.length === 0 ? (
-          <div className="text-center py-10 text-gray-600">Nenhum log encontrado</div>
+          <div className="text-center py-10 text-gray-600">{t('settings.noLogs')}</div>
         ) : (
           [...entries].reverse().map(entry => {
             const c    = LEVEL_COLORS[entry.level] || LEVEL_COLORS.INFO
@@ -216,32 +240,21 @@ function LogPanel() {
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
               >
                 <div className="flex items-start gap-2 px-4 py-2">
-                  {/* Nível */}
                   <span className="px-1.5 py-0.5 rounded text-xs flex-shrink-0 leading-tight"
                     style={{ color: c.text, background: c.bg, border: `1px solid ${c.border}` }}>
                     {entry.level[0]}
                   </span>
-
-                  {/* Timestamp */}
                   <span className="flex-shrink-0 text-gray-600 text-xs leading-5">{ts}</span>
-
-                  {/* Context */}
                   <span className="flex-shrink-0 text-xs leading-5" style={{ color: '#7c3aed' }}>
                     [{entry.context}]
                   </span>
-
-                  {/* Mensagem */}
                   <span className="text-gray-300 leading-5 break-all flex-1">{entry.message}</span>
-
-                  {/* Indicador de dados */}
                   {hasData && (
                     <span className="flex-shrink-0 text-xs text-gray-600 leading-5">
                       {isOpen ? '▲' : '▼'}
                     </span>
                   )}
                 </div>
-
-                {/* Dados expandidos */}
                 {hasData && isOpen && (
                   <pre className="px-4 pb-3 text-xs overflow-x-auto leading-relaxed"
                     style={{ color: '#94a3b8', background: 'rgba(0,0,0,0.2)' }}>
@@ -257,8 +270,8 @@ function LogPanel() {
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-2 text-xs text-gray-600"
         style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.1)' }}>
-        <span>{entries.length} entrada{entries.length !== 1 ? 's' : ''} exibida{entries.length !== 1 ? 's' : ''}</span>
-        <span>Total em memória: {getLogs().length}</span>
+        <span>{entryLabel}</span>
+        <span>{t('settings.totalMemory')} {getLogs().length}</span>
       </div>
     </div>
   )

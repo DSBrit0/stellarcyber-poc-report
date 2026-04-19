@@ -1,20 +1,17 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, AlertTriangle, Monitor, Radio,
-  Lightbulb, Settings, ShieldCheck, X, ChevronRight, FileText,
+  Settings, ShieldCheck, X, ChevronRight, FileText,
 } from 'lucide-react'
-
-const navItems = [
-  { to: '/report',          icon: FileText,        label: 'Relatório PDF' },
-  /*{ to: '/dashboard',       icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/cases',           icon: AlertTriangle,   label: 'Cases' },
-  { to: '/assets',          icon: Monitor,         label: 'Assets' },
-  { to: '/sensors',         icon: Radio,           label: 'Sensors' },
-  { to: '/recommendations', icon: Lightbulb,       label: 'Recommendations' },*/
-  { to: '/settings',        icon: Settings,        label: 'Settings' },
-]
+import { useLocale } from '../../i18n'
 
 export default function Sidebar({ open, onClose }) {
+  const { t } = useLocale()
+
+  const navItems = [
+    { to: '/report',   icon: FileText,  label: t('nav.report') },
+    { to: '/settings', icon: Settings,  label: t('nav.settings') },
+  ]
+
   return (
     <>
       {open && (
@@ -84,7 +81,7 @@ export default function Sidebar({ open, onClose }) {
 
         {/* Footer */}
         <div className="px-5 py-4 text-xs text-gray-600" style={{ borderTop: '1px solid rgba(0,212,255,0.08)' }}>
-          <div>Stellar Cyber Dashboard</div>
+          <div>{t('nav.footer')}</div>
           <div className="mt-0.5" style={{ color: '#00d4ff44' }}>v2.0.0</div>
         </div>
       </aside>

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
+import { useLocale } from '../i18n'
 import { generateRecommendations } from '../utils/recommendations'
 import { downloadPDFReport } from '../services/pdfReport'
 import { formatRelative } from '../utils/formatters'
@@ -34,6 +35,7 @@ function Field({ label, children }) {
 export default function Report() {
   const { auth }                                              = useAuth()
   const { data, loading, errors, lastRefresh, refresh }      = useData()
+  const { t }                                                 = useLocale()
   const [generating, setGenerating]                          = useState(false)
   const [downloaded, setDownloaded]                          = useState(false)
   const [formOpen, setFormOpen]                              = useState(true)
@@ -47,7 +49,7 @@ export default function Report() {
     pocStartDate: '',
     pocEndDate:   '',
     version:      '1.0',
-    verdict:      'Aprovado',
+    verdict:      '',
   })
 
   function setField(key) {
@@ -95,10 +97,10 @@ export default function Report() {
         <div>
           <h1 className="text-2xl font-bold tracking-wide flex items-center gap-3" style={{ color: '#f1f5f9' }}>
             <FileText size={24} style={{ color: '#00d4ff' }} />
-            Relatório de PoC
+            {t('report.title')}
           </h1>
           <p className="text-sm mt-1" style={{ color: '#64748b' }}>
-            Configure os metadados e gere o PDF profissional de Prova de Conceito.
+            {t('report.subtitle')}
           </p>
         </div>
 
@@ -110,7 +112,7 @@ export default function Report() {
             style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)', color: '#00d4ff' }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Sincronizar
+            {t('report.sync')}
           </button>
 
           <button
@@ -124,11 +126,11 @@ export default function Report() {
             }}
           >
             {generating ? (
-              <><Loader size={14} className="animate-spin" />Gerando…</>
+              <><Loader size={14} className="animate-spin" />{t('report.generating')}</>
             ) : downloaded ? (
-              <><CheckCircle2 size={14} />Baixado!</>
+              <><CheckCircle2 size={14} />{t('report.downloaded')}</>
             ) : (
-              <><Download size={14} />Baixar PDF</>
+              <><Download size={14} />{t('report.download')}</>
             )}
           </button>
         </div>
@@ -136,12 +138,12 @@ export default function Report() {
 
       {/* Status pills */}
       <div className="flex flex-wrap gap-3">
-        <StatusPill ok={apiOk} okLabel="API Conectada" errLabel="Erro na API" loading={loading} />
+        <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} loading={loading} />
         {lastRefresh && (
           <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b' }}>
             <Clock size={12} />
-            Última sincronização: {formatRelative(lastRefresh.toISOString())}
+            {t('report.lastSync')} {formatRelative(lastRefresh.toISOString())}
           </div>
         )}
       </div>
@@ -151,7 +153,7 @@ export default function Report() {
         <div className="rounded-lg p-4 text-sm space-y-1"
           style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5' }}>
           <div className="flex items-center gap-2 font-semibold mb-2">
-            <AlertTriangle size={14} />Alguns dados não puderam ser carregados
+            <AlertTriangle size={14} />{t('report.dataError')}
           </div>
           {Object.entries(errors).map(([key, msg]) => (
             <div key={key} className="text-xs ml-5">
@@ -163,10 +165,10 @@ export default function Report() {
 
       {/* Data summary */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <SummaryCard icon={Shield}    color="#ff4444" label="Cases"          value={cases.length}           sub={`${openCases} abertos · ${critCases} críticos`}      loading={loading} error={!!errors.cases} />
-        <SummaryCard icon={Layers}    color="#00d4ff" label="Assets"         value={tenants.length}         sub="tenants monitorados"                                  loading={loading} error={!!errors.tenants} />
-        <SummaryCard icon={Radio}     color="#22c55e" label="Sensors"        value={connectors.length}      sub={`${activeConn} ativos`}                               loading={loading} error={!!errors.connectors} />
-        <SummaryCard icon={Lightbulb} color="#f59e0b" label="Recomendações"  value={recommendations.length} sub={`${critRecs} críticas · ${mitreRecs} MITRE`}         loading={loading} error={false} />
+        <SummaryCard icon={Shield}    color="#ff4444" label={t('report.cases')}           value={cases.length}           sub={`${openCases} · ${critCases} ${t('report.critical')}`}         loading={loading} error={!!errors.cases} />
+        <SummaryCard icon={Layers}    color="#00d4ff" label={t('report.assets')}           value={tenants.length}         sub={t('report.tenantsMonitored')}                                  loading={loading} error={!!errors.tenants} />
+        <SummaryCard icon={Radio}     color="#22c55e" label={t('report.sensors')}          value={connectors.length}      sub={`${activeConn} ${t('report.active') ?? 'ativos'}`}             loading={loading} error={!!errors.connectors} />
+        <SummaryCard icon={Lightbulb} color="#f59e0b" label={t('report.recommendations')} value={recommendations.length} sub={`${critRecs} ${t('report.critical')} · ${mitreRecs} ${t('report.mitre')}`} loading={loading} error={false} />
       </div>
 
       {/* PoC metadata form */}
@@ -178,9 +180,9 @@ export default function Report() {
         >
           <span className="flex items-center gap-2">
             <Settings2 size={15} style={{ color: '#00d4ff' }} />
-            Configuração do Relatório PoC
+            {t('report.formTitle')}
           </span>
-          <span style={{ color: '#00d4ff', fontSize: '11px' }}>{formOpen ? '▲ Recolher' : '▼ Expandir'}</span>
+          <span style={{ color: '#00d4ff', fontSize: '11px' }}>{formOpen ? t('report.collapse') : t('report.expand')}</span>
         </button>
 
         {formOpen && (
@@ -191,47 +193,48 @@ export default function Report() {
 
             {/* Row 1 */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="NOME DO CLIENTE *">
-                <input style={INPUT} placeholder="Ex: Empresa XYZ Ltda" value={pocMeta.clientName} onChange={setField('clientName')} />
+              <Field label={t('report.clientName')}>
+                <input style={INPUT} placeholder={t('report.clientPlaceholder')} value={pocMeta.clientName} onChange={setField('clientName')} />
               </Field>
-              <Field label="DEPARTAMENTO / ÁREA">
-                <input style={INPUT} placeholder="Ex: TI / Segurança da Informação" value={pocMeta.clientDept} onChange={setField('clientDept')} />
+              <Field label={t('report.clientDept')}>
+                <input style={INPUT} placeholder={t('report.deptPlaceholder')} value={pocMeta.clientDept} onChange={setField('clientDept')} />
               </Field>
             </div>
 
             {/* Row 2 */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="NOME DO SE / AUTOR *">
-                <input style={INPUT} placeholder="Ex: João Silva" value={pocMeta.seName} onChange={setField('seName')} />
+              <Field label={t('report.seName')}>
+                <input style={INPUT} placeholder={t('report.sePlaceholder')} value={pocMeta.seName} onChange={setField('seName')} />
               </Field>
-              <Field label="PARCEIRO / EMPRESA">
-                <input style={INPUT} placeholder="Ex: Stellar Cyber Brasil" value={pocMeta.partnerName} onChange={setField('partnerName')} />
+              <Field label={t('report.partnerName')}>
+                <input style={INPUT} placeholder={t('report.partnerPlaceholder')} value={pocMeta.partnerName} onChange={setField('partnerName')} />
               </Field>
             </div>
 
             {/* Row 3 */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="E-MAIL DO SE">
-                <input style={INPUT} type="email" placeholder="se@parceiro.com" value={pocMeta.seEmail} onChange={setField('seEmail')} />
+              <Field label={t('report.seEmail')}>
+                <input style={INPUT} type="email" placeholder={t('report.emailPlaceholder')} value={pocMeta.seEmail} onChange={setField('seEmail')} />
               </Field>
-              <Field label="INÍCIO DO PoC">
+              <Field label={t('report.pocStart')}>
                 <input style={INPUT} type="date" value={pocMeta.pocStartDate} onChange={setField('pocStartDate')} />
               </Field>
-              <Field label="FIM DO PoC">
+              <Field label={t('report.pocEnd')}>
                 <input style={INPUT} type="date" value={pocMeta.pocEndDate} onChange={setField('pocEndDate')} />
               </Field>
             </div>
 
             {/* Row 4 */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="VERSÃO DO RELATÓRIO">
+              <Field label={t('report.version')}>
                 <input style={INPUT} placeholder="1.0" value={pocMeta.version} onChange={setField('version')} />
               </Field>
-              <Field label="VEREDICTO *">
+              <Field label={t('report.verdict')}>
                 <select style={{ ...INPUT, cursor: 'pointer' }} value={pocMeta.verdict} onChange={setField('verdict')}>
-                  <option value="Aprovado">Aprovado</option>
-                  <option value="Aprovado com Ressalvas">Aprovado com Ressalvas</option>
-                  <option value="Não Aprovado">Não Aprovado</option>
+                  <option value="">{t('report.verdictApproved')}</option>
+                  <option value={t('report.verdictApproved')}>{t('report.verdictApproved')}</option>
+                  <option value={t('report.verdictCond')}>{t('report.verdictCond')}</option>
+                  <option value={t('report.verdictRejected')}>{t('report.verdictRejected')}</option>
                 </select>
               </Field>
             </div>
@@ -243,7 +246,7 @@ export default function Report() {
       <div className="rounded-xl p-5" style={{ background: 'rgba(15,22,40,0.7)', border: '1px solid rgba(255,255,255,0.07)' }}>
         <h2 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: '#94a3b8' }}>
           <Activity size={14} />
-          Conteúdo do relatório PDF
+          {t('report.pdfContents')}
         </h2>
         <div className="space-y-2">
           {[
@@ -277,7 +280,7 @@ export default function Report() {
           style={{ background: 'rgba(10,30,70,0.5)', border: '1px solid rgba(0,102,255,0.2)' }}>
           <h2 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: '#93c5fd' }}>
             <Shield size={14} />
-            MITRE ATT&CK — Correlações detectadas
+            {t('report.mitreDetections')}
           </h2>
           <div className="grid gap-2">
             {recommendations
@@ -300,7 +303,7 @@ export default function Report() {
                         color:      r.priority === 'critical' ? '#fca5a5' : '#fdba74',
                         border:     r.priority === 'critical' ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(249,115,22,0.3)',
                       }}>
-                      {r.mitre?.affectedCases} caso(s)
+                      {t('report.casesN', { n: r.mitre?.affectedCases ?? 0 })}
                     </span>
                   </div>
                 </div>

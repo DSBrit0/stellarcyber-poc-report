@@ -2,14 +2,16 @@ import {
   AlertTriangle, Database, Building2, Plug, Clock,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
+import { useLocale } from '../i18n'
 import KPICard from '../components/Cards/KPICard'
 import IngestionChart from '../components/Charts/IngestionChart'
 import AssetDonut from '../components/Charts/AssetDonut'
 import CasesTable from '../components/Tables/CasesTable'
-import { formatRelative, formatBytes, recencyColor, severityColor } from '../utils/formatters'
+import { formatRelative, formatBytes, recencyColor } from '../utils/formatters'
 
 export default function Dashboard() {
   const { data, loading } = useData()
+  const { t } = useLocale()
 
   const openCases = data.cases.filter(c =>
     ['new', 'open'].includes((c.status || '').toLowerCase())
@@ -22,47 +24,17 @@ export default function Dashboard() {
   return (
     <div className="p-4 md:p-6 space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-lg font-bold text-gray-100">Security Dashboard</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Visão em tempo real da sua postura de segurança</p>
+        <h2 className="text-lg font-bold text-gray-100">{t('dashboard.title')}</h2>
+        <p className="text-xs text-gray-500 mt-0.5">{t('dashboard.subtitle')}</p>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <KPICard
-          icon={AlertTriangle}
-          label="Casos Abertos"
-          value={openCases}
-          color="#ff4444"
-          loading={loading}
-        />
-        <KPICard
-          icon={Database}
-          label="Dados Ingeridos"
-          value={formatBytes(totalGB)}
-          color="#00d4ff"
-          loading={loading}
-        />
-        <KPICard
-          icon={Building2}
-          label="Tenants"
-          value={data.tenants.length}
-          color="#22c55e"
-          loading={loading}
-        />
-        <KPICard
-          icon={Plug}
-          label="Conectores Ativos"
-          value={activeConnectors}
-          color="#7c3aed"
-          loading={loading}
-        />
-        <KPICard
-          icon={Clock}
-          label="Último Evento"
-          value={lastEvent ? formatRelative(lastEvent.timestamp) : '—'}
-          color="#f59e0b"
-          loading={loading}
-        />
+        <KPICard icon={AlertTriangle} label={t('dashboard.openCases')}        value={openCases}                               color="#ff4444" loading={loading} />
+        <KPICard icon={Database}      label={t('dashboard.dataIngested')}     value={formatBytes(totalGB)}                    color="#00d4ff" loading={loading} />
+        <KPICard icon={Building2}     label={t('dashboard.tenants')}          value={data.tenants.length}                     color="#22c55e" loading={loading} />
+        <KPICard icon={Plug}          label={t('dashboard.activeConnectors')} value={activeConnectors}                        color="#7c3aed" loading={loading} />
+        <KPICard icon={Clock}         label={t('dashboard.lastEvent')}        value={lastEvent ? formatRelative(lastEvent.timestamp) : '—'} color="#f59e0b" loading={loading} />
       </div>
 
       {/* Charts row */}
@@ -88,6 +60,8 @@ export default function Dashboard() {
 // ─── Painel de Conectores ────────────────────────────────────────────────────
 
 function ConnectorsPanel({ connectors, loading }) {
+  const { t } = useLocale()
+
   if (loading) {
     return (
       <div className="glass rounded-xl p-5">
@@ -103,7 +77,7 @@ function ConnectorsPanel({ connectors, loading }) {
     return (
       <div className="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 min-h-32">
         <Plug size={20} style={{ color: '#334155' }} />
-        <p className="text-xs" style={{ color: '#475569' }}>Nenhum conector</p>
+        <p className="text-xs" style={{ color: '#475569' }}>{t('dashboard.noConnectors')}</p>
       </div>
     )
   }
@@ -111,7 +85,7 @@ function ConnectorsPanel({ connectors, loading }) {
   return (
     <div className="glass rounded-xl p-5">
       <h3 className="text-sm font-semibold text-gray-200 mb-4">
-        Conectores / Fontes de Log
+        {t('dashboard.connectorPanel')}
       </h3>
       <div className="space-y-2">
         {connectors.slice(0, 6).map(c => (
@@ -140,7 +114,7 @@ function ConnectorsPanel({ connectors, loading }) {
                 background: c.active ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
               }}
             >
-              {c.active ? 'ativo' : 'inativo'}
+              {c.active ? t('common.active') : t('common.inactive')}
             </span>
           </div>
         ))}
@@ -152,6 +126,8 @@ function ConnectorsPanel({ connectors, loading }) {
 // ─── Timeline de Eventos ─────────────────────────────────────────────────────
 
 function TimelinePanel({ events, loading }) {
+  const { t } = useLocale()
+
   if (loading) {
     return (
       <div className="glass rounded-xl p-5">
@@ -167,14 +143,14 @@ function TimelinePanel({ events, loading }) {
     return (
       <div className="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 min-h-32">
         <Clock size={20} style={{ color: '#334155' }} />
-        <p className="text-xs" style={{ color: '#475569' }}>Nenhum evento recente</p>
+        <p className="text-xs" style={{ color: '#475569' }}>{t('dashboard.noEvents')}</p>
       </div>
     )
   }
 
   return (
     <div className="glass rounded-xl p-5">
-      <h3 className="text-sm font-semibold text-gray-200 mb-4">Eventos Recentes</h3>
+      <h3 className="text-sm font-semibold text-gray-200 mb-4">{t('dashboard.recentEvents')}</h3>
       <div className="space-y-2">
         {events.map(ev => {
           const color = recencyColor(ev.timestamp)
@@ -201,7 +177,7 @@ function TimelinePanel({ events, loading }) {
                   background: ev.status === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
                 }}
               >
-                {ev.status === 'success' ? 'ok' : 'erro'}
+                {ev.status === 'success' ? t('common.ok') : t('common.error')}
               </span>
             </div>
           )

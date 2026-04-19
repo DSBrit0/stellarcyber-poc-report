@@ -1,9 +1,11 @@
 import { useData } from '../context/DataContext'
+import { useLocale } from '../i18n'
 import { Radio } from 'lucide-react'
 import { formatRelative } from '../utils/formatters'
 
 export default function Sensors() {
   const { data, loading } = useData()
+  const { t } = useLocale()
 
   const sensors = (data.connectors ?? []).map(c => ({
     id:       c.id,
@@ -21,18 +23,18 @@ export default function Sensors() {
     <div className="p-4 md:p-6 space-y-6 animate-fade-in">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-100">Sensors / Conectores</h2>
-          <p className="text-xs text-gray-500 mt-0.5">{sensors.length} conectores registrados</p>
+          <h2 className="text-lg font-bold text-gray-100">{t('sensors.title')}</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{t('sensors.registered', { n: sensors.length })}</p>
         </div>
         {sensors.length > 0 && (
           <div className="flex gap-3">
             <div className="glass rounded-lg px-4 py-2 text-center">
               <div className="text-xl font-bold" style={{ color: '#22c55e' }}>{online}</div>
-              <div className="text-xs text-gray-500">Online</div>
+              <div className="text-xs text-gray-500">{t('common.online')}</div>
             </div>
             <div className="glass rounded-lg px-4 py-2 text-center">
               <div className="text-xl font-bold" style={{ color: '#ef4444' }}>{offline}</div>
-              <div className="text-xs text-gray-500">Offline</div>
+              <div className="text-xs text-gray-500">{t('common.offline')}</div>
             </div>
           </div>
         )}
@@ -45,7 +47,7 @@ export default function Sensors() {
       ) : sensors.length === 0 ? (
         <div className="glass rounded-xl p-10 text-center">
           <Radio size={32} className="mx-auto mb-3" style={{ color: '#334155' }} />
-          <p className="text-sm" style={{ color: '#475569' }}>Nenhum conector encontrado</p>
+          <p className="text-sm" style={{ color: '#475569' }}>{t('sensors.none')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -74,7 +76,7 @@ export default function Sensors() {
                       background: isOnline ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
                     }}
                   >
-                    {s.status}
+                    {isOnline ? t('common.online') : t('common.offline')}
                   </span>
                   <div className="text-xs text-gray-600 mt-1">{formatRelative(s.lastSeen)}</div>
                 </div>

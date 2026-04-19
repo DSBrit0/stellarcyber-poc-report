@@ -4,9 +4,11 @@ import {
   Zap, Globe, User, Lock, Hash,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useLocale, LOCALE_OPTIONS } from '../i18n'
 
 export default function Login() {
   const { connect, connecting, authError } = useAuth()
+  const { t, locale, setLocale } = useLocale()
 
   return (
     <div
@@ -25,6 +27,25 @@ export default function Login() {
           width: 350, height: 350, borderRadius: '50%',
           background: 'radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 70%)',
         }} />
+      </div>
+
+      {/* Language picker — top right */}
+      <div className="absolute top-4 right-4 flex gap-1 z-10">
+        {LOCALE_OPTIONS.map(opt => (
+          <button
+            key={opt.code}
+            onClick={() => setLocale(opt.code)}
+            title={opt.label}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+            style={{
+              background: locale === opt.code ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${locale === opt.code ? 'rgba(0,212,255,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              color: locale === opt.code ? '#00d4ff' : '#475569',
+            }}
+          >
+            {opt.flag} {opt.code.toUpperCase()}
+          </button>
+        ))}
       </div>
 
       <div
@@ -52,7 +73,7 @@ export default function Login() {
             Stellar Dashboard
           </h1>
           <p className="text-xs mt-1" style={{ color: '#64748b' }}>
-            Conecte-se à sua instância Stellar Cyber
+            {t('login.subtitle')}
           </p>
         </div>
 
@@ -64,7 +85,7 @@ export default function Login() {
       </div>
 
       <p className="mt-5 text-xs relative z-10" style={{ color: '#1e293b' }}>
-        Credenciais ficam apenas em memória de sessão e nunca são gravadas em disco.
+        {t('login.securityNote')}
       </p>
     </div>
   )
@@ -73,6 +94,7 @@ export default function Login() {
 // ─── Credentials Step ────────────────────────────────────────────────────────
 
 function CredentialsForm({ onSubmit, connecting, authError }) {
+  const { t } = useLocale()
   const [form, setForm]         = useState({ url: '', username: '', password: '', tenantId: '' })
   const [showPass, setShowPass] = useState(false)
 
@@ -82,7 +104,6 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    // tenant is optional — only passed when filled
     await onSubmit({ url: form.url, username: form.username, password: form.password, tenant: form.tenantId.trim() })
   }
 
@@ -99,9 +120,9 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <IconField
         icon={Globe}
-        label="URL da Instância"
+        label={t('login.urlLabel')}
         type="url"
-        placeholder="https://seu-dominio.com"
+        placeholder={t('login.urlPlaceholder')}
         value={form.url}
         onChange={set('url')}
         required
@@ -109,9 +130,9 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
 
       <IconField
         icon={User}
-        label="Usuário"
+        label={t('login.userLabel')}
         type="text"
-        placeholder="usuario@empresa.com"
+        placeholder={t('login.userPlaceholder')}
         value={form.username}
         onChange={set('username')}
         required
@@ -121,7 +142,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
       {/* Password field */}
       <div>
         <label className="block text-xs font-medium mb-1.5" style={{ color: '#94a3b8' }}>
-          Senha / API Key
+          {t('login.passwordLabel')}
         </label>
         <div className="relative">
           <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#475569' }}>
@@ -154,9 +175,9 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
       {/* Tenant ID field */}
       <IconField
         icon={Hash}
-        label="Tenant ID"
+        label={t('login.tenantLabel')}
         type="text"
-        placeholder="Ex: 6951699ec7314422bd3bec86f9d354ab"
+        placeholder={t('login.tenantPlaceholder')}
         value={form.tenantId}
         onChange={set('tenantId')}
         required
@@ -164,7 +185,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
 
       <ErrorBanner message={authError} />
 
-      <SubmitButton connecting={connecting} label="Conectar" />
+      <SubmitButton connecting={connecting} />
 
       <Divider />
 
@@ -180,7 +201,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
         }}
       >
         <Zap size={14} />
-        Explorar em modo demo
+        {t('login.demo')}
       </button>
 
       <AuthFlowInfo />
@@ -207,7 +228,8 @@ function ErrorBanner({ message }) {
   )
 }
 
-function SubmitButton({ connecting, label }) {
+function SubmitButton({ connecting }) {
+  const { t } = useLocale()
   return (
     <button
       type="submit"
@@ -222,23 +244,25 @@ function SubmitButton({ connecting, label }) {
       }}
     >
       {connecting ? (
-        <><Loader size={16} className="animate-spin" />Autenticando…</>
-      ) : label}
+        <><Loader size={16} className="animate-spin" />{t('login.submitting')}</>
+      ) : t('login.submit')}
     </button>
   )
 }
 
 function Divider() {
+  const { t } = useLocale()
   return (
     <div className="flex items-center gap-3 my-1">
       <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-      <span className="text-xs" style={{ color: '#334155' }}>ou</span>
+      <span className="text-xs" style={{ color: '#334155' }}>{t('common.or')}</span>
       <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
     </div>
   )
 }
 
 function AuthFlowInfo() {
+  const { t } = useLocale()
   return (
     <div
       className="mt-2 rounded-lg px-4 py-3 text-xs"
@@ -248,11 +272,11 @@ function AuthFlowInfo() {
         color: '#475569',
       }}
     >
-      <div className="font-medium mb-1" style={{ color: '#64748b' }}>Fluxo de autenticação</div>
+      <div className="font-medium mb-1" style={{ color: '#64748b' }}>{t('login.authFlow')}</div>
       <ol className="space-y-0.5 list-decimal list-inside">
-        <li>Credenciais enviadas via <code className="text-blue-400">HTTP Basic Auth</code></li>
-        <li>Instância retorna <code className="text-blue-400">access_token</code> (JWT)</li>
-        <li>Token usado como <code className="text-blue-400">Bearer</code> em todas as chamadas</li>
+        <li>{t('login.authStep1').replace('HTTP Basic Auth', '')} <code className="text-blue-400">HTTP Basic Auth</code></li>
+        <li>{t('login.authStep2').replace('access_token', '')} <code className="text-blue-400">access_token</code> (JWT)</li>
+        <li>{t('login.authStep3').replace('Bearer', '')} <code className="text-blue-400">Bearer</code></li>
       </ol>
     </div>
   )
