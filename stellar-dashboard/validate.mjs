@@ -110,23 +110,6 @@ function normalizeCases(items) {
   }))
 }
 
-function normalizeAlerts(items) {
-  return items.map((a, i) => ({
-    id:        a._id || a.id || a.alert_id || `ALERT-${2000 + i}`,
-    name:      a.name || a.title || a.summary || `Alert ${i + 1}`,
-    severity:  normalizeSeverity(a.severity || a.priority),
-    status:    a.status || 'New',
-    score:     typeof a.score === 'number' ? a.score : null,
-    tenantName: a.tenant_name || a.cust_name || '',
-    custId:    a.cust_id || '',
-    createdAt: a.created_at
-      ? (typeof a.created_at === 'number' ? new Date(a.created_at).toISOString() : a.created_at)
-      : new Date().toISOString(),
-    sourceIp:  a.src_ip || a.source_ip || '',
-    type:      a.type || a.alert_type || '',
-  }))
-}
-
 function normalizeTenants(items) {
   return items.map((t, i) => ({
     id:        t.cust_id || `T-${i}`,
@@ -257,41 +240,6 @@ async function validateCases(token) {
   }
 }
 
-async function validateAlerts(token) {
-  section('4. ALERTS — GET /connect/api/v1/alerts')
-  try {
-    const res = await proxyFetch(
-      `/connect/api/v1/alerts?limit=${LIMIT}&tenantid=${TENANT}`,
-      token
-    )
-    if (!res.ok) { fail(`HTTP ${res.status}`, JSON.stringify(res.body).slice(0, 300)); return [] }
-
-    const raw    = res.body
-    const items  = raw?.data?.alerts ?? raw?.alerts ?? (Array.isArray(raw) ? raw : [])
-    const total  = raw?.data?.total ?? raw?.total ?? items.length
-    const alerts = normalizeAlerts(items)
-
-    ok(`HTTP ${res.status} — ${alerts.length} alerts (total API: ${total})`)
-
-    if (alerts.length > 0) {
-      const bySev = sevCount(alerts)
-      ok('Severidades', Object.entries(bySev).map(([k,v]) => `${k}:${v}`).join(' | '))
-      const sample = alerts[0]
-      ok('Amostra normalizada', `id=${sample.id} | sev=${sample.severity} | type=${sample.type || 'n/a'}`)
-    }
-
-    const pdfReady = alerts.length > 0 && alerts.every(a => a.id && a.name && a.severity)
-    pdfReady
-      ? ok('PDF-ready ✅')
-      : (alerts.length === 0 ? ok('Lista vazia (sem alertas no período)') : fail('PDF-ready ❌'))
-
-    return alerts
-  } catch (e) {
-    fail('Erro inesperado', e.message)
-    return []
-  }
-}
-
 async function validateTenants(token) {
   section('5. TENANTS — GET /connect/api/v1/tenants')
   try {
@@ -355,39 +303,31 @@ async function validateConnectors(token) {
   }
 }
 
-function validatePdfData(cases, alerts, tenants, connectors) {
-  section('7. PDF REPORT — VALIDAÇÃO DE DADOS')
+function validatePdfData(cases, tenants, connectors) {
+  section('6. PDF REPORT — VALIDAÇÃO DE DADOS')
 
-  const criticalCases  = cases.filter(c => c.severity === 'Critical').length
-  const highCases      = cases.filter(c => c.severity === 'High').length
-  const openCases      = cases.filter(c => c.status !== 'Closed').length
-  const critAlerts     = alerts.filter(a => a.severity === 'Critical').length
-  const activeConns    = connectors.filter(c => c.active).length
+  const criticalCases = cases.filter(c => c.severity === 'Critical').length
+  const highCases     = cases.filter(c => c.severity === 'High').length
+  const openCases     = cases.filter(c => c.status !== 'Closed').length
+  const activeConns   = connectors.filter(c => c.active).length
 
   console.log('\n  📊  Resumo executivo para o PDF:')
-  console.log(`      Casos abertos:      ${openCases}`)
-  console.log(`      Casos críticos:     ${criticalCases}`)
-  console.log(`      Casos high:         ${highCases}`)
-  console.log(`      Alertas críticos:   ${critAlerts}`)
-  console.log(`      Total alertas:      ${alerts.length}`)
-  console.log(`      Conectores ativos:  ${activeConns} / ${connectors.length}`)
-  console.log(`      Tenants:            ${tenants.length}`)
+  console.log(`      Casos abertos:     ${openCases}`)
+  console.log(`      Casos críticos:    ${criticalCases}`)
+  console.log(`      Casos high:        ${highCases}`)
+  console.log(`      Conectores ativos: ${activeConns} / ${connectors.length}`)
+  console.log(`      Tenants:           ${tenants.length}`)
 
-  // Check PDF sections
   console.log('\n  📄  Seções do PDF:')
   cases.length > 0
     ? ok('Tabela de Cases', `${cases.length} linhas`)
     : fail('Tabela de Cases', 'sem dados')
 
-  alerts.length > 0
-    ? ok('Tabela de Alertas', `${alerts.length} linhas`)
-    : ok('Tabela de Alertas', 'vazia — OK, sem alertas no período')
-
   connectors.length > 0
     ? ok('Tabela de Conectores', `${connectors.length} linhas`)
     : ok('Tabela de Conectores', 'vazia')
 
-  ok('KPIs executivos', `total fields validated`)
+  ok('KPIs executivos', 'campos validados')
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -409,14 +349,13 @@ async function main() {
     process.exit(1)
   }
 
-  const [cases, alerts, tenants, connectors] = await Promise.all([
+  const [cases, tenants, connectors] = await Promise.all([
     validateCases(auth.token),
-    validateAlerts(auth.token),
     validateTenants(auth.token),
     validateConnectors(auth.token),
   ])
 
-  validatePdfData(cases, alerts, tenants, connectors)
+  validatePdfData(cases, tenants, connectors)
 
   section('RESULTADO FINAL')
   console.log(`\n  ✅  Aprovado: ${PASS}`)

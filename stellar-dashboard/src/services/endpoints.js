@@ -10,7 +10,6 @@ export const ENDPOINTS = {
   ASSETS:       `${API_PREFIX}/assets`,
   CONNECTORS:   `${API_PREFIX}/connectors`,
   EVENTS:       `${API_PREFIX}/events`,
-  ALERTS:       `${API_PREFIX}/alerts`,
 }
 
 export const HTTP = {

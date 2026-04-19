@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import {
   fetchCases,
-  fetchAlerts,
   fetchAssets,
   fetchConnectors,
   fetchIngestionStats,
@@ -16,7 +15,6 @@ export function DataProvider({ children }) {
 
   const [data, setData] = useState({
     cases:             [],
-    alerts:            [],
     tenants:           [],
     connectors:        [],
     ingestionStats:    [],
@@ -34,14 +32,13 @@ export function DataProvider({ children }) {
 
     const results = await Promise.allSettled([
       fetchCases(auth),
-      fetchAlerts(auth),
       fetchAssets(auth),
       fetchConnectors(auth),
       fetchIngestionStats(auth),
       fetchIngestionTimeline(auth),
     ])
 
-    const keys = ['cases', 'alerts', 'tenants', 'connectors', 'ingestionStats', 'ingestionTimeline']
+    const keys = ['cases', 'tenants', 'connectors', 'ingestionStats', 'ingestionTimeline']
     const newData = {}
 
     for (let i = 0; i < results.length; i++) {

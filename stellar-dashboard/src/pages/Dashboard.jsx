@@ -1,5 +1,5 @@
 import {
-  AlertTriangle, Database, Building2, Plug, Clock, Bell,
+  AlertTriangle, Database, Building2, Plug, Clock,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import KPICard from '../components/Cards/KPICard'
@@ -15,10 +15,6 @@ export default function Dashboard() {
     ['new', 'open'].includes((c.status || '').toLowerCase())
   ).length
 
-  const openAlerts = data.alerts.filter(a =>
-    ['new', 'open'].includes((a.status || '').toLowerCase())
-  ).length
-
   const totalGB          = data.ingestionStats.reduce((s, d) => s + (d.gb || 0), 0)
   const activeConnectors = data.connectors.filter(c => c.active).length
   const lastEvent        = data.ingestionTimeline[0]
@@ -31,19 +27,12 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KPICard
           icon={AlertTriangle}
           label="Casos Abertos"
           value={openCases}
           color="#ff4444"
-          loading={loading}
-        />
-        <KPICard
-          icon={Bell}
-          label="Alertas Abertos"
-          value={openAlerts}
-          color="#f97316"
           loading={loading}
         />
         <KPICard
@@ -87,71 +76,10 @@ export default function Dashboard() {
       {/* Cases Table */}
       <CasesTable cases={data.cases} loading={loading} />
 
-      {/* Alerts + Connectors + Timeline */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <AlertsPanel alerts={data.alerts} loading={loading} />
+      {/* Connectors + Timeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ConnectorsPanel connectors={data.connectors} loading={loading} />
         <TimelinePanel events={data.ingestionTimeline} loading={loading} />
-      </div>
-    </div>
-  )
-}
-
-// ─── Painel de Alertas ───────────────────────────────────────────────────────
-
-function AlertsPanel({ alerts, loading }) {
-  if (loading) {
-    return (
-      <div className="glass rounded-xl p-5">
-        <div className="skeleton h-4 w-32 mb-4" />
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="skeleton h-10 w-full mb-2 rounded-lg" />
-        ))}
-      </div>
-    )
-  }
-
-  if (alerts.length === 0) {
-    return (
-      <div className="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 min-h-32">
-        <Bell size={20} style={{ color: '#334155' }} />
-        <p className="text-xs" style={{ color: '#475569' }}>Nenhum alerta</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="glass rounded-xl p-5">
-      <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-        <Bell size={14} style={{ color: '#f97316' }} />
-        Alertas Recentes
-        <span className="ml-auto text-xs px-2 py-0.5 rounded-full"
-          style={{ background: 'rgba(249,115,22,0.12)', color: '#f97316' }}>
-          {alerts.length}
-        </span>
-      </h3>
-      <div className="space-y-2">
-        {alerts.slice(0, 6).map(a => {
-          const sc = severityColor(a.severity)
-          return (
-            <div
-              key={a.id}
-              className="flex items-center justify-between py-2 px-3 rounded-lg"
-              style={{ background: 'rgba(255,255,255,0.03)' }}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-medium text-gray-300 truncate">{a.name}</div>
-                <div className="text-xs text-gray-600 mt-0.5">{formatRelative(a.createdAt)}</div>
-              </div>
-              <span
-                className="text-xs px-2 py-0.5 rounded ml-2 flex-shrink-0 capitalize"
-                style={{ color: sc.text, background: sc.bg, border: `1px solid ${sc.border}` }}
-              >
-                {a.severity}
-              </span>
-            </div>
-          )
-        })}
       </div>
     </div>
   )
