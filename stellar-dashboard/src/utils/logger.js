@@ -301,8 +301,19 @@ export function logApiError(err, context = 'api') {
 
   // Sem rede / CORS / recusado
   if (err?.code === 'ERR_NETWORK' || err?.code === 'ECONNREFUSED') {
-    error(context, 'Erro de rede', { code: err.code, url: err.config?.url })
-    return 'Não foi possível alcançar a instância — verifique a URL e a rede.'
+    const url = err.config?.url
+    error(context, 'Erro de rede', { code: err.code, url, method: err.config?.method })
+
+    // Tentar extrair o host da URL para feedback mais específico
+    let host = 'desconhecido'
+    try {
+      const parsed = new URL(url)
+      host = parsed.hostname
+    } catch {
+      // ignore
+    }
+
+    return `Não foi possível conectar a ${host}. Verifique:\n1. URL está correta?\n2. Instância está acessível?\n3. Há bloqueio de firewall/VPN?`
   }
 
   // Erro genérico

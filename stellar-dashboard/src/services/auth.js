@@ -6,6 +6,24 @@ import {
 } from '../utils/logger'
 
 /**
+ * Testa se a URL é acessível (faz um HEAD request para raiz).
+ * Útil para validar antes de tentar autenticar.
+ */
+export async function testConnectivity(url) {
+  const base = url.replace(/\/$/, '')
+  try {
+    debug('auth', 'Testing connectivity', { url: base })
+    const res = await axios.head(base, { timeout: 5000 })
+    info('auth', 'URL is reachable', { url: base, status: res.status })
+    return { reachable: true, status: res.status }
+  } catch (err) {
+    const code = err.code || (err.response?.status ? `HTTP${err.response.status}` : 'unknown')
+    warn('auth', 'URL not reachable', { url: base, code })
+    return { reachable: false, error: err.message, code }
+  }
+}
+
+/**
  * Step 1 — Authenticate with username + password via HTTP Basic Auth.
  *
  * Returns:
@@ -29,7 +47,7 @@ export async function authenticate({ url, username, password, jwtToken }) {
   const base     = url.replace(/\/$/, '')
   const endpoint = `${base}${ENDPOINTS.ACCESS_TOKEN}`
 
-  debug('auth', 'Starting authentication', { endpoint, username })
+  debug('auth', 'Starting authentication', { endpoint, username, timestamp: new Date().toISOString() })
 
   try {
     const res = await axios.post(endpoint, null, {

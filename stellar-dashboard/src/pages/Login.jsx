@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   ShieldCheck, Eye, EyeOff, Loader, AlertCircle,
-  Zap, Globe, User, Lock, KeyRound, ArrowLeft, Hash,
+  Zap, Globe, User, Lock, KeyRound, ArrowLeft, Hash, Check, X,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { testConnectivity } from '../services/auth'
 
 export default function Login() {
   const { connect, verifyMFA, resetAuthStep, connecting, authError, authStep } = useAuth()
@@ -83,11 +84,34 @@ export default function Login() {
 // ─── Credentials Step ────────────────────────────────────────────────────────
 
 function CredentialsForm({ onSubmit, connecting, authError }) {
-  const [form, setForm]         = useState({ url: 'https://poc.stellarcyber.cloud', username: '', password: '', tenantId: '' })
-  const [showPass, setShowPass] = useState(false)
+  const [form, setForm]           = useState({ url: '', username: '', password: '', tenantId: '' })
+  const [showPass, setShowPass]   = useState(false)
+  const [testingUrl, setTestingUrl] = useState(false)
+  const [urlStatus, setUrlStatus] = useState(null) // null | { ok: bool, msg: string }
 
   function set(k) {
     return e => setForm(prev => ({ ...prev, [k]: e.target.value }))
+  }
+
+  async function handleTestUrl() {
+    if (!form.url.trim()) {
+      setUrlStatus({ ok: false, msg: 'Digite a URL primeiro' })
+      return
+    }
+    setTestingUrl(true)
+    try {
+      const result = await testConnectivity(form.url)
+      setUrlStatus({
+        ok: result.reachable,
+        msg: result.reachable
+          ? `✓ URL acessível (HTTP ${result.status})`
+          : `✗ Não foi possível conectar: ${result.error}`
+      })
+    } catch (err) {
+      setUrlStatus({ ok: false, msg: `Erro ao testar: ${err.message}` })
+    } finally {
+      setTestingUrl(false)
+    }
   }
 
   async function handleSubmit(e) {
@@ -111,11 +135,38 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
         icon={Globe}
         label="URL da Instância"
         type="url"
-        placeholder="https://poc.stellarcyber.cloud"
+        placeholder="https://seu-dominio.com"
         value={form.url}
         onChange={set('url')}
         required
       />
+
+      {/* URL Test Status */}
+      {urlStatus && (
+        <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
+          style={{
+            background: urlStatus.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+            border: urlStatus.ok ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(239,68,68,0.25)',
+            color: urlStatus.ok ? '#4ade80' : '#fca5a5',
+          }}>
+          {urlStatus.ok ? <Check size={14} /> : <X size={14} />}
+          {urlStatus.msg}
+        </div>
+      )}
+
+      {/* Test URL Button */}
+      <button
+        type="button"
+        onClick={handleTestUrl}
+        disabled={testingUrl || connecting || !form.url.trim()}
+        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+        style={{
+          background: 'rgba(0,212,255,0.08)',
+          border: '1px solid rgba(0,212,255,0.2)',
+          color: '#00d4ff',
+        }}>
+        {testingUrl ? <><Loader size={12} className="animate-spin" />Testando...</> : 'Testar Conectividade'}
+      </button>
       <IconField
         icon={User}
         label="Usuário"
