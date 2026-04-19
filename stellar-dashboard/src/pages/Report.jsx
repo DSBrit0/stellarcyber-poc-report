@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import { useLocale } from '../i18n'
+import { useLocale, getPdfStrings } from '../i18n'
 import { generateRecommendations } from '../utils/recommendations'
 import { downloadPDFReport } from '../services/pdfReport'
 import { formatRelative } from '../utils/formatters'
@@ -35,7 +35,7 @@ function Field({ label, children }) {
 export default function Report() {
   const { auth }                                              = useAuth()
   const { data, loading, errors, lastRefresh, refresh }      = useData()
-  const { t }                                                 = useLocale()
+  const { t, locale }                                         = useLocale()
   const [generating, setGenerating]                          = useState(false)
   const [downloaded, setDownloaded]                          = useState(false)
   const [formOpen, setFormOpen]                              = useState(true)
@@ -81,6 +81,8 @@ export default function Report() {
         recommendations,
         generatedAt: new Date(),
         pocMeta,
+        locale,
+        s: getPdfStrings(locale),
       })
       setDownloaded(true)
       setTimeout(() => setDownloaded(false), 4000)

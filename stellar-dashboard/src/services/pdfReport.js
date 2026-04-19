@@ -10,7 +10,7 @@ const C = {
   white:   [255, 255, 255],
   text:    [30,  30,  30 ],
   muted:   [120, 120, 120],
-  red:     [192, 0,   0  ],   // CONFIDENCIAL, crítico
+  red:     [192, 0,   0  ],   // crítico
   green:   [0,   176, 80 ],   // #00B050
   orange:  [255, 130, 0  ],
   gray:    [242, 242, 242],
@@ -24,12 +24,20 @@ const CW = PW - ML - MR  // 182mm
 
 let _pageNum = 0
 let _meta    = {}
+let _s       = {}
+
+// Simple interpolation helper: i(s.key, { var: val })
+function i(str, vars = {}) {
+  return String(str || '').replace(/\{(\w+)\}/g, (_, k) =>
+    vars[k] !== undefined ? String(vars[k]) : `{${k}}`
+  )
+}
 
 // ─── Page chrome (header + footer on body pages) ─────────────────────────────
 
 function addChrome(doc) {
-  const client  = _meta.clientName  || 'Cliente'
-  const partner = _meta.partnerName || 'Parceiro'
+  const client  = _meta.clientName  || 'Client'
+  const partner = _meta.partnerName || 'Partner'
   const year    = new Date().getFullYear()
 
   doc.setFillColor(...C.blue)
@@ -37,15 +45,18 @@ function addChrome(doc) {
   doc.setFontSize(7)
   doc.setTextColor(...C.white)
   doc.setFont('helvetica', 'normal')
-  doc.text(`Stellar Cyber Open XDR — Relatório de PoC | ${client} — CONFIDENCIAL`, ML, 6.5)
-  doc.text(`Página ${_pageNum}`, PW - MR, 6.5, { align: 'right' })
+  doc.text(
+    `Stellar Cyber Open XDR — ${_s.headerTitle} | ${client} — ${_s.confidential}`,
+    ML, 6.5
+  )
+  doc.text(`${_s.page} ${_pageNum}`, PW - MR, 6.5, { align: 'right' })
 
   doc.setFillColor(...C.navy)
   doc.rect(0, PH - 10, PW, 10, 'F')
   doc.setFontSize(6.5)
   doc.setTextColor(...C.white)
   doc.text(
-    `© ${year} — Documento Confidencial | Stellar Cyber + ${partner} | Página ${_pageNum}`,
+    `© ${year} — ${_s.footerDoc} | Stellar Cyber + ${partner} | ${_s.page} ${_pageNum}`,
     PW / 2, PH - 4, { align: 'center' }
   )
 }
@@ -115,9 +126,10 @@ function pct(n, total) {
   return total > 0 ? `${((n / total) * 100).toFixed(0)}%` : '0%'
 }
 
-function fmtDate(iso) {
+function fmtDate(iso, locale) {
   if (!iso) return '—'
-  try { return new Date(iso).toLocaleDateString('pt-BR') } catch { return String(iso) }
+  const loc = locale === 'en' ? 'en-US' : locale === 'es' ? 'es-ES' : 'pt-BR'
+  try { return new Date(iso).toLocaleDateString(loc) } catch { return String(iso) }
 }
 
 function trunc(str, n) {
@@ -133,9 +145,9 @@ function sevColor(sev) {
   return C.green
 }
 
-function scoreColor(s) {
-  if (s === 'Excelente') return C.green
-  if (s === 'Bom')       return C.blue
+function scoreColor(val, s) {
+  if (val === s.scoreExcellent) return C.green
+  if (val === s.scoreGood)      return C.blue
   return C.orange
 }
 
@@ -167,22 +179,26 @@ export function generatePDFReport({
   recommendations = [],
   generatedAt     = new Date(),
   pocMeta         = {},
+  locale          = 'pt',
+  s               = {},
 }) {
   _pageNum = 1
   _meta    = pocMeta
+  _s       = s
+
+  const fmt = (iso) => fmtDate(iso, locale)
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
   // Pre-compute metrics
-  const openCases = cases.filter(c => !['closed', 'resolved'].includes((c.status || '').toLowerCase()))
-  const critCases = cases.filter(c => c.severity?.toLowerCase() === 'critical')
-  const highCases = cases.filter(c => c.severity?.toLowerCase() === 'high')
-  const medCases  = cases.filter(c => c.severity?.toLowerCase() === 'medium')
-  const lowCases  = cases.filter(c => c.severity?.toLowerCase() === 'low')
+  const openCases  = cases.filter(c => !['closed', 'resolved'].includes((c.status || '').toLowerCase()))
+  const critCases  = cases.filter(c => c.severity?.toLowerCase() === 'critical')
+  const highCases  = cases.filter(c => c.severity?.toLowerCase() === 'high')
+  const medCases   = cases.filter(c => c.severity?.toLowerCase() === 'medium')
+  const lowCases   = cases.filter(c => c.severity?.toLowerCase() === 'low')
   const activeConn = connectors.filter(c => c.active)
   const mitrRecs   = recommendations.filter(r => r.category === 'MITRE ATT&CK')
   const opRecs     = recommendations.filter(r => r.category !== 'MITRE ATT&CK')
-  const critRecs   = recommendations.filter(r => r.priority === 'critical')
 
   const detectedTactics = new Set(mitrRecs.map(r => r.mitre?.tactic?.id).filter(Boolean))
   const mitreCovPct = Math.round((detectedTactics.size / ALL_TACTICS.length) * 100)
@@ -196,22 +212,21 @@ export function generatePDFReport({
     pocStartDate = '',
     pocEndDate   = '',
     version      = '1.0',
-    verdict      = 'Aprovado',
+    verdict      = s.verdictApproved || 'Approved',
   } = pocMeta
 
   const period = pocStartDate && pocEndDate
-    ? `${fmtDate(pocStartDate)} a ${fmtDate(pocEndDate)}`
-    : fmtDate(generatedAt.toISOString())
+    ? `${fmt(pocStartDate)} ${s.periodTo || 'to'} ${fmt(pocEndDate)}`
+    : fmt(generatedAt.toISOString())
 
-  const verdictColor = verdict === 'Aprovado' ? C.green
-    : verdict === 'Não Aprovado' ? C.red
+  const verdictColor = verdict === s.verdictApproved ? C.green
+    : verdict === s.verdictRejected ? C.red
     : C.orange
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // CAPA
+  // COVER
   // ══════════════════════════════════════════════════════════════════════════════
 
-  // Topo azul
   doc.setFillColor(...C.blue)
   doc.rect(0, 0, PW, 32, 'F')
   doc.setFont('helvetica', 'bold')
@@ -222,19 +237,17 @@ export function generatePDFReport({
   doc.setFontSize(8)
   doc.text('Open XDR Platform', ML, 21)
 
-  // CONFIDENCIAL no topo direito
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(255, 210, 210)
-  doc.text('CONFIDENCIAL', PW - MR, 14, { align: 'right' })
+  doc.text(s.confidential, PW - MR, 14, { align: 'right' })
   doc.setFont('helvetica', 'normal')
 
-  // Título central
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(24)
   doc.setTextColor(...C.navy)
-  doc.text('RELATÓRIO DE', PW / 2, 72, { align: 'center' })
-  doc.text('PROVA DE CONCEITO', PW / 2, 88, { align: 'center' })
+  doc.text(s.reportTitle1, PW / 2, 72, { align: 'center' })
+  doc.text(s.reportTitle2, PW / 2, 88, { align: 'center' })
   doc.setFont('helvetica', 'normal')
 
   doc.setFontSize(12)
@@ -245,7 +258,7 @@ export function generatePDFReport({
   doc.setLineWidth(0.7)
   doc.line(ML + 15, 107, PW - MR - 15, 107)
 
-  // Caixa "Preparado para"
+  // "Prepared for" box
   doc.setFillColor(...C.rowAlt)
   doc.roundedRect(ML, 114, 86, 46, 2, 2, 'F')
   doc.setDrawColor(...C.midBlue)
@@ -254,7 +267,7 @@ export function generatePDFReport({
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C.navy)
-  doc.text('PREPARADO PARA', ML + 4, 122)
+  doc.text(s.preparedFor, ML + 4, 122)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
   doc.setTextColor(...C.text)
@@ -263,7 +276,7 @@ export function generatePDFReport({
   doc.setTextColor(...C.muted)
   doc.text(trunc(clientDept, 32), ML + 4, 141)
 
-  // Caixa "Preparado por"
+  // "Prepared by" box
   const rx = PW - MR - 86
   doc.setFillColor(...C.rowAlt)
   doc.roundedRect(rx, 114, 86, 46, 2, 2, 'F')
@@ -272,7 +285,7 @@ export function generatePDFReport({
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C.navy)
-  doc.text('PREPARADO POR', rx + 4, 122)
+  doc.text(s.preparedBy, rx + 4, 122)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
   doc.setTextColor(...C.text)
@@ -282,12 +295,12 @@ export function generatePDFReport({
   doc.text(trunc(partnerName, 32), rx + 4, 141)
   doc.text(trunc(seEmail, 36), rx + 4, 149)
 
-  // Tabela de metadados
+  // Metadata table
   autoTable(doc, {
     startY: 168,
     body: [
-      ['Versão', version, 'Período da PoC', period],
-      ['Data do Relatório', fmtDate(generatedAt.toISOString()), 'Veredicto', verdict],
+      [s.metaVersion, version,                           s.metaPeriod,  period],
+      [s.metaDate,    fmt(generatedAt.toISOString()),    s.metaVerdict, verdict],
     ],
     styles:     { fontSize: 9.5, cellPadding: 4.5, textColor: C.text },
     bodyStyles: { fillColor: C.rowAlt },
@@ -297,47 +310,44 @@ export function generatePDFReport({
       2: { fontStyle: 'bold', textColor: C.navy, cellWidth: 40 },
       3: { cellWidth: 51, fontStyle: 'bold', textColor: verdictColor },
     },
-    margin:          { left: ML, right: MR },
-    tableLineColor:  C.blue,
-    tableLineWidth:  0.3,
+    margin:         { left: ML, right: MR },
+    tableLineColor: C.blue,
+    tableLineWidth: 0.3,
   })
 
-  // Rodapé da capa
+  // Cover footer
   doc.setFillColor(...C.navy)
   doc.rect(0, PH - 22, PW, 22, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(...C.white)
-  doc.text('CONFIDENCIAL', PW / 2, PH - 13, { align: 'center' })
+  doc.text(s.confidential, PW / 2, PH - 13, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
   doc.setTextColor(200, 210, 230)
-  doc.text(
-    'Este documento contém informações proprietárias e confidenciais. Distribuição restrita.',
-    PW / 2, PH - 6, { align: 'center' }
-  )
+  doc.text(s.coverDisclaimer, PW / 2, PH - 6, { align: 'center' })
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 1 — SUMÁRIO EXECUTIVO
+  // SECTION 1 — EXECUTIVE SUMMARY
   // ══════════════════════════════════════════════════════════════════════════════
 
   let y = newPage(doc)
-  y = sectionTitle(doc, 1, 'Sumário Executivo', y)
-  y = subTitle(doc, '1.1 Indicadores-Chave do PoC', y)
+  y = sectionTitle(doc, 1, s.sec1, y)
+  y = subTitle(doc, s.sec1_1, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Indicador', 'Resultado']],
+    head: [[s.kpiIndicator, s.kpiResult]],
     body: [
-      ['Período de Avaliação',        period],
-      ['Fontes de Log Integradas',    String(connectors.length)],
-      ['Alertas / Cases Detectados',  String(cases.length)],
-      ['Cases Abertos',               String(openCases.length)],
-      ['Cases Críticos',              String(critCases.length)],
-      ['Cobertura MITRE ATT\u0026CK', `${mitreCovPct}% (${detectedTactics.size} de ${ALL_TACTICS.length} táticas)`],
-      ['Assets / Tenants Monitorados',String(tenants.length)],
-      ['Veredicto Final',             verdict],
+      [s.kpiPeriod,        period],
+      [s.kpiSources,       String(connectors.length)],
+      [s.kpiCasesDetected, String(cases.length)],
+      [s.kpiOpenCases,     String(openCases.length)],
+      [s.kpiCritCases,     String(critCases.length)],
+      [s.kpiMitreCov,      `${mitreCovPct}% (${i(s.kpiTacticsFmt, { detected: detectedTactics.size, total: ALL_TACTICS.length })})`],
+      [s.kpiTenants,       String(tenants.length)],
+      [s.kpiFinalVerdict,  verdict],
     ],
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 90 },
@@ -352,39 +362,39 @@ export function generatePDFReport({
   })
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, '1.2 Contexto e Objetivos', y)
-  y = bodyText(doc, `Este relatório apresenta os resultados da Prova de Conceito (PoC) da plataforma Stellar Cyber Open XDR, conduzida para ${clientName}. A avaliação teve como objetivo demonstrar as capacidades de detecção, correlação e resposta a ameaças em um ambiente representativo do cliente.`, y)
+  y = subTitle(doc, s.sec1_2, y)
+  y = bodyText(doc, i(s.body1_1, { client: clientName }), y)
   y += 4
-  y = bodyText(doc, `Durante o período de ${period}, foram integradas ${connectors.length} fontes de dados, resultando na detecção de ${cases.length} alertas/cases, com cobertura de ${mitreCovPct}% das táticas do framework MITRE ATT&CK Enterprise.`, y)
+  y = bodyText(doc, i(s.body1_2, { period, connCount: connectors.length, caseCount: cases.length, mitrePct: mitreCovPct }), y)
   y += 10
 
-  // Bloco de veredicto
+  // Verdict block
   doc.setFillColor(...verdictColor)
   doc.roundedRect(ML, y, CW, 16, 3, 3, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...C.white)
-  doc.text(`Veredicto: ${verdict}`, PW / 2, y + 10, { align: 'center' })
+  doc.text(`${s.verdictLabel}: ${verdict}`, PW / 2, y + 10, { align: 'center' })
   doc.setFont('helvetica', 'normal')
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 2 — ESCOPO E METODOLOGIA
+  // SECTION 2 — SCOPE AND METHODOLOGY
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 2, 'Escopo e Metodologia', y)
-  y = subTitle(doc, '2.1 Ambiente Avaliado', y)
+  y = sectionTitle(doc, 2, s.sec2, y)
+  y = subTitle(doc, s.sec2_1, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Componente', 'Detalhes']],
+    head: [[s.envComponent, s.envDetails]],
     body: [
-      ['Instância Stellar Cyber', trunc(auth?.url || '—', 60)],
-      ['Usuário de Avaliação',    auth?.username || '—'],
-      ['Fontes de Log (Sensors)', `${connectors.length} conectores integrados`],
-      ['Tenants / Assets',        `${tenants.length} entidades monitoradas`],
-      ['Período de Coleta',        period],
+      [s.envInstance, trunc(auth?.url || '—', 60)],
+      [s.envUser,     auth?.username || '—'],
+      [s.envSensors,  i(s.connIntegrated, { n: connectors.length })],
+      [s.envTenants,  i(s.entitiesMonitored, { n: tenants.length })],
+      [s.envPeriod,   period],
     ],
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 75 },
@@ -393,18 +403,18 @@ export function generatePDFReport({
   })
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, '2.2 Fases da Metodologia', y)
+  y = subTitle(doc, s.sec2_2, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Fase', 'Atividade', 'Status']],
+    head: [[s.phaseCol, s.activityCol, s.statusCol]],
     body: [
-      ['1 — Integração',   'Integração de fontes de log e sensores na plataforma',        'Concluído'],
-      ['2 — Baseline',     'Estabelecimento de baseline comportamental do ambiente',        'Concluído'],
-      ['3 — Simulação',    'Execução de cenários de ataque e análise de detecção',          'Concluído'],
-      ['4 — Análise',      'Correlação de eventos e mapeamento MITRE ATT\u0026CK',          'Concluído'],
-      ['5 — Relatório',    'Documentação de resultados, gaps e recomendações',              'Concluído'],
+      [s.phase1, s.phase1desc, s.phaseCompleted],
+      [s.phase2, s.phase2desc, s.phaseCompleted],
+      [s.phase3, s.phase3desc, s.phaseCompleted],
+      [s.phase4, s.phase4desc, s.phaseCompleted],
+      [s.phase5, s.phase5desc, s.phaseCompleted],
     ],
     columnStyles: {
       0: { cellWidth: 42, fontStyle: 'bold' },
@@ -414,17 +424,17 @@ export function generatePDFReport({
   })
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, '2.3 Critérios de Sucesso', y)
+  y = subTitle(doc, s.sec2_3, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Critério', 'Meta', 'Resultado', 'Status']],
+    head: [[s.critCol, s.goalCol, s.resultCol, s.successStatus]],
     body: [
-      ['Integração de fontes',       '≥ 5 fontes',  `${connectors.length} integradas`,  connectors.length >= 5 ? 'Atingido' : 'Parcial'],
-      ['Detecção de ameaças',        '≥ 1 case',    `${cases.length} detectados`,        cases.length >= 1 ? 'Atingido' : 'Não Atingido'],
-      ['Cobertura MITRE ATT\u0026CK','≥ 20%',       `${mitreCovPct}%`,                   mitreCovPct >= 20 ? 'Atingido' : 'Parcial'],
-      ['Disponibilidade plataforma', '≥ 99%',       '99,9%',                             'Atingido'],
+      [s.crit1, s.crit1goal, i(s.crit1result, { n: connectors.length }), connectors.length >= 5 ? s.achieved : s.partial],
+      [s.crit2, s.crit2goal, i(s.crit2result, { n: cases.length }),      cases.length >= 1 ? s.achieved : s.notAchieved],
+      [s.crit3, s.crit3goal, `${mitreCovPct}%`,                          mitreCovPct >= 20 ? s.achieved : s.partial],
+      [s.crit4, s.crit4goal, s.crit4result,                              s.achieved],
     ],
     columnStyles: {
       0: { cellWidth: 68 },
@@ -435,32 +445,32 @@ export function generatePDFReport({
     didParseCell: (d) => {
       if (d.section === 'body' && d.column.index === 3) {
         const v = String(d.cell.raw)
-        d.cell.styles.textColor = v === 'Atingido' ? C.green : v === 'Parcial' ? C.orange : C.red
+        d.cell.styles.textColor = v === s.achieved ? C.green : v === s.partial ? C.orange : C.red
         d.cell.styles.fontStyle = 'bold'
       }
     },
   })
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 3 — VISÃO TÉCNICA DA PLATAFORMA
+  // SECTION 3 — PLATFORM TECHNICAL OVERVIEW
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 3, 'Visão Técnica da Plataforma', y)
-  y = subTitle(doc, '3.1 Arquitetura Stellar Cyber Open XDR', y)
+  y = sectionTitle(doc, 3, s.sec3, y)
+  y = subTitle(doc, s.sec3_1, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Componente', 'Descrição', 'Status']],
+    head: [[s.compComponent, s.compDesc, s.compStatus]],
     body: [
-      ['Open XDR Platform',    'Motor central de correlação e detecção baseado em IA/ML',        'Ativo'],
-      ['Security Data Lake',   'Armazenamento centralizado e normalizado de todos os eventos',    'Ativo'],
-      ['AI-Powered Detection', 'Detecção de anomalias comportamentais e ameaças conhecidas',      'Ativo'],
-      ['Threat Intelligence',  'Integração com feeds de inteligência de ameaças externos',        'Ativo'],
-      ['MITRE ATT\u0026CK Mapping', 'Mapeamento automático de alertas para táticas e técnicas',  'Ativo'],
-      ['Automated Response',   'Orquestração e automação de resposta a incidentes (SOAR)',        'Ativo'],
-      ['Multi-Tenancy',        'Suporte a múltiplos tenants com isolamento de dados',              'Ativo'],
+      [s.comp1, s.comp1desc, s.compActive],
+      [s.comp2, s.comp2desc, s.compActive],
+      [s.comp3, s.comp3desc, s.compActive],
+      [s.comp4, s.comp4desc, s.compActive],
+      [s.comp5, s.comp5desc, s.compActive],
+      [s.comp6, s.comp6desc, s.compActive],
+      [s.comp7, s.comp7desc, s.compActive],
     ],
     columnStyles: {
       0: { cellWidth: 58, fontStyle: 'bold' },
@@ -470,25 +480,28 @@ export function generatePDFReport({
   })
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, '3.2 Modelo de Implantação', y)
-  y = bodyText(doc, `Instância avaliada: ${auth?.url || '—'}. Implantação em modo SaaS/Cloud com acesso seguro via API REST autenticada por Bearer JWT. Interface web acessível via navegador sem necessidade de instalação de agente no lado do cliente.`, y)
+  y = subTitle(doc, s.sec3_2, y)
+  y = bodyText(doc, i(s.body3_2, { url: auth?.url || '—' }), y)
   y += 10
 
-  y = subTitle(doc, '3.3 Integrações Configuradas', y)
+  y = subTitle(doc, s.sec3_3, y)
 
   if (connectors.length === 0) {
-    y = bodyText(doc, 'Nenhum conector/sensor identificado via API.', y)
+    y = bodyText(doc, s.noConnectors, y)
     y += 4
   } else {
     autoTable(doc, {
-      ...tableBase({ styles: { fontSize: 8.5, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 }, headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8.5 } }),
+      ...tableBase({
+        styles: { fontSize: 8.5, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8.5 },
+      }),
       startY: y,
-      head: [['Nome do Conector', 'Tipo', 'Categoria', 'Status']],
+      head: [[s.connName, s.connType, s.connCategory, s.connStatus]],
       body: connectors.slice(0, 35).map(c => [
         trunc(c.name || '—', 42),
         trunc(c.type || '—', 22),
         trunc(c.category || '—', 22),
-        c.active ? 'Online' : 'Offline',
+        c.active ? s.connOnline : s.connOffline,
       ]),
       columnStyles: {
         0: { cellWidth: 72, fontStyle: 'bold' },
@@ -498,7 +511,7 @@ export function generatePDFReport({
       },
       didParseCell: (d) => {
         if (d.section === 'body' && d.column.index === 3) {
-          d.cell.styles.textColor = d.cell.raw === 'Online' ? C.green : C.red
+          d.cell.styles.textColor = d.cell.raw === s.connOnline ? C.green : C.red
           d.cell.styles.fontStyle = 'bold'
         }
       },
@@ -507,21 +520,21 @@ export function generatePDFReport({
     if (connectors.length > 35) {
       doc.setFontSize(7.5)
       doc.setTextColor(...C.muted)
-      doc.text(`Exibindo 35 de ${connectors.length} conectores.`, ML, y)
+      doc.text(i(s.showingOf, { shown: 35, total: connectors.length }), ML, y)
       y += 6
     }
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 4 — RESULTADOS DE DETECÇÃO E RESPOSTA
+  // SECTION 4 — DETECTION AND RESPONSE RESULTS
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 4, 'Resultados de Detecção e Resposta', y)
-  y = subTitle(doc, '4.1 Cenários de Ataque Detectados', y)
+  y = sectionTitle(doc, 4, s.sec4, y)
+  y = subTitle(doc, s.sec4_1, y)
 
   if (cases.length === 0) {
-    y = bodyText(doc, 'Nenhum case detectado durante o período de avaliação.', y)
+    y = bodyText(doc, s.noCases, y)
     y += 4
   } else {
     const sevOrd = { critical: 0, high: 1, medium: 2, low: 3 }
@@ -531,18 +544,18 @@ export function generatePDFReport({
 
     autoTable(doc, {
       ...tableBase({
-        styles:     { fontSize: 8, cellPadding: 2.5, textColor: C.text, lineColor: [210,210,210], lineWidth: 0.1 },
+        styles:     { fontSize: 8, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
         headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8 },
       }),
       startY: y,
-      head: [['Case / Alerta', 'Severidade', 'Status', 'Assets', 'Score', 'Data']],
+      head: [[s.caseCol, s.sevCol, s.caseStatusCol, s.assetsCol, s.scoreCol, s.dateCol]],
       body: sortedCases.map(c => [
         trunc(c.name || c.id || '—', 56),
         (c.severity || '—').toUpperCase(),
         trunc(c.status || '—', 18),
         String(c.assetsAffected || 1),
         c.score != null ? String(c.score) : '—',
-        fmtDate(c.createdAt),
+        fmt(c.createdAt),
       ]),
       columnStyles: {
         0: { cellWidth: 72 },
@@ -564,28 +577,27 @@ export function generatePDFReport({
     if (cases.length > 50) {
       doc.setFontSize(7.5)
       doc.setTextColor(...C.muted)
-      doc.text(`Exibindo 50 de ${cases.length} cases, ordenados por severidade.`, ML, y)
+      doc.text(i(s.showingCases, { shown: 50, total: cases.length }), ML, y)
       y += 8
     }
   }
 
-  if (y > 230) { y = newPage(doc) }
-  else { y += 4 }
-  y = subTitle(doc, '4.2 Métricas de Detecção', y)
+  if (y > 230) { y = newPage(doc) } else { y += 4 }
+  y = subTitle(doc, s.sec4_2, y)
 
   autoTable(doc, {
     ...tableBase({ tableWidth: 130 }),
     startY: y,
-    head: [['Métrica', 'Valor']],
+    head: [[s.metricCol, s.valueCol]],
     body: [
-      ['Total de Cases / Alertas',   String(cases.length)],
-      ['Cases Abertos',              String(openCases.length)],
-      ['Cases Críticos',             String(critCases.length)],
-      ['Cases de Alta Severidade',   String(highCases.length)],
-      ['Cases de Média Severidade',  String(medCases.length)],
-      ['Cases de Baixa Severidade',  String(lowCases.length)],
-      ['Taxa de Abertura',           pct(openCases.length, cases.length)],
-      ['Sensores Ativos',            `${activeConn.length} de ${connectors.length}`],
+      [s.totalCasesLabel,    String(cases.length)],
+      [s.openCasesLabel,     String(openCases.length)],
+      [s.critCasesLabel,     String(critCases.length)],
+      [s.highCasesLabel,     String(highCases.length)],
+      [s.medCasesLabel,      String(medCases.length)],
+      [s.lowCasesLabel,      String(lowCases.length)],
+      [s.openRate,           pct(openCases.length, cases.length)],
+      [s.activeSensorsLabel, i(s.sensorsOf, { active: activeConn.length, total: connectors.length })],
     ],
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 90 },
@@ -594,22 +606,22 @@ export function generatePDFReport({
   })
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 5 — ANÁLISE DE COBERTURA MITRE ATT&CK
+  // SECTION 5 — MITRE ATT&CK COVERAGE
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 5, 'Análise de Cobertura MITRE ATT\u0026CK', y)
-  y = subTitle(doc, '5.1 Mapeamento de Táticas Detectadas', y)
+  y = sectionTitle(doc, 5, s.sec5, y)
+  y = subTitle(doc, s.sec5_1, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['ID', 'Tática', 'Técnicas Detectadas', 'Cobertura']],
+    head: [[s.mitreId, s.mitreTactic, s.mitreTechs, s.mitreCoverage]],
     body: ALL_TACTICS.map(tactic => {
       const hits     = mitrRecs.filter(r => r.mitre?.tactic?.id === tactic.id)
       const covered  = hits.length > 0
       const techList = hits.map(r => r.mitre?.technique?.id).filter(Boolean).join(', ') || '—'
-      return [tactic.id, tactic.name, techList, covered ? 'Detectado' : 'Não Detectado']
+      return [tactic.id, tactic.name, techList, covered ? s.detected : s.notDetected]
     }),
     columnStyles: {
       0: { cellWidth: 22, fontStyle: 'bold' },
@@ -619,17 +631,16 @@ export function generatePDFReport({
     },
     didParseCell: (d) => {
       if (d.section === 'body' && d.column.index === 3) {
-        d.cell.styles.textColor = d.cell.raw === 'Detectado' ? C.green : C.muted
-        d.cell.styles.fontStyle = d.cell.raw === 'Detectado' ? 'bold' : 'normal'
+        d.cell.styles.textColor = d.cell.raw === s.detected ? C.green : C.muted
+        d.cell.styles.fontStyle = d.cell.raw === s.detected ? 'bold' : 'normal'
       }
     },
   })
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
   if (y > 240) { y = newPage(doc) }
-  y = subTitle(doc, '5.2 Resumo de Cobertura', y)
+  y = subTitle(doc, s.sec5_2, y)
 
-  // Três boxes de métricas
   const bw = (CW - 8) / 3
   const bh = 22
 
@@ -640,7 +651,7 @@ export function generatePDFReport({
   doc.setTextColor(...C.white)
   doc.text(`${mitreCovPct}%`, ML + bw / 2, y + 13, { align: 'center' })
   doc.setFontSize(7.5)
-  doc.text('Cobertura Total', ML + bw / 2, y + 19, { align: 'center' })
+  doc.text(s.totalCoverage, ML + bw / 2, y + 19, { align: 'center' })
   doc.setFont('helvetica', 'normal')
 
   const b2x = ML + bw + 4
@@ -651,7 +662,7 @@ export function generatePDFReport({
   doc.setTextColor(...C.navy)
   doc.text(`${detectedTactics.size}`, b2x + bw / 2, y + 13, { align: 'center' })
   doc.setFontSize(7.5)
-  doc.text('Táticas Detectadas', b2x + bw / 2, y + 19, { align: 'center' })
+  doc.text(s.tacticsDetected, b2x + bw / 2, y + 19, { align: 'center' })
   doc.setFont('helvetica', 'normal')
 
   const b3x = ML + (bw + 4) * 2
@@ -662,31 +673,31 @@ export function generatePDFReport({
   doc.setTextColor(...C.navy)
   doc.text(`${mitrRecs.length}`, b3x + bw / 2, y + 13, { align: 'center' })
   doc.setFontSize(7.5)
-  doc.text('Técnicas Mapeadas', b3x + bw / 2, y + 19, { align: 'center' })
+  doc.text(s.techniquesMapped, b3x + bw / 2, y + 19, { align: 'center' })
   doc.setFont('helvetica', 'normal')
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 6 — AVALIAÇÃO OPERACIONAL
+  // SECTION 6 — OPERATIONAL ASSESSMENT
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 6, 'Avaliação Operacional', y)
-  y = subTitle(doc, '6.1 Experiência do Analista SOC', y)
-  y = bodyText(doc, 'A plataforma Stellar Cyber demonstrou interface unificada com visualização clara de alertas priorizados por risco. O painel de investigations permite ao analista navegar do alerta até o evento bruto em poucos cliques, reduzindo significativamente o Mean Time to Detect (MTTD) e o Mean Time to Respond (MTTR).', y)
+  y = sectionTitle(doc, 6, s.sec6, y)
+  y = subTitle(doc, s.sec6_1, y)
+  y = bodyText(doc, s.body6_1, y)
   y += 8
 
-  y = subTitle(doc, '6.2 Fluxo de Resposta a Incidentes', y)
+  y = subTitle(doc, s.sec6_2, y)
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Etapa', 'Ação', 'Ferramenta']],
+    head: [[s.stepCol, s.actionCol, s.toolCol]],
     body: [
-      ['1 — Detecção',     'Alerta gerado automaticamente pela plataforma',          'Stellar Cyber AI Engine'],
-      ['2 — Triagem',      'Analista revisa alerta e contexto correlacionado',        'Stellar Cyber Console'],
-      ['3 — Investigação', 'Análise de linha do tempo e pivôs de dados',              'Security Data Lake'],
-      ['4 — Contenção',    'Isolamento de host ou bloqueio de IP via integração',     'SOAR / EDR / Firewall'],
-      ['5 — Remediação',   'Limpeza, patch e restauração de serviço',                 'Equipe de TI'],
-      ['6 — Documentação', 'Case fechado com timeline e RCA registrados',             'Stellar Cyber Cases'],
+      [s.step1, s.step1action, s.step1tool],
+      [s.step2, s.step2action, s.step2tool],
+      [s.step3, s.step3action, s.step3tool],
+      [s.step4, s.step4action, s.step4tool],
+      [s.step5, s.step5action, s.step5tool],
+      [s.step6, s.step6action, s.step6tool],
     ],
     columnStyles: {
       0: { cellWidth: 42, fontStyle: 'bold' },
@@ -696,28 +707,28 @@ export function generatePDFReport({
   })
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, '6.3 Automação e Playbooks', y)
-  y = bodyText(doc, 'A plataforma suporta automação de resposta via playbooks configuráveis (SOAR nativo), permitindo ações automáticas como: enriquecimento de alertas com threat intelligence, notificações de equipe, isolamento de endpoint e bloqueio de IPs maliciosos — reduzindo a carga operacional do SOC.', y)
+  y = subTitle(doc, s.sec6_3, y)
+  y = bodyText(doc, s.body6_3, y)
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 7 — ANÁLISE DE ROI E CONSOLIDAÇÃO
+  // SECTION 7 — ROI ANALYSIS
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 7, 'Análise de ROI e Consolidação', y)
-  y = subTitle(doc, '7.1 Comparativo de TCO (3 Anos)', y)
+  y = sectionTitle(doc, 7, s.sec7, y)
+  y = subTitle(doc, s.sec7_1, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Item', 'Ambiente Atual (Estimado)', 'Com Stellar Cyber']],
+    head: [[s.tcoItem, s.tcoCurrent, s.tcoWithSC]],
     body: [
-      ['Ferramentas de Segurança (SIEM, EDR, NDR)', 'Múltiplas licenças separadas', 'Plataforma unificada'],
-      ['Horas de Analista (triagem manual)',         'Alto volume de trabalho manual','Redução de até 80%'],
-      ['MTTD (Tempo médio de detecção)',             '> 24 horas',                   '< 1 hora'],
-      ['MTTR (Tempo médio de resposta)',             '> 72 horas',                   '< 4 horas'],
-      ['Integração de fontes de log',               'Desenvolvimento customizado',   'Conectores nativos prontos'],
-      ['Cobertura MITRE ATT\u0026CK',               'Parcial / desconhecida',        `${mitreCovPct}% (mensurado)`],
+      [s.tco1, s.tco1current, s.tco1sc],
+      [s.tco2, s.tco2current, s.tco2sc],
+      [s.tco3, s.tco3current, s.tco3sc],
+      [s.tco4, s.tco4current, s.tco4sc],
+      [s.tco5, s.tco5current, s.tco5sc],
+      [s.tco6, s.tco6current, i(s.tco6sc, { pct: mitreCovPct })],
     ],
     columnStyles: {
       0: { cellWidth: 78, fontStyle: 'bold' },
@@ -727,18 +738,18 @@ export function generatePDFReport({
   })
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, '7.2 Benefícios Qualitativos', y)
+  y = subTitle(doc, s.sec7_2, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Benefício', 'Impacto']],
+    head: [[s.benefitCol, s.impactCol]],
     body: [
-      ['Visibilidade Unificada',       'Correlação de dados de toda a superfície de ataque em uma única plataforma'],
-      ['Redução de Fadiga de Alertas', 'IA/ML prioriza e agrupa alertas, reduzindo o ruído operacional do SOC'],
-      ['Conformidade e Auditoria',     'Logs centralizados facilitam auditorias e requisitos regulatórios (LGPD, ISO 27001)'],
-      ['Escalabilidade',               'Arquitetura cloud-native escala automaticamente com o crescimento do ambiente'],
-      ['Consolidação de Equipe',       'Uma plataforma substitui múltiplas ferramentas e equipes especializadas'],
+      [s.ben1, s.ben1impact],
+      [s.ben2, s.ben2impact],
+      [s.ben3, s.ben3impact],
+      [s.ben4, s.ben4impact],
+      [s.ben5, s.ben5impact],
     ],
     columnStyles: {
       0: { cellWidth: 68, fontStyle: 'bold' },
@@ -747,21 +758,24 @@ export function generatePDFReport({
   })
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 8 — RISCOS, GAPS E RECOMENDAÇÕES
+  // SECTION 8 — RISKS, GAPS AND RECOMMENDATIONS
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 8, 'Riscos, Gaps e Recomendações', y)
-  y = subTitle(doc, '8.1 Riscos Identificados', y)
+  y = sectionTitle(doc, 8, s.sec8, y)
+  y = subTitle(doc, s.sec8_1, y)
 
   if (recommendations.length === 0) {
-    y = bodyText(doc, 'Nenhum risco identificado durante o período de avaliação.', y)
+    y = bodyText(doc, s.noRisks, y)
     y += 6
   } else {
     autoTable(doc, {
-      ...tableBase({ styles: { fontSize: 8.5, cellPadding: 2.8, textColor: C.text, lineColor: [210,210,210], lineWidth: 0.1 }, headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8.5 } }),
+      ...tableBase({
+        styles: { fontSize: 8.5, cellPadding: 2.8, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8.5 },
+      }),
       startY: y,
-      head: [['Prioridade', 'Risco / Gap', 'Descrição']],
+      head: [[s.priorityCol, s.riskCol, s.descCol]],
       body: opRecs.slice(0, 18).map(r => [
         (r.priority || '—').toUpperCase(),
         trunc(r.title || '—', 50),
@@ -785,12 +799,15 @@ export function generatePDFReport({
 
   if (mitrRecs.length > 0) {
     if (y > 210) { y = newPage(doc) }
-    y = subTitle(doc, '8.2 Recomendações Técnicas — MITRE ATT\u0026CK', y)
+    y = subTitle(doc, s.sec8_2, y)
 
     autoTable(doc, {
-      ...tableBase({ styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak', textColor: C.text, lineColor: [210,210,210], lineWidth: 0.1 }, headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8 } }),
+      ...tableBase({
+        styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak', textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8 },
+      }),
       startY: y,
-      head: [['Técnica', 'Tática', 'Cases', 'Mitigação Recomendada']],
+      head: [[s.techCol, s.tacticCol, s.casesCol, s.mitigationCol]],
       body: mitrRecs.slice(0, 15).map(r => [
         `${r.mitre?.technique?.id} — ${r.mitre?.technique?.name}`,
         r.mitre?.tactic?.name || '—',
@@ -808,24 +825,24 @@ export function generatePDFReport({
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 9 — PRÓXIMOS PASSOS
+  // SECTION 9 — NEXT STEPS
   // ══════════════════════════════════════════════════════════════════════════════
 
   if (y > 215) { y = newPage(doc) } else { y += 6 }
-  y = sectionTitle(doc, 9, 'Próximos Passos', y)
+  y = sectionTitle(doc, 9, s.sec9, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['#', 'Ação', 'Responsável', 'Prazo']],
+    head: [[s.nextNum, s.nextAction, s.nextOwner, s.nextDeadline]],
     body: [
-      ['1', 'Aprovação formal do resultado do PoC pela liderança técnica',              clientName,                  '30 dias'],
-      ['2', 'Definição de escopo e arquitetura para implantação em produção',           `${seName} / ${clientName}`, '30 dias'],
-      ['3', 'Integração de todas as fontes de log do ambiente de produção',             clientName,                  '60 dias'],
-      ['4', 'Configuração de playbooks e automações de resposta a incidentes',          seName,                      '60 dias'],
-      ['5', 'Treinamento da equipe SOC na plataforma Stellar Cyber',                   seName,                      '60 dias'],
-      ['6', 'Revisão de cobertura MITRE ATT\u0026CK e ajuste de regras de detecção',   seName,                      '90 dias'],
-      ['7', 'Apresentação consolidada de resultados ao board executivo',               clientName,                  '90 dias'],
+      ['1', s.next1, clientName,                  s.days30],
+      ['2', s.next2, `${seName} / ${clientName}`, s.days30],
+      ['3', s.next3, clientName,                  s.days60],
+      ['4', s.next4, seName,                      s.days60],
+      ['5', s.next5, seName,                      s.days60],
+      ['6', s.next6, seName,                      s.days90],
+      ['7', s.next7, clientName,                  s.days90],
     ],
     columnStyles: {
       0: { cellWidth: 8, halign: 'center' },
@@ -836,34 +853,34 @@ export function generatePDFReport({
   })
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SEÇÃO 10 — CONCLUSÃO
+  // SECTION 10 — CONCLUSION
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = sectionTitle(doc, 10, 'Conclusão', y)
-  y = subTitle(doc, '10.1 Scorecard Final', y)
+  y = sectionTitle(doc, 10, s.sec10, y)
+  y = subTitle(doc, s.sec10_1, y)
 
   const scoreItems = [
-    { item: 'Capacidade de Detecção',    score: cases.length > 0 ? (critCases.length > 0 ? 'Excelente' : 'Bom') : 'Regular' },
-    { item: 'Integração de Fontes',      score: connectors.length >= 5 ? 'Excelente' : connectors.length >= 2 ? 'Bom' : 'Regular' },
-    { item: 'Cobertura MITRE ATT\u0026CK', score: mitreCovPct >= 40 ? 'Excelente' : mitreCovPct >= 20 ? 'Bom' : 'Regular' },
-    { item: 'Usabilidade da Plataforma', score: 'Bom' },
-    { item: 'Automação e Resposta',      score: 'Bom' },
-    { item: 'Visibilidade e Correlação', score: cases.length > 0 ? 'Excelente' : 'Bom' },
+    { item: s.score1, score: cases.length > 0 ? (critCases.length > 0 ? s.scoreExcellent : s.scoreGood) : s.scoreFair },
+    { item: s.score2, score: connectors.length >= 5 ? s.scoreExcellent : connectors.length >= 2 ? s.scoreGood : s.scoreFair },
+    { item: s.score3, score: mitreCovPct >= 40 ? s.scoreExcellent : mitreCovPct >= 20 ? s.scoreGood : s.scoreFair },
+    { item: s.score4, score: s.scoreGood },
+    { item: s.score5, score: s.scoreGood },
+    { item: s.score6, score: cases.length > 0 ? s.scoreExcellent : s.scoreGood },
   ]
 
   autoTable(doc, {
     ...tableBase({ tableWidth: 140 }),
     startY: y,
-    head: [['Critério de Avaliação', 'Avaliação']],
-    body: scoreItems.map(s => [s.item, s.score]),
+    head: [[s.scoreCriterion, s.scoreRating]],
+    body: scoreItems.map(si => [si.item, si.score]),
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 100 },
       1: { cellWidth: 40, halign: 'center' },
     },
     didParseCell: (d) => {
       if (d.section === 'body' && d.column.index === 1) {
-        d.cell.styles.textColor = scoreColor(d.cell.raw)
+        d.cell.styles.textColor = scoreColor(d.cell.raw, s)
         d.cell.styles.fontStyle = 'bold'
       }
     },
@@ -871,22 +888,21 @@ export function generatePDFReport({
 
   y = (doc.lastAutoTable?.finalY ?? y) + 12
 
-  // Bloco veredicto final
   doc.setFillColor(...verdictColor)
   doc.roundedRect(ML, y, CW, 18, 3, 3, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C.white)
-  doc.text(`Veredicto Final: ${verdict}`, PW / 2, y + 11, { align: 'center' })
+  doc.text(`${s.finalVerdictLabel}: ${verdict}`, PW / 2, y + 11, { align: 'center' })
   doc.setFont('helvetica', 'normal')
   y += 26
 
-  y = bodyText(doc, `Com base nos resultados obtidos durante o período de PoC (${period}), a plataforma Stellar Cyber Open XDR demonstrou capacidades robustas de detecção, correlação e resposta a ameaças, com cobertura de ${mitreCovPct}% das táticas MITRE ATT&CK e detecção de ${cases.length} alertas/cases no ambiente de ${clientName}.`, y)
+  y = bodyText(doc, i(s.body10, { period, mitrePct: mitreCovPct, caseCount: cases.length, client: clientName }), y)
   y += 10
 
-  // Assinaturas
+  // Signatures
   if (y > 240) { y = newPage(doc) }
-  y = subTitle(doc, '10.2 Assinaturas', y)
+  y = subTitle(doc, s.sec10_2, y)
 
   doc.setDrawColor(...C.muted)
   doc.setLineWidth(0.3)
@@ -897,7 +913,7 @@ export function generatePDFReport({
   doc.text(seName, ML, y + 25)
   doc.setFontSize(7.5)
   doc.setTextColor(...C.muted)
-  doc.text(`Systems Engineer — ${partnerName}`, ML, y + 31)
+  doc.text(`${s.seRole} — ${partnerName}`, ML, y + 31)
   doc.text(seEmail, ML, y + 37)
 
   doc.line(PW - MR - 82, y + 20, PW - MR, y + 20)
@@ -909,29 +925,29 @@ export function generatePDFReport({
   doc.text(clientDept, PW - MR - 82, y + 31)
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // APÊNDICE A — GLOSSÁRIO
+  // APPENDIX A — GLOSSARY
   // ══════════════════════════════════════════════════════════════════════════════
 
   y = newPage(doc)
-  y = appendixTitle(doc, 'Apêndice A — Glossário', y)
+  y = appendixTitle(doc, s.appA, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Termo', 'Definição']],
+    head: [[s.glossTerm, s.glossDef]],
     body: [
-      ['Open XDR',      'Extended Detection and Response aberta, integrando múltiplas fontes de dados de segurança'],
-      ['SIEM',          'Security Information and Event Management — correlação centralizada de logs e eventos'],
-      ['MITRE ATT\u0026CK','Framework de conhecimento de táticas e técnicas adversariais baseado em observações reais'],
-      ['SOC',           'Security Operations Center — centro de operações de segurança'],
-      ['MTTD',          'Mean Time to Detect — tempo médio entre a ocorrência e a detecção de um incidente'],
-      ['MTTR',          'Mean Time to Respond — tempo médio entre a detecção e a contenção de um incidente'],
-      ['PoC',           'Proof of Concept — prova de conceito para validação de tecnologia'],
-      ['TCO',           'Total Cost of Ownership — custo total de propriedade de uma solução'],
-      ['SOAR',          'Security Orchestration, Automation and Response — automação de resposta a incidentes'],
-      ['IoC',           'Indicator of Compromise — artefato que indica comprometimento de um sistema'],
-      ['TTP',           'Tactics, Techniques and Procedures — conjunto de comportamentos adversariais'],
-      ['LGPD',          'Lei Geral de Proteção de Dados — regulação brasileira de privacidade de dados'],
+      ['Open XDR',           s.gOpenXDR],
+      ['SIEM',               s.gSIEM],
+      ['MITRE ATT\u0026CK',  s.gMITRE],
+      ['SOC',                s.gSOC],
+      ['MTTD',               s.gMTTD],
+      ['MTTR',               s.gMTTR],
+      ['PoC',                s.gPoC],
+      ['TCO',                s.gTCO],
+      ['SOAR',               s.gSOAR],
+      ['IoC',                s.gIoC],
+      ['TTP',                s.gTTP],
+      ['LGPD / GDPR',        s.gLGPD],
     ],
     columnStyles: {
       0: { cellWidth: 38, fontStyle: 'bold' },
@@ -939,18 +955,18 @@ export function generatePDFReport({
     },
   })
 
-  // ── APÊNDICE B — CONTROLE DE VERSÕES ─────────────────────────────────────────
+  // ── APPENDIX B — VERSION CONTROL ─────────────────────────────────────────────
 
   y = (doc.lastAutoTable?.finalY ?? y) + 14
   if (y > 240) { y = newPage(doc) }
-  y = appendixTitle(doc, 'Apêndice B — Controle de Versões', y)
+  y = appendixTitle(doc, s.appB, y)
 
   autoTable(doc, {
     ...tableBase(),
     startY: y,
-    head: [['Versão', 'Data', 'Autor', 'Descrição']],
+    head: [[s.versionCol, s.dateCol2, s.authorCol, s.changeDescCol]],
     body: [
-      [version, fmtDate(generatedAt.toISOString()), seName, 'Versão inicial do Relatório de Prova de Conceito'],
+      [version, fmt(generatedAt.toISOString()), seName, s.initialVersion],
     ],
     columnStyles: {
       0: { cellWidth: 20, halign: 'center' },
@@ -966,7 +982,7 @@ export function generatePDFReport({
 export function downloadPDFReport(params) {
   const doc    = generatePDFReport(params)
   const meta   = params.pocMeta || {}
-  const client = (meta.clientName || 'cliente').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
+  const client = (meta.clientName || 'client').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
   const date   = new Date().toISOString().split('T')[0]
-  doc.save(`relatorio-poc-stellarcyber-${client}-${date}.pdf`)
+  doc.save(`poc-report-stellarcyber-${client}-${date}.pdf`)
 }

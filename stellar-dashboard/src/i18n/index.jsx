@@ -48,3 +48,7 @@ export function useLocale() {
   if (!ctx) throw new Error('useLocale must be used within LocaleProvider')
   return ctx
 }
+
+export function getPdfStrings(localeCode) {
+  return (LOCALES[localeCode] || pt).pdf || {}
+}
