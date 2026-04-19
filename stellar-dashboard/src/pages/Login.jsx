@@ -83,7 +83,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
   async function handleSubmit(e) {
     e.preventDefault()
     // tenant is optional — only passed when filled
-    await onSubmit({ url: form.url, username: form.username, password: form.password, tenant: form.tenantId.trim() || null })
+    await onSubmit({ url: form.url, username: form.username, password: form.password, tenant: form.tenantId.trim() })
   }
 
   async function handleDemo() {
@@ -154,11 +154,12 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
       {/* Tenant ID field */}
       <IconField
         icon={Hash}
-        label="Tenant ID (opcional)"
+        label="Tenant ID"
         type="text"
-        placeholder="Ex: abc123ef"
+        placeholder="Ex: 6951699ec7314422bd3bec86f9d354ab"
         value={form.tenantId}
         onChange={set('tenantId')}
+        required
       />
 
       <ErrorBanner message={authError} />

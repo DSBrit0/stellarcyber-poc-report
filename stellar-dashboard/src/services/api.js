@@ -102,15 +102,16 @@ function demoAlerts() {
 export async function fetchCases(auth) {
   if (IS_DEMO(auth)) { debug('api', 'fetchCases → demo'); return demoCases() }
   try {
-    const params = { limit: HTTP.DEFAULT_LIMIT }
-    if (auth.tenant) params.tenantid = auth.tenant
+    const params = { limit: HTTP.DEFAULT_LIMIT, tenantid: auth.tenant }
     debug('api', `GET ${ENDPOINTS.CASES}`, params)
 
-    const res    = await createApiClient(auth).get(ENDPOINTS.CASES, { params })
-    const raw    = res.data
-    const items  = raw?.data?.cases ?? raw?.cases ?? (Array.isArray(raw) ? raw : [])
+    const res   = await createApiClient(auth).get(ENDPOINTS.CASES, { params })
+    const raw   = res.data
+    // Real response: { data: { total: N, cases: [...] } }
+    const total = raw?.data?.total ?? null
+    const items = raw?.data?.cases ?? raw?.cases ?? (Array.isArray(raw) ? raw : [])
     const result = normalizeCases(items)
-    info('api', `fetchCases ✅ ${result.length} cases`, { total: raw?.data?.total })
+    info('api', `fetchCases ✅ ${result.length} / ${total ?? '?'} cases`)
     return result
   } catch (err) {
     handleError(err, ENDPOINTS.CASES)
@@ -140,8 +141,7 @@ export async function fetchTenants(auth) {
 export async function fetchAssets(auth) {
   if (IS_DEMO(auth)) { debug('api', 'fetchAssets → demo'); return demoTenants() }
   try {
-    const params = {}
-    if (auth.tenant) params.cust_id = auth.tenant
+    const params = { cust_id: auth.tenant }
     debug('api', `GET ${ENDPOINTS.ASSETS}`, params)
 
     const res    = await createApiClient(auth).get(ENDPOINTS.ASSETS, { params })
@@ -163,8 +163,7 @@ export async function fetchAssets(auth) {
 export async function fetchAlerts(auth) {
   if (IS_DEMO(auth)) { debug('api', 'fetchAlerts → demo'); return demoAlerts() }
   try {
-    const params = { limit: HTTP.DEFAULT_LIMIT }
-    if (auth.tenant) params.tenantid = auth.tenant
+    const params = { limit: HTTP.DEFAULT_LIMIT, tenantid: auth.tenant }
     debug('api', `GET ${ENDPOINTS.ALERTS}`, params)
 
     const res   = await createApiClient(auth).get(ENDPOINTS.ALERTS, { params })
@@ -183,8 +182,7 @@ export async function fetchAlerts(auth) {
 export async function fetchConnectors(auth) {
   if (IS_DEMO(auth)) { debug('api', 'fetchConnectors → demo'); return demoConnectors() }
   try {
-    const params = {}
-    if (auth.tenant) params.tenantid = auth.tenant
+    const params = { tenantid: auth.tenant }
     debug('api', `GET ${ENDPOINTS.CONNECTORS}`, params)
 
     const res    = await createApiClient(auth).get(ENDPOINTS.CONNECTORS, { params })
@@ -247,7 +245,8 @@ function normalizeSeverity(val) {
   if (['critical', '4', 'p1'].includes(s)) return 'Critical'
   if (['high',     '3', 'p2'].includes(s)) return 'High'
   if (['medium',   '2', 'p3'].includes(s)) return 'Medium'
-  return 'Low'
+  if (['low',      '1', 'p4'].includes(s)) return 'Low'
+  return 'Medium'
 }
 
 function normalizeAlerts(items) {
