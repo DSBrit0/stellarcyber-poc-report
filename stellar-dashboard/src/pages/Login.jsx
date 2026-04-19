@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import {
   ShieldCheck, Eye, EyeOff, Loader, AlertCircle,
-  Zap, Globe, User, Lock, KeyRound, ArrowLeft, Hash, Check, X,
+  Zap, Globe, User, Lock, Hash, Check, X,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { testConnectivity } from '../services/auth'
 
 export default function Login() {
-  const { connect, verifyMFA, resetAuthStep, connecting, authError, authStep } = useAuth()
+  const { connect, connecting, authError } = useAuth()
 
   return (
     <div
@@ -53,25 +53,15 @@ export default function Login() {
             Stellar Dashboard
           </h1>
           <p className="text-xs mt-1" style={{ color: '#64748b' }}>
-            {authStep === 'otp'
-              ? 'Digite o código de autenticação'
-              : 'Conecte-se à sua instância Stellar Cyber'}
+            Conecte-se à sua instância Stellar Cyber
           </p>
         </div>
 
-        {authStep === 'otp'
-          ? <OTPForm
-              onSubmit={verifyMFA}
-              onBack={resetAuthStep}
-              connecting={connecting}
-              authError={authError}
-            />
-          : <CredentialsForm
-              onSubmit={connect}
-              connecting={connecting}
-              authError={authError}
-            />
-        }
+        <CredentialsForm
+          onSubmit={connect}
+          connecting={connecting}
+          authError={authError}
+        />
       </div>
 
       <p className="mt-5 text-xs relative z-10" style={{ color: '#1e293b' }}>
@@ -247,90 +237,6 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
   )
 }
 
-// ─── OTP Step ────────────────────────────────────────────────────────────────
-
-function OTPForm({ onSubmit, onBack, connecting, authError }) {
-  const [code, setCode] = useState('')
-  const inputRef        = useRef(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    await onSubmit(code)
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Step indicator */}
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-          style={{ background: 'rgba(0,102,255,0.2)', color: '#94a3b8' }}>1</div>
-        <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-          style={{ background: 'linear-gradient(135deg, #0066ff, #00d4ff)', color: 'white' }}>2</div>
-        <span className="text-xs ml-1" style={{ color: '#64748b' }}>Verificação</span>
-      </div>
-
-      <div
-        className="rounded-lg p-3 text-xs"
-        style={{ background: 'rgba(0,212,255,0.05)', border: '1px solid rgba(0,212,255,0.15)', color: '#94a3b8' }}
-      >
-        <KeyRound size={13} className="inline-block mr-1.5 mb-0.5" style={{ color: '#00d4ff' }} />
-        Digite o código do seu autenticador (TOTP) ou o código de verificação enviado pela instância.
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1.5" style={{ color: '#94a3b8' }}>
-          Código de Autenticação
-        </label>
-        <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#475569' }}>
-            <KeyRound size={14} />
-          </div>
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9 ]*"
-            placeholder="000 000"
-            value={code}
-            onChange={e => setCode(e.target.value.replace(/[^0-9 ]/g, ''))}
-            maxLength={7}
-            required
-            autoComplete="one-time-code"
-            className="w-full rounded-lg pl-9 pr-3 py-3 text-lg tracking-widest outline-none transition-all font-mono text-center"
-            style={{ ...fieldStyle, letterSpacing: '0.3em' }}
-            onFocus={focusStyle}
-            onBlur={blurStyle}
-          />
-        </div>
-      </div>
-
-      <ErrorBanner message={authError} />
-
-      <SubmitButton connecting={connecting} label="Verificar Código" />
-
-      <button
-        type="button"
-        onClick={onBack}
-        disabled={connecting}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-60"
-        style={{
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          color: '#64748b',
-        }}
-      >
-        <ArrowLeft size={14} />
-        Voltar ao login
-      </button>
-    </form>
-  )
-}
-
 // ─── Shared sub-components ───────────────────────────────────────────────────
 
 function ErrorBanner({ message }) {
@@ -395,7 +301,6 @@ function AuthFlowInfo() {
       <ol className="space-y-0.5 list-decimal list-inside">
         <li>Credenciais enviadas via <code className="text-blue-400">HTTP Basic Auth</code></li>
         <li>Instância retorna <code className="text-blue-400">access_token</code> (JWT)</li>
-        <li>Se MFA habilitado, etapa de verificação de código</li>
         <li>Token usado como <code className="text-blue-400">Bearer</code> em todas as chamadas</li>
       </ol>
     </div>
