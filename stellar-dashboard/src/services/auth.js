@@ -37,14 +37,15 @@ export async function authenticate({ url, username, password, jwtToken }) {
   const { valid, errors } = validateLoginFields({ url, username, password })
   if (!valid) throw new Error(errors[0])
 
-  const base     = url.replace(/\/$/, '')
-  const endpoint = `${base}${ENDPOINTS.ACCESS_TOKEN}`
+  const base = url.replace(/\/$/, '')
 
-  debug('auth', 'Starting authentication', { endpoint, username, timestamp: new Date().toISOString() })
+  debug('auth', 'Starting authentication', { base, username, timestamp: new Date().toISOString() })
 
   try {
-    const res = await axios.post(endpoint, null, {
+    const res = await axios.post(ENDPOINTS.ACCESS_TOKEN, null, {
+      baseURL: '/proxy',
       auth: { username: username.trim(), password },
+      headers: { 'X-Proxy-Target': base },
       timeout: HTTP.AUTH_TIMEOUT,
     })
 

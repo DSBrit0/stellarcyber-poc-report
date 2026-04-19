@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "serve -s dist -l 8080",
+    "start": "node server.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.15.0",
+    "express": "^4.21.0",
+    "http-proxy-middleware": "^3.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^1.8.0",
@@ -20,7 +22,6 @@
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1",
-    "serve": "^14.2.4",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
