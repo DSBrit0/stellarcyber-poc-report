@@ -75,6 +75,28 @@ function demoIngestionTimeline() {
   }))
 }
 
+function demoAlerts() {
+  const severities = ['Critical', 'High', 'High', 'Medium', 'Low']
+  const names = [
+    'Suspicious login from unknown IP',
+    'Malware detected on endpoint',
+    'Unusual outbound data transfer',
+    'Failed authentication attempts spike',
+    'Port scan detected from internal host',
+  ]
+  return Array.from({ length: 15 }, (_, i) => ({
+    id:         `ALERT-${2000 + i}`,
+    name:       names[i % names.length],
+    severity:   severities[i % severities.length],
+    status:     i % 5 === 0 ? 'Closed' : 'New',
+    score:      +(Math.random() * 10).toFixed(1),
+    tenantName: ['Acme Corp', 'Demo Tenant', 'Test Org'][i % 3],
+    createdAt:  new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(),
+    sourceIp:   `192.168.${Math.floor(i / 5)}.${(i % 5) * 10 + 1}`,
+    type:       ['behavioral', 'signature', 'anomaly'][i % 3],
+  }))
+}
+
 // ─── Cases ────────────────────────────────────────────────────────────────────
 
 export async function fetchCases(auth) {
@@ -133,6 +155,26 @@ export async function fetchAssets(auth) {
     // Assets endpoint not available — fall back to tenants as asset proxy
     warn('api', `${ENDPOINTS.ASSETS} not available — falling back to tenants`)
     return fetchTenants(auth)
+  }
+}
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+
+export async function fetchAlerts(auth) {
+  if (IS_DEMO(auth)) { debug('api', 'fetchAlerts → demo'); return demoAlerts() }
+  try {
+    const params = { limit: HTTP.DEFAULT_LIMIT }
+    if (auth.tenant) params.tenantid = auth.tenant
+    debug('api', `GET ${ENDPOINTS.ALERTS}`, params)
+
+    const res   = await createApiClient(auth).get(ENDPOINTS.ALERTS, { params })
+    const raw   = res.data
+    const items = raw?.data?.alerts ?? raw?.alerts ?? (Array.isArray(raw) ? raw : [])
+    const result = normalizeAlerts(items)
+    info('api', `fetchAlerts ✅ ${result.length} alerts`, { total: raw?.data?.total })
+    return result
+  } catch (err) {
+    handleError(err, ENDPOINTS.ALERTS)
   }
 }
 
@@ -206,6 +248,23 @@ function normalizeSeverity(val) {
   if (['high',     '3', 'p2'].includes(s)) return 'High'
   if (['medium',   '2', 'p3'].includes(s)) return 'Medium'
   return 'Low'
+}
+
+function normalizeAlerts(items) {
+  return items.map((a, i) => ({
+    id:        a._id || a.id || a.alert_id || `ALERT-${2000 + i}`,
+    name:      a.name || a.title || a.summary || `Alert ${i + 1}`,
+    severity:  normalizeSeverity(a.severity || a.priority),
+    status:    a.status || 'New',
+    score:     typeof a.score === 'number' ? a.score : null,
+    tenantName: a.tenant_name || a.cust_name || '',
+    custId:    a.cust_id || '',
+    createdAt: a.created_at
+      ? (typeof a.created_at === 'number' ? new Date(a.created_at).toISOString() : a.created_at)
+      : new Date().toISOString(),
+    sourceIp:  a.src_ip || a.source_ip || '',
+    type:      a.type || a.alert_type || '',
+  }))
 }
 
 function normalizeTenants(items) {

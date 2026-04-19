@@ -1,27 +1,27 @@
 import {
-  AlertTriangle, Database, Building2, Plug, Clock
+  AlertTriangle, Database, Building2, Plug, Clock, Bell,
 } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import KPICard from '../components/Cards/KPICard'
 import IngestionChart from '../components/Charts/IngestionChart'
 import AssetDonut from '../components/Charts/AssetDonut'
 import CasesTable from '../components/Tables/CasesTable'
-import { formatRelative, formatBytes, recencyColor } from '../utils/formatters'
+import { formatRelative, formatBytes, recencyColor, severityColor } from '../utils/formatters'
 
 export default function Dashboard() {
   const { data, loading } = useData()
 
-  // Cases com status "New" ou "Open" (API retorna "New", não "open")
   const openCases = data.cases.filter(c =>
     ['new', 'open'].includes((c.status || '').toLowerCase())
   ).length
 
-  const totalGB = data.ingestionStats.reduce((s, d) => s + (d.gb || 0), 0)
+  const openAlerts = data.alerts.filter(a =>
+    ['new', 'open'].includes((a.status || '').toLowerCase())
+  ).length
 
-  // Conectores ativos (substituem "sensors")
+  const totalGB          = data.ingestionStats.reduce((s, d) => s + (d.gb || 0), 0)
   const activeConnectors = data.connectors.filter(c => c.active).length
-
-  const lastEvent = data.ingestionTimeline[0]
+  const lastEvent        = data.ingestionTimeline[0]
 
   return (
     <div className="p-4 md:p-6 space-y-6 animate-fade-in">
@@ -31,14 +31,19 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <KPICard
           icon={AlertTriangle}
           label="Casos Abertos"
           value={openCases}
-          trend={-12}
-          trendLabel="vs semana passada"
           color="#ff4444"
+          loading={loading}
+        />
+        <KPICard
+          icon={Bell}
+          label="Alertas Abertos"
+          value={openAlerts}
+          color="#f97316"
           loading={loading}
         />
         <KPICard
@@ -59,15 +64,12 @@ export default function Dashboard() {
           icon={Plug}
           label="Conectores Ativos"
           value={activeConnectors}
-          trend={data.connectors.length > 0
-            ? Math.round((activeConnectors / data.connectors.length) * 100) - 100
-            : 0}
           color="#7c3aed"
           loading={loading}
         />
         <KPICard
           icon={Clock}
-          label="Último Dado Recebido"
+          label="Último Evento"
           value={lastEvent ? formatRelative(lastEvent.timestamp) : '—'}
           color="#f59e0b"
           loading={loading}
@@ -85,10 +87,71 @@ export default function Dashboard() {
       {/* Cases Table */}
       <CasesTable cases={data.cases} loading={loading} />
 
-      {/* Connectors + Timeline */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Alerts + Connectors + Timeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <AlertsPanel alerts={data.alerts} loading={loading} />
         <ConnectorsPanel connectors={data.connectors} loading={loading} />
         <TimelinePanel events={data.ingestionTimeline} loading={loading} />
+      </div>
+    </div>
+  )
+}
+
+// ─── Painel de Alertas ───────────────────────────────────────────────────────
+
+function AlertsPanel({ alerts, loading }) {
+  if (loading) {
+    return (
+      <div className="glass rounded-xl p-5">
+        <div className="skeleton h-4 w-32 mb-4" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="skeleton h-10 w-full mb-2 rounded-lg" />
+        ))}
+      </div>
+    )
+  }
+
+  if (alerts.length === 0) {
+    return (
+      <div className="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 min-h-32">
+        <Bell size={20} style={{ color: '#334155' }} />
+        <p className="text-xs" style={{ color: '#475569' }}>Nenhum alerta</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="glass rounded-xl p-5">
+      <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+        <Bell size={14} style={{ color: '#f97316' }} />
+        Alertas Recentes
+        <span className="ml-auto text-xs px-2 py-0.5 rounded-full"
+          style={{ background: 'rgba(249,115,22,0.12)', color: '#f97316' }}>
+          {alerts.length}
+        </span>
+      </h3>
+      <div className="space-y-2">
+        {alerts.slice(0, 6).map(a => {
+          const sc = severityColor(a.severity)
+          return (
+            <div
+              key={a.id}
+              className="flex items-center justify-between py-2 px-3 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.03)' }}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-medium text-gray-300 truncate">{a.name}</div>
+                <div className="text-xs text-gray-600 mt-0.5">{formatRelative(a.createdAt)}</div>
+              </div>
+              <span
+                className="text-xs px-2 py-0.5 rounded ml-2 flex-shrink-0 capitalize"
+                style={{ color: sc.text, background: sc.bg, border: `1px solid ${sc.border}` }}
+              >
+                {a.severity}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -108,12 +171,14 @@ function ConnectorsPanel({ connectors, loading }) {
     )
   }
 
-  const display = connectors.length > 0 ? connectors.slice(0, 8) : [
-    { id: '1', name: 'Office365-HQ',    active: true,  type: 'office365',      category: 'saas' },
-    { id: '2', name: 'AWS-CloudTrail',  active: true,  type: 'aws_cloudtrail', category: 'cloud' },
-    { id: '3', name: 'Azure-EventHub',  active: false, type: 'azure_eventhub', category: 'paas' },
-    { id: '4', name: 'CrowdStrike-EDR', active: true,  type: 'crowdstrike',    category: 'endpoint' },
-  ]
+  if (connectors.length === 0) {
+    return (
+      <div className="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 min-h-32">
+        <Plug size={20} style={{ color: '#334155' }} />
+        <p className="text-xs" style={{ color: '#475569' }}>Nenhum conector</p>
+      </div>
+    )
+  }
 
   return (
     <div className="glass rounded-xl p-5">
@@ -121,7 +186,7 @@ function ConnectorsPanel({ connectors, loading }) {
         Conectores / Fontes de Log
       </h3>
       <div className="space-y-2">
-        {display.map(c => (
+        {connectors.slice(0, 6).map(c => (
           <div
             key={c.id}
             className="flex items-center justify-between py-2 px-3 rounded-lg"
@@ -132,7 +197,7 @@ function ConnectorsPanel({ connectors, loading }) {
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{
                   background: c.active ? '#22c55e' : '#ef4444',
-                  boxShadow: c.active ? '0 0 6px #22c55e' : '0 0 6px #ef4444',
+                  boxShadow:  c.active ? '0 0 6px #22c55e' : '0 0 6px #ef4444',
                 }}
               />
               <div>
@@ -170,18 +235,20 @@ function TimelinePanel({ events, loading }) {
     )
   }
 
-  const display = events.length > 0 ? events : Array.from({ length: 6 }, (_, i) => ({
-    id: `EVT-${i}`,
-    source: `connector-${i + 1}`,
-    timestamp: new Date(Date.now() - i * 3600000 * (i < 2 ? 0.5 : i)).toISOString(),
-    status: 'success',
-  }))
+  if (events.length === 0) {
+    return (
+      <div className="glass rounded-xl p-5 flex flex-col items-center justify-center gap-2 min-h-32">
+        <Clock size={20} style={{ color: '#334155' }} />
+        <p className="text-xs" style={{ color: '#475569' }}>Nenhum evento recente</p>
+      </div>
+    )
+  }
 
   return (
     <div className="glass rounded-xl p-5">
       <h3 className="text-sm font-semibold text-gray-200 mb-4">Eventos Recentes</h3>
       <div className="space-y-2">
-        {display.map(ev => {
+        {events.map(ev => {
           const color = recencyColor(ev.timestamp)
           return (
             <div
