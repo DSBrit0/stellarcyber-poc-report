@@ -1,15 +1,19 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { authenticate } from '../services/auth'
+import { info, warn } from '../utils/logger'
 
 const SESSION_KEY = 'stellar_session'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  // { token, url, username, tenant, exp } — null when not authenticated
   const [auth, setAuth]             = useState(null)
   const [connecting, setConnecting] = useState(false)
   const [authError, setAuthError]   = useState(null)
+
+  // Password mantido apenas em memória — nunca serializado ou gravado em disco.
+  // Necessário para renovar o token automaticamente (expira em 10 min).
+  const passwordRef = useRef(null)
 
   // ── Restore session on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -27,44 +31,72 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  // ── Persist auth state to sessionStorage (token only — never password) ────
+  // ── Persist auth to sessionStorage (nunca a senha) ───────────────────────
   useEffect(() => {
     if (!auth) {
       sessionStorage.removeItem(SESSION_KEY)
       return
     }
-    const { password: _omit, ...safe } = auth  // eslint-disable-line no-unused-vars
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(safe))
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(auth))
   }, [auth])
-
-  // ── Connect: username + password ──────────────────────────────────────────
-  const connect = useCallback(async (credentials) => {
-    setConnecting(true)
-    setAuthError(null)
-    try {
-      const result = await authenticate(credentials)
-      const authData = {
-        token:    result.token,
-        url:      credentials.url,
-        username: credentials.username,
-        tenant:   credentials.tenant ?? null,
-        exp:      result.exp ?? null,
-      }
-      setAuth(authData)
-      return { success: true }
-    } catch (err) {
-      setAuthError(err.message || 'Connection failed')
-      return { success: false }
-    } finally {
-      setConnecting(false)
-    }
-  }, [])
 
   // ── Disconnect ────────────────────────────────────────────────────────────
   const disconnect = useCallback(() => {
     setAuth(null)
     setAuthError(null)
+    passwordRef.current = null
     sessionStorage.removeItem(SESSION_KEY)
+  }, [])
+
+  // ── Renovação proativa do token (60s antes de expirar) ───────────────────
+  useEffect(() => {
+    if (!auth?.exp || !passwordRef.current) return
+
+    const msUntilExpiry = auth.exp * 1000 - Date.now()
+    const delay         = Math.max(msUntilExpiry - 60_000, 0)
+
+    info('auth', `Renovação de token agendada em ${Math.round(delay / 1000)}s`)
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await authenticate({
+          url:      auth.url,
+          username: auth.username,
+          password: passwordRef.current,
+          tenant:   auth.tenant,
+        })
+        setAuth(prev => ({ ...prev, token: result.token, exp: result.exp ?? prev.exp }))
+        info('auth', 'Token renovado automaticamente ✅')
+      } catch (err) {
+        warn('auth', 'Falha ao renovar token — sessão encerrada', { error: err.message })
+        disconnect()
+      }
+    }, delay)
+
+    return () => clearTimeout(timer)
+  }, [auth?.exp, auth?.url, auth?.username, auth?.tenant, disconnect])
+
+  // ── Connect ───────────────────────────────────────────────────────────────
+  const connect = useCallback(async (credentials) => {
+    setConnecting(true)
+    setAuthError(null)
+    try {
+      const result = await authenticate(credentials)
+      passwordRef.current = credentials.password  // mantém em memória para renovação
+      setAuth({
+        token:    result.token,
+        url:      credentials.url,
+        username: credentials.username,
+        tenant:   credentials.tenant ?? null,
+        exp:      result.exp ?? null,
+      })
+      return { success: true }
+    } catch (err) {
+      setAuthError(err.message || 'Falha na conexão')
+      return { success: false }
+    } finally {
+      setConnecting(false)
+    }
   }, [])
 
   return (

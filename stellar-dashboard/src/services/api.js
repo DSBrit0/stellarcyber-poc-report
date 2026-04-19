@@ -7,7 +7,10 @@ import { debug, info, warn, logApiError } from '../utils/logger'
 const IS_DEMO = (auth) => auth.token === 'DEMO_MODE_TOKEN'
 
 function handleError(err, endpoint) {
-  throw new Error(logApiError(err, endpoint))
+  const message = logApiError(err, endpoint)
+  const error = new Error(message)
+  error.status = err?.response?.status ?? null
+  throw error
 }
 
 // ─── Demo data ────────────────────────────────────────────────────────────────

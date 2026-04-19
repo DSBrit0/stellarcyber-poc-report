@@ -12,7 +12,7 @@ import { useAuth } from './AuthContext'
 const DataContext = createContext(null)
 
 export function DataProvider({ children }) {
-  const { auth } = useAuth()
+  const { auth, disconnect } = useAuth()
 
   const [data, setData] = useState({
     cases:             [],
@@ -44,20 +44,27 @@ export function DataProvider({ children }) {
     const keys = ['cases', 'alerts', 'tenants', 'connectors', 'ingestionStats', 'ingestionTimeline']
     const newData = {}
 
-    results.forEach((result, i) => {
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]
       if (result.status === 'fulfilled') {
         newData[keys[i]] = result.value
       } else {
-        newErrors[keys[i]] = result.reason?.message || 'Falha ao buscar dados'
+        const err = result.reason
+        if (err?.status === 401 || err?.message?.includes('(401)')) {
+          disconnect()
+          setLoading(false)
+          return
+        }
+        newErrors[keys[i]] = err?.message || 'Falha ao buscar dados'
         newData[keys[i]] = data[keys[i]]
       }
-    })
+    }
 
     setData(prev => ({ ...prev, ...newData }))
     setErrors(newErrors)
     setLastRefresh(new Date())
     setLoading(false)
-  }, [auth]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth, disconnect]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!auth) return
