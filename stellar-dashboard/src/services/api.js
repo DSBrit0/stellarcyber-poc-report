@@ -81,7 +81,7 @@ export async function fetchCases(auth) {
   if (IS_DEMO(auth)) { debug('api', 'fetchCases → demo'); return demoCases() }
   try {
     const params = { limit: HTTP.DEFAULT_LIMIT }
-    if (auth.tenant) params.cust_id = auth.tenant
+    if (auth.tenant) params.tenantid = auth.tenant
     debug('api', `GET ${ENDPOINTS.CASES}`, params)
 
     const res    = await createApiClient(auth).get(ENDPOINTS.CASES, { params })

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   ShieldCheck, Eye, EyeOff, Loader, AlertCircle,
-  Zap, Globe, User, Lock, KeyRound, ArrowLeft,
+  Zap, Globe, User, Lock, KeyRound, ArrowLeft, Hash,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -83,7 +83,7 @@ export default function Login() {
 // ─── Credentials Step ────────────────────────────────────────────────────────
 
 function CredentialsForm({ onSubmit, connecting, authError }) {
-  const [form, setForm]         = useState({ url: '', username: '', password: '' })
+  const [form, setForm]         = useState({ url: 'https://poc.stellarcyber.cloud', username: '', password: '', tenantId: '' })
   const [showPass, setShowPass] = useState(false)
 
   function set(k) {
@@ -92,8 +92,8 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    await onSubmit(form)
-    // Navigation is handled automatically by LoginRoute when auth is set
+    // tenant is optional — only passed when filled
+    await onSubmit({ url: form.url, username: form.username, password: form.password, tenant: form.tenantId.trim() || null })
   }
 
   async function handleDemo() {
@@ -159,6 +159,16 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
           </button>
         </div>
       </div>
+
+      {/* Tenant ID field */}
+      <IconField
+        icon={Hash}
+        label="Tenant ID (opcional)"
+        type="text"
+        placeholder="Ex: abc123ef"
+        value={form.tenantId}
+        onChange={set('tenantId')}
+      />
 
       <ErrorBanner message={authError} />
 
