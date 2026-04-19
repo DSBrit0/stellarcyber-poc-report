@@ -11,7 +11,7 @@ export function createApiClient(auth) {
   const target = auth.url.replace(/\/$/, '')
 
   const instance = axios.create({
-    baseURL: '/proxy/connect/api/v1',
+    baseURL: '/proxy',
     headers: {
       Authorization:    `Bearer ${auth.token}`,
       'X-Proxy-Target': target,
