@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import {
   fetchCases,
-  fetchAssets,
+  fetchEntityUsage,
   fetchConnectors,
   fetchIngestionStats,
   fetchIngestionTimeline,
@@ -32,7 +32,7 @@ export function DataProvider({ children }) {
 
     const results = await Promise.allSettled([
       fetchCases(auth),
-      fetchAssets(auth),
+      fetchEntityUsage(auth),
       fetchConnectors(auth),
       fetchIngestionStats(auth),
       fetchIngestionTimeline(auth),

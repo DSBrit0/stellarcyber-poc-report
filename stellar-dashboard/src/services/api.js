@@ -41,12 +41,11 @@ function demoCases() {
   }))
 }
 
-function demoAssets() {
-  return [
-    { id: 'A1', name: 'HQ Assets',      custId: 'abc001', dsNum: 12, userNum: 45, createdAt: new Date(Date.now() - 30 * 86400000).toISOString() },
-    { id: 'A2', name: 'Branch Assets',  custId: 'abc002', dsNum: 5,  userNum: 12, createdAt: new Date(Date.now() - 20 * 86400000).toISOString() },
-    { id: 'A3', name: 'Cloud Assets',   custId: 'abc003', dsNum: 8,  userNum: 30, createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
-  ]
+function demoEntityUsage() {
+  return Array.from({ length: 30 }, (_, i) => ({
+    date:         new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
+    entity_count: Math.floor(40 + Math.random() * 60),
+  }))
 }
 
 function demoConnectors() {
@@ -99,22 +98,30 @@ export async function fetchCases(auth) {
   }
 }
 
-// ─── Assets ───────────────────────────────────────────────────────────────────
+// ─── Entity Usage (daily count) ──────────────────────────────────────────────
+// GET /connect/api/v1/entity_usages/daily_count/all?days=30&cust_id=<tenant>
+// Response: { data: [ { date, entity_count }, ... ] }
+// Returns the raw daily array; consumers compute the average.
 
-export async function fetchAssets(auth) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchAssets → demo'); return demoAssets() }
+export async function fetchEntityUsage(auth) {
+  if (IS_DEMO(auth)) { debug('api', 'fetchEntityUsage → demo'); return demoEntityUsage() }
   try {
-    const params = { cust_id: auth.tenant }
-    debug('api', `GET ${ENDPOINTS.ASSETS}`, params)
+    const params = { days: 30, cust_id: auth.tenant }
+    debug('api', `GET ${ENDPOINTS.ENTITY_USAGE_DAILY}`, params)
 
-    const res    = await createApiClient(auth).get(ENDPOINTS.ASSETS, { params })
-    const raw    = res.data
-    const items  = raw?.data ?? raw?.assets ?? (Array.isArray(raw) ? raw : [])
-    const result = normalizeAssets(items)
-    info('api', `fetchAssets ✅ ${result.length} assets`)
+    const res   = await createApiClient(auth).get(ENDPOINTS.ENTITY_USAGE_DAILY, { params })
+    const items = res.data?.data ?? (Array.isArray(res.data) ? res.data : [])
+    const result = items.map(d => ({
+      date:         d.date || '',
+      entity_count: typeof d.entity_count === 'number' ? d.entity_count : 0,
+    }))
+    const avg = result.length > 0
+      ? Math.round(result.reduce((s, d) => s + d.entity_count, 0) / result.length)
+      : 0
+    info('api', `fetchEntityUsage ✅ ${result.length} days | avg ${avg} entities`)
     return result
   } catch (err) {
-    handleError(err, ENDPOINTS.ASSETS)
+    handleError(err, ENDPOINTS.ENTITY_USAGE_DAILY)
   }
 }
 
@@ -188,21 +195,6 @@ function normalizeSeverity(val) {
   if (['medium',   '2', 'p3'].includes(s)) return 'Medium'
   if (['low',      '1', 'p4'].includes(s)) return 'Low'
   return 'Medium'
-}
-
-function normalizeAssets(items) {
-  return items.map((a, i) => ({
-    id:        a._id || a.id || a.asset_id || `A-${i}`,
-    name:      a.name || a.hostname || a.ip || `Asset ${i + 1}`,
-    custId:    a.cust_id || '',
-    dsNum:     a.ds_num || 0,
-    userNum:   a.user_num || 0,
-    orgId:     a.org_id || '',
-    type:      a.type || a.asset_type || '',
-    createdAt: a.created_at
-      ? (typeof a.created_at === 'number' ? new Date(a.created_at * 1000).toISOString() : a.created_at)
-      : null,
-  }))
 }
 
 function normalizeConnectors(items) {

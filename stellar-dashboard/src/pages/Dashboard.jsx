@@ -20,6 +20,9 @@ export default function Dashboard() {
   const totalGB          = data.ingestionStats.reduce((s, d) => s + (d.gb || 0), 0)
   const activeConnectors = data.connectors.filter(c => c.active).length
   const lastEvent        = data.ingestionTimeline[0]
+  const avgEntities      = data.assets.length > 0
+    ? Math.round(data.assets.reduce((s, d) => s + (d.entity_count || 0), 0) / data.assets.length)
+    : 0
 
   return (
     <div className="p-4 md:p-6 space-y-6 animate-fade-in">
@@ -32,7 +35,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KPICard icon={AlertTriangle} label={t('dashboard.openCases')}        value={openCases}                               color="#ff4444" loading={loading} />
         <KPICard icon={Database}      label={t('dashboard.dataIngested')}     value={formatBytes(totalGB)}                    color="#00d4ff" loading={loading} />
-        <KPICard icon={Building2}     label={t('dashboard.assets')}           value={data.assets.length}                      color="#22c55e" loading={loading} />
+        <KPICard icon={Building2}     label={t('dashboard.assets')}           value={avgEntities}                             color="#22c55e" loading={loading} />
         <KPICard icon={Plug}          label={t('dashboard.activeConnectors')} value={activeConnectors}                        color="#7c3aed" loading={loading} />
         <KPICard icon={Clock}         label={t('dashboard.lastEvent')}        value={lastEvent ? formatRelative(lastEvent.timestamp) : '—'} color="#f59e0b" loading={loading} />
       </div>
