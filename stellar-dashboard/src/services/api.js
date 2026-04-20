@@ -1,6 +1,6 @@
 import { createApiClient } from './apiClient'
 import { ENDPOINTS, HTTP } from './endpoints'
-import { debug, info, warn, logApiError } from '../utils/logger'
+import { debug, info, warn, error as logError, logApiError } from '../utils/logger'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,44 @@ function demoConnectors() {
     { id: 'C5', name: 'CrowdStrike-EDR',active: true,  type: 'crowdstrike',   category: 'endpoint',     tenantId: 'T1', lastActivity: new Date(Date.now() - 3600000).toISOString(),      statusCode: 0 },
     { id: 'C6', name: 'Palo-Alto-FW',  active: false, type: 'paloalto',      category: 'network',      tenantId: 'T2', lastActivity: new Date(Date.now() - 8 * 3600000).toISOString(),  statusCode: 2 },
   ]
+}
+
+function demoIngestionBySensor() {
+  const sensors = [
+    { name: 'Cisco-Umbrella',  type: 'ciscoumbrella',   gb: 42.3 },
+    { name: 'CrowdStrike-EDR', type: 'crowdstrike',      gb: 128.7 },
+    { name: 'Office365-HQ',    type: 'office365',        gb: 85.1 },
+    { name: 'Palo-Alto-FW',    type: 'paloalto',         gb: 210.4 },
+    { name: 'AWS-CloudTrail',  type: 'aws_cloudtrail',   gb: 67.9 },
+    { name: 'Azure-EventHub',  type: 'azure_eventhub',   gb: 33.2 },
+  ]
+  return sensors.map((s, i) => ({
+    id:            `sensor-${i}`,
+    name:          s.name,
+    type:          s.type,
+    gbIngested:    s.gb,
+    bytesIngested: Math.round(s.gb * 1073741824),
+    eventsCount:   Math.floor(s.gb * 12000),
+  }))
+}
+
+function demoIngestionByConnector() {
+  const connectors = [
+    { name: 'Office365-HQ',    type: 'office365',        gb: 85.1,  events: 1020000 },
+    { name: 'Cisco-Umbrella',  type: 'ciscoumbrella',    gb: 42.3,  events: 507600  },
+    { name: 'Azure-EventHub',  type: 'azure_eventhub',   gb: 33.2,  events: 398400  },
+    { name: 'AWS-CloudTrail',  type: 'aws_cloudtrail',   gb: 67.9,  events: 814800  },
+    { name: 'CrowdStrike-EDR', type: 'crowdstrike',      gb: 128.7, events: 1544400 },
+    { name: 'Palo-Alto-FW',    type: 'paloalto',         gb: 210.4, events: 2524800 },
+  ]
+  return connectors.map((c, i) => ({
+    id:            `conn-${i}`,
+    name:          c.name,
+    type:          c.type,
+    gbIngested:    c.gb,
+    bytesIngested: Math.round(c.gb * 1073741824),
+    eventsCount:   c.events,
+  }))
 }
 
 function demoIngestionStats() {
@@ -130,7 +168,7 @@ export async function fetchEntityUsage(auth) {
 export async function fetchConnectors(auth) {
   if (IS_DEMO(auth)) { debug('api', 'fetchConnectors → demo'); return demoConnectors() }
   try {
-    const params = { tenantid: auth.tenant }
+    const params = { cust_id: auth.tenant }
     debug('api', `GET ${ENDPOINTS.CONNECTORS}`, params)
 
     const res    = await createApiClient(auth).get(ENDPOINTS.CONNECTORS, { params })
@@ -145,7 +183,7 @@ export async function fetchConnectors(auth) {
   }
 }
 
-// ─── Ingestion stats (derived from connectors) ───────────────────────────────
+// ─── Ingestion stats (derived from connectors — used by Dashboard charts) ────
 
 export async function fetchIngestionStats(auth) {
   if (IS_DEMO(auth)) return demoIngestionStats()
@@ -169,7 +207,73 @@ export async function fetchIngestionTimeline(auth) {
   }
 }
 
+// ─── Ingestion by Sensor (real API — 30-day window ending at pocEndDate) ─────
+// GET /connect/api/v1/ingestion-stats/sensor?cust_id=<tenant>&start_ts=<ms>&end_ts=<ms>
+
+export async function fetchIngestionBySensor(auth, pocEndDate) {
+  if (IS_DEMO(auth)) { debug('api', 'fetchIngestionBySensor → demo'); return demoIngestionBySensor() }
+  try {
+    const endTs   = pocEndDate ? new Date(pocEndDate).getTime() : Date.now()
+    const startTs = endTs - 30 * 86400000
+    const params  = { cust_id: auth.tenant, start_ts: startTs, end_ts: endTs }
+    debug('api', `GET ${ENDPOINTS.INGESTION_BY_SENSOR}`, params)
+
+    const res    = await createApiClient(auth).get(ENDPOINTS.INGESTION_BY_SENSOR, { params })
+    const items  = res.data?.data ?? (Array.isArray(res.data) ? res.data : [])
+    const result = normalizeIngestionBySensor(items)
+    info('api', `fetchIngestionBySensor ✅ ${result.length} sensors | period: 30d ending ${new Date(endTs).toISOString().split('T')[0]}`)
+    return result
+  } catch (err) {
+    warn('api', 'fetchIngestionBySensor fallback → empty', { error: err.message })
+    handleError(err, ENDPOINTS.INGESTION_BY_SENSOR)
+  }
+}
+
+// ─── Ingestion by Connector (real API — 30-day window ending at pocEndDate) ──
+// GET /connect/api/v1/ingestion-stats/connector?cust_id=<tenant>&start_ts=<ms>&end_ts=<ms>
+
+export async function fetchIngestionByConnector(auth, pocEndDate) {
+  if (IS_DEMO(auth)) { debug('api', 'fetchIngestionByConnector → demo'); return demoIngestionByConnector() }
+  try {
+    const endTs   = pocEndDate ? new Date(pocEndDate).getTime() : Date.now()
+    const startTs = endTs - 30 * 86400000
+    const params  = { cust_id: auth.tenant, start_ts: startTs, end_ts: endTs }
+    debug('api', `GET ${ENDPOINTS.INGESTION_BY_CONNECTOR}`, params)
+
+    const res    = await createApiClient(auth).get(ENDPOINTS.INGESTION_BY_CONNECTOR, { params })
+    const items  = res.data?.data ?? (Array.isArray(res.data) ? res.data : [])
+    const result = normalizeIngestionByConnector(items)
+    info('api', `fetchIngestionByConnector ✅ ${result.length} connectors | period: 30d ending ${new Date(endTs).toISOString().split('T')[0]}`)
+    return result
+  } catch (err) {
+    warn('api', 'fetchIngestionByConnector fallback → empty', { error: err.message })
+    handleError(err, ENDPOINTS.INGESTION_BY_CONNECTOR)
+  }
+}
+
 // ─── Normalizers ─────────────────────────────────────────────────────────────
+
+function normalizeIngestionBySensor(items) {
+  return items.map((d, i) => ({
+    id:            d._id || d.id || d.sensor_id || `sensor-${i}`,
+    name:          d.sensor_name || d.name || `Sensor ${i + 1}`,
+    type:          d.sensor_type || d.type || 'unknown',
+    bytesIngested: d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0,
+    eventsCount:   d.total_events ?? d.event_count ?? d.events ?? 0,
+    gbIngested:    +(((d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0) / 1073741824) || (d.gb ?? 0)).toFixed(2),
+  }))
+}
+
+function normalizeIngestionByConnector(items) {
+  return items.map((d, i) => ({
+    id:            d._id || d.id || d.connector_id || `conn-${i}`,
+    name:          d.connector_name || d.name || `Connector ${i + 1}`,
+    type:          d.connector_type || d.type || 'unknown',
+    bytesIngested: d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0,
+    eventsCount:   d.total_events ?? d.event_count ?? d.events ?? 0,
+    gbIngested:    +(((d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0) / 1073741824) || (d.gb ?? 0)).toFixed(2),
+  }))
+}
 
 function normalizeCases(items) {
   return items.map((c, i) => ({

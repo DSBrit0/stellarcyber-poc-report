@@ -173,13 +173,15 @@ const ALL_TACTICS = [
 
 export function generatePDFReport({
   auth,
-  cases           = [],
-  connectors      = [],
-  recommendations = [],
-  generatedAt     = new Date(),
-  pocMeta         = {},
-  locale          = 'pt',
-  s               = {},
+  cases                = [],
+  connectors           = [],
+  recommendations      = [],
+  ingestionBySensor    = [],
+  ingestionByConnector = [],
+  generatedAt          = new Date(),
+  pocMeta              = {},
+  locale               = 'pt',
+  s                    = {},
 }) {
   _pageNum = 1
   _meta    = pocMeta
@@ -520,6 +522,70 @@ export function generatePDFReport({
       doc.text(i(s.showingOf, { shown: 35, total: connectors.length }), ML, y)
       y += 6
     }
+  }
+
+  // ─── 3.4 Ingestion Stats by Sensor ───────────────────────────────────────────
+  if (ingestionBySensor.length > 0) {
+    if (y > 220) { y = newPage(doc) } else { y += 8 }
+    y = subTitle(doc, s.sec3_ingestionSensor || 'Ingestão por Sensor (últimos 30 dias)', y)
+    autoTable(doc, {
+      ...tableBase({
+        styles:     { fontSize: 8.5, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8.5 },
+      }),
+      startY: y,
+      head: [[
+        s.ingestSensorName  || 'Sensor',
+        s.ingestType        || 'Tipo',
+        s.ingestGB          || 'GB Ingerido',
+        s.ingestEvents      || 'Eventos',
+      ]],
+      body: ingestionBySensor.map(d => [
+        trunc(d.name || '—', 52),
+        trunc(d.type || '—', 28),
+        d.gbIngested != null ? d.gbIngested.toLocaleString(locale === 'en' ? 'en-US' : 'pt-BR') : '—',
+        d.eventsCount != null ? d.eventsCount.toLocaleString(locale === 'en' ? 'en-US' : 'pt-BR') : '—',
+      ]),
+      columnStyles: {
+        0: { cellWidth: 72, fontStyle: 'bold' },
+        1: { cellWidth: 48 },
+        2: { cellWidth: 32, halign: 'right' },
+        3: { cellWidth: CW - 152, halign: 'right' },
+      },
+    })
+    y = (doc.lastAutoTable?.finalY ?? y) + 6
+  }
+
+  // ─── 3.5 Ingestion Stats by Connector ────────────────────────────────────────
+  if (ingestionByConnector.length > 0) {
+    if (y > 220) { y = newPage(doc) } else { y += 4 }
+    y = subTitle(doc, s.sec3_ingestionConnector || 'Ingestão por Conector (últimos 30 dias)', y)
+    autoTable(doc, {
+      ...tableBase({
+        styles:     { fontSize: 8.5, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
+        headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8.5 },
+      }),
+      startY: y,
+      head: [[
+        s.ingestConnName    || 'Conector',
+        s.ingestType        || 'Tipo',
+        s.ingestGB          || 'GB Ingerido',
+        s.ingestEvents      || 'Eventos',
+      ]],
+      body: ingestionByConnector.map(d => [
+        trunc(d.name || '—', 52),
+        trunc(d.type || '—', 28),
+        d.gbIngested != null ? d.gbIngested.toLocaleString(locale === 'en' ? 'en-US' : 'pt-BR') : '—',
+        d.eventsCount != null ? d.eventsCount.toLocaleString(locale === 'en' ? 'en-US' : 'pt-BR') : '—',
+      ]),
+      columnStyles: {
+        0: { cellWidth: 72, fontStyle: 'bold' },
+        1: { cellWidth: 48 },
+        2: { cellWidth: 32, halign: 'right' },
+        3: { cellWidth: CW - 152, halign: 'right' },
+      },
+    })
+    y = (doc.lastAutoTable?.finalY ?? y) + 6
   }
 
   // ══════════════════════════════════════════════════════════════════════════════

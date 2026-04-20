@@ -4,11 +4,13 @@
 export const API_PREFIX = '/connect/api/v1'
 
 export const ENDPOINTS = {
-  ACCESS_TOKEN:        `${API_PREFIX}/access_token`,
-  CASES:               `${API_PREFIX}/cases`,
-  ENTITY_USAGE_DAILY:  `${API_PREFIX}/entity_usages/daily_count/all`,
-  CONNECTORS:          `${API_PREFIX}/connectors`,
-  EVENTS:              `${API_PREFIX}/events`,
+  ACCESS_TOKEN:           `${API_PREFIX}/access_token`,
+  CASES:                  `${API_PREFIX}/cases`,
+  ENTITY_USAGE_DAILY:     `${API_PREFIX}/entity_usages/daily_count/all`,
+  CONNECTORS:             `${API_PREFIX}/connectors`,
+  EVENTS:                 `${API_PREFIX}/events`,
+  INGESTION_BY_SENSOR:    `${API_PREFIX}/ingestion-stats/sensor`,
+  INGESTION_BY_CONNECTOR: `${API_PREFIX}/ingestion-stats/connector`,
 }
 
 export const HTTP = {

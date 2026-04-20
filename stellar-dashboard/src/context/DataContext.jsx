@@ -5,6 +5,8 @@ import {
   fetchConnectors,
   fetchIngestionStats,
   fetchIngestionTimeline,
+  fetchIngestionBySensor,
+  fetchIngestionByConnector,
 } from '../services/api'
 import { useAuth } from './AuthContext'
 
@@ -14,18 +16,20 @@ export function DataProvider({ children }) {
   const { auth, disconnect } = useAuth()
 
   const [data, setData] = useState({
-    cases:             [],
-    assets:            [],
-    connectors:        [],
-    ingestionStats:    [],
-    ingestionTimeline: [],
+    cases:                [],
+    assets:               [],
+    connectors:           [],
+    ingestionStats:       [],
+    ingestionTimeline:    [],
+    ingestionBySensor:    [],
+    ingestionByConnector: [],
   })
   const [loading, setLoading]         = useState(false)
   const [errors, setErrors]           = useState({})
   const [lastRefresh, setLastRefresh] = useState(null)
   const intervalRef = useRef(null)
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (pocEndDate) => {
     if (!auth) return
     setLoading(true)
     const newErrors = {}
@@ -36,9 +40,11 @@ export function DataProvider({ children }) {
       fetchConnectors(auth),
       fetchIngestionStats(auth),
       fetchIngestionTimeline(auth),
+      fetchIngestionBySensor(auth, pocEndDate),
+      fetchIngestionByConnector(auth, pocEndDate),
     ])
 
-    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline']
+    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector']
     const newData = {}
 
     for (let i = 0; i < results.length; i++) {
