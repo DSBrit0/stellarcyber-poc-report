@@ -58,6 +58,7 @@ export default function Report() {
 
   const { cases, assets, connectors, ingestionTimeline, ingestionBySensor, ingestionByConnector } = data
 
+
   const recommendations = generateRecommendations({ cases, connectors, ingestionTimeline })
 
   const critCases    = cases.filter(c => c.severity?.toLowerCase() === 'critical').length
@@ -80,6 +81,7 @@ export default function Report() {
         auth,
         cases,
         connectors,
+        assets,
         recommendations,
         ingestionBySensor,
         ingestionByConnector,
