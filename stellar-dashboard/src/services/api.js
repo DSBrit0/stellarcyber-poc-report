@@ -208,20 +208,20 @@ export async function fetchIngestionTimeline(auth) {
 }
 
 // ─── Ingestion by Sensor (real API — 30-day window ending at pocEndDate) ─────
-// GET /connect/api/v1/ingestion-stats/sensor?cust_id=<tenant>&start_ts=<ms>&end_ts=<ms>
+// GET /connect/api/v1/ingestion-stats/sensor?cust_id=<tenant>&start_time=<ms>&end_time=<ms>
 
-export async function fetchIngestionBySensor(auth, pocEndDate) {
+export async function fetchIngestionBySensor(auth, { pocStartDate, pocEndDate } = {}) {
   if (IS_DEMO(auth)) { debug('api', 'fetchIngestionBySensor → demo'); return demoIngestionBySensor() }
   try {
-    const endTs   = pocEndDate ? new Date(pocEndDate).getTime() : Date.now()
-    const startTs = endTs - 30 * 86400000
-    const params  = { cust_id: auth.tenant, start_ts: startTs, end_ts: endTs }
+    const endTime   = pocEndDate   ? new Date(pocEndDate).getTime()   : Date.now()
+    const startTime = pocStartDate ? new Date(pocStartDate).getTime() : (endTime - 30 * 86400000)
+    const params    = { cust_id: auth.tenant, start_time: startTime, end_time: endTime }
     debug('api', `GET ${ENDPOINTS.INGESTION_BY_SENSOR}`, params)
 
     const res    = await createApiClient(auth).get(ENDPOINTS.INGESTION_BY_SENSOR, { params })
     const items  = res.data?.data ?? (Array.isArray(res.data) ? res.data : [])
     const result = normalizeIngestionBySensor(items)
-    info('api', `fetchIngestionBySensor ✅ ${result.length} sensors | period: 30d ending ${new Date(endTs).toISOString().split('T')[0]}`)
+    info('api', `fetchIngestionBySensor ✅ ${result.length} sensors | period ending ${new Date(endTime).toISOString().split('T')[0]}`)
     return result
   } catch (err) {
     warn('api', 'fetchIngestionBySensor fallback → empty', { error: err.message })
@@ -230,20 +230,20 @@ export async function fetchIngestionBySensor(auth, pocEndDate) {
 }
 
 // ─── Ingestion by Connector (real API — 30-day window ending at pocEndDate) ──
-// GET /connect/api/v1/ingestion-stats/connector?cust_id=<tenant>&start_ts=<ms>&end_ts=<ms>
+// GET /connect/api/v1/ingestion-stats/connector?cust_id=<tenant>&start_time=<ms>&end_time=<ms>
 
-export async function fetchIngestionByConnector(auth, pocEndDate) {
+export async function fetchIngestionByConnector(auth, { pocStartDate, pocEndDate } = {}) {
   if (IS_DEMO(auth)) { debug('api', 'fetchIngestionByConnector → demo'); return demoIngestionByConnector() }
   try {
-    const endTs   = pocEndDate ? new Date(pocEndDate).getTime() : Date.now()
-    const startTs = endTs - 30 * 86400000
-    const params  = { cust_id: auth.tenant, start_ts: startTs, end_ts: endTs }
+    const endTime   = pocEndDate   ? new Date(pocEndDate).getTime()   : Date.now()
+    const startTime = pocStartDate ? new Date(pocStartDate).getTime() : (endTime - 30 * 86400000)
+    const params    = { cust_id: auth.tenant, start_time: startTime, end_time: endTime }
     debug('api', `GET ${ENDPOINTS.INGESTION_BY_CONNECTOR}`, params)
 
     const res    = await createApiClient(auth).get(ENDPOINTS.INGESTION_BY_CONNECTOR, { params })
     const items  = res.data?.data ?? (Array.isArray(res.data) ? res.data : [])
     const result = normalizeIngestionByConnector(items)
-    info('api', `fetchIngestionByConnector ✅ ${result.length} connectors | period: 30d ending ${new Date(endTs).toISOString().split('T')[0]}`)
+    info('api', `fetchIngestionByConnector ✅ ${result.length} connectors | period ending ${new Date(endTime).toISOString().split('T')[0]}`)
     return result
   } catch (err) {
     warn('api', 'fetchIngestionByConnector fallback → empty', { error: err.message })

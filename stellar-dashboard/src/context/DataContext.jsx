@@ -9,11 +9,13 @@ import {
   fetchIngestionByConnector,
 } from '../services/api'
 import { useAuth } from './AuthContext'
+import { usePocMeta } from './PocMetaContext'
 
 const DataContext = createContext(null)
 
 export function DataProvider({ children }) {
   const { auth, disconnect } = useAuth()
+  const { pocMeta } = usePocMeta()
 
   const [data, setData] = useState({
     cases:                [],
@@ -29,10 +31,11 @@ export function DataProvider({ children }) {
   const [lastRefresh, setLastRefresh] = useState(null)
   const intervalRef = useRef(null)
 
-  const fetchAll = useCallback(async (pocEndDate) => {
+  const fetchAll = useCallback(async () => {
     if (!auth) return
     setLoading(true)
     const newErrors = {}
+    const dates = { pocStartDate: pocMeta.pocStartDate, pocEndDate: pocMeta.pocEndDate }
 
     const results = await Promise.allSettled([
       fetchCases(auth),
@@ -40,8 +43,8 @@ export function DataProvider({ children }) {
       fetchConnectors(auth),
       fetchIngestionStats(auth),
       fetchIngestionTimeline(auth),
-      fetchIngestionBySensor(auth, pocEndDate),
-      fetchIngestionByConnector(auth, pocEndDate),
+      fetchIngestionBySensor(auth, dates),
+      fetchIngestionByConnector(auth, dates),
     ])
 
     const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector']
@@ -67,7 +70,7 @@ export function DataProvider({ children }) {
     setErrors(newErrors)
     setLastRefresh(new Date())
     setLoading(false)
-  }, [auth, disconnect]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth, disconnect, pocMeta.pocStartDate, pocMeta.pocEndDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!auth) return

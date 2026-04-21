@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usePocMeta } from '../context/PocMetaContext'
 import { useLocale, LOCALE_OPTIONS } from '../i18n'
-import { LogOut, RotateCcw, Shield, Terminal, Trash2, Download, RefreshCw, ChevronDown, Globe, Copy, Check } from 'lucide-react'
+import { LogOut, RotateCcw, Shield, Terminal, Trash2, Download, RefreshCw, ChevronDown, Globe, Copy, Check, RefreshCcw } from 'lucide-react'
 import {
   getLogs, filterLogs, clearLogs, exportLogsJSON, exportLogsText, Level,
 } from '../utils/logger'
 
 export default function Settings() {
   const { auth, disconnect } = useAuth()
+  const { resetSetup, pocMeta } = usePocMeta()
   const { t, locale, setLocale } = useLocale()
   const navigate              = useNavigate()
   const [confirmed, setConfirmed] = useState(false)
@@ -78,6 +80,24 @@ export default function Settings() {
         >
           <RotateCcw size={14} />
           {t('settings.reconnect')}
+        </button>
+
+        <button
+          onClick={resetSetup}
+          className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-lg transition-colors w-full"
+          style={{
+            background: 'rgba(124,58,237,0.08)',
+            border: '1px solid rgba(124,58,237,0.2)',
+            color: '#a78bfa',
+          }}
+        >
+          <RefreshCcw size={14} />
+          {t('settings.resetPocSetup')}
+          {pocMeta.pocStartDate && pocMeta.pocEndDate && (
+            <span className="ml-auto text-xs font-mono" style={{ color: '#6b7280' }}>
+              {pocMeta.pocStartDate} → {pocMeta.pocEndDate}
+            </span>
+          )}
         </button>
 
         <button

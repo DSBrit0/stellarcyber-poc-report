@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
+import { usePocMeta } from '../context/PocMetaContext'
 import { useLocale, getPdfStrings } from '../i18n'
 import { generateRecommendations } from '../utils/recommendations'
 import { downloadPDFReport } from '../services/pdfReport'
@@ -36,24 +37,13 @@ export default function Report() {
   const { auth }                                              = useAuth()
   const { data, loading, errors, lastRefresh, refresh }      = useData()
   const { t, locale }                                         = useLocale()
+  const { pocMeta, setPocMeta }                               = usePocMeta()
   const [generating, setGenerating]                          = useState(false)
   const [downloaded, setDownloaded]                          = useState(false)
-  const [formOpen, setFormOpen]                              = useState(true)
-
-  const [pocMeta, setPocMeta] = useState({
-    clientName:   '',
-    clientDept:   '',
-    seName:       '',
-    partnerName:  '',
-    seEmail:      '',
-    pocStartDate: '',
-    pocEndDate:   '',
-    version:      '1.0',
-    verdict:      '',
-  })
+  const [formOpen, setFormOpen]                              = useState(false)
 
   function setField(key) {
-    return e => setPocMeta(prev => ({ ...prev, [key]: e.target.value }))
+    return e => setPocMeta({ [key]: e.target.value })
   }
 
   const { cases, assets, connectors, ingestionTimeline, ingestionBySensor, ingestionByConnector } = data
