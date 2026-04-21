@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLocale, LOCALE_OPTIONS } from '../i18n'
-import { LogOut, RotateCcw, Shield, Terminal, Trash2, Download, RefreshCw, ChevronDown, Globe } from 'lucide-react'
+import { LogOut, RotateCcw, Shield, Terminal, Trash2, Download, RefreshCw, ChevronDown, Globe, Copy, Check } from 'lucide-react'
 import {
   getLogs, filterLogs, clearLogs, exportLogsJSON, exportLogsText, Level,
 } from '../utils/logger'
@@ -130,6 +130,37 @@ const LEVEL_COLORS = {
   ERROR: { text: '#ef4444', bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)' },
 }
 
+function CopyButton({ entry }) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy(e) {
+    e.stopPropagation()
+    const ts   = entry.timestamp.replace('T', ' ').slice(0, 19)
+    let text   = `[${entry.level}] ${ts} [${entry.context}] ${entry.message}`
+    if (entry.data !== null && entry.data !== undefined) {
+      text += '\n' + JSON.stringify(entry.data, null, 2)
+    }
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copiar log"
+      className="flex-shrink-0 p-1 rounded transition-all opacity-0 group-hover:opacity-100"
+      style={{
+        color: copied ? '#22c55e' : '#475569',
+        background: copied ? 'rgba(34,197,94,0.1)' : 'transparent',
+      }}
+    >
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+    </button>
+  )
+}
+
 function LogPanel() {
   const { t } = useLocale()
   const [entries, setEntries]   = useState([])
@@ -235,7 +266,7 @@ function LogPanel() {
 
             return (
               <div key={entry.id}
-                className={hasData ? 'cursor-pointer hover:bg-white/[0.02]' : ''}
+                className={`group ${hasData ? 'cursor-pointer hover:bg-white/[0.02]' : 'hover:bg-white/[0.01]'}`}
                 onClick={() => hasData && toggleExpand(entry.id)}
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
               >
@@ -249,6 +280,7 @@ function LogPanel() {
                     [{entry.context}]
                   </span>
                   <span className="text-gray-300 leading-5 break-all flex-1">{entry.message}</span>
+                  <CopyButton entry={entry} />
                   {hasData && (
                     <span className="flex-shrink-0 text-xs text-gray-600 leading-5">
                       {isOpen ? '▲' : '▼'}
@@ -256,8 +288,11 @@ function LogPanel() {
                   )}
                 </div>
                 {hasData && isOpen && (
-                  <pre className="px-4 pb-3 text-xs overflow-x-auto leading-relaxed"
-                    style={{ color: '#94a3b8', background: 'rgba(0,0,0,0.2)' }}>
+                  <pre
+                    className="px-4 pb-3 text-xs overflow-x-auto leading-relaxed select-text"
+                    onClick={e => e.stopPropagation()}
+                    style={{ color: '#94a3b8', background: 'rgba(0,0,0,0.2)' }}
+                  >
                     {JSON.stringify(entry.data, null, 2)}
                   </pre>
                 )}
