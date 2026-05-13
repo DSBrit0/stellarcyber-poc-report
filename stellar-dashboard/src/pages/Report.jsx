@@ -236,6 +236,26 @@ export default function Report() {
                 </select>
               </Field>
             </div>
+
+            {/* Comments */}
+            <Field label={t('report.comments')}>
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  style={{ ...INPUT, resize: 'vertical', minHeight: '96px', lineHeight: '1.5' }}
+                  placeholder={t('report.commentsPlaceholder')}
+                  maxLength={1500}
+                  value={pocMeta.comments}
+                  onChange={setField('comments')}
+                />
+                <span style={{
+                  position: 'absolute', bottom: '8px', right: '10px',
+                  fontSize: '10px', color: (pocMeta.comments?.length ?? 0) >= 1400 ? '#f59e0b' : '#475569',
+                  pointerEvents: 'none',
+                }}>
+                  {t('report.commentsChars', { n: pocMeta.comments?.length ?? 0 })}
+                </span>
+              </div>
+            </Field>
           </div>
         )}
       </div>

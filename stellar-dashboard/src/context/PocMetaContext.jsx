@@ -13,6 +13,7 @@ const DEFAULTS = {
   pocEndDate:   '',
   version:      '1.0',
   verdict:      '',
+  comments:     '',
 }
 
 const PocMetaContext = createContext(null)

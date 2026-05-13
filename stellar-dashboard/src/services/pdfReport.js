@@ -478,6 +478,15 @@ export function generatePDFReport({
   doc.setTextColor(...C.white)
   doc.text(`${s.verdictLabel || 'Verdict'}: ${verdict}`, PW / 2, y + 10, { align: 'center' })
   doc.setFont('helvetica', 'normal')
+  y += 26
+
+  // ─── 1.3 Comments ─────────────────────────────────────────────────────────
+  if (needsPage(doc, y, 30)) { y = newPage(doc) }
+  y = subTitle(doc, s.sec1_3 || '1.3 SE Comments & Notes', y)
+  const commentsText = (pocMeta.comments || '').trim()
+  y = commentsText
+    ? bodyText(doc, commentsText, y)
+    : infoNote(doc, s.noComments || 'No additional comments recorded.', y)
 
   // ══════════════════════════════════════════════════════════════════════════════
   // SECTION 2 — SCOPE AND METHODOLOGY
