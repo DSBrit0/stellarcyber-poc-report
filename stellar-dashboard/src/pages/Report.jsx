@@ -24,10 +24,27 @@ const INPUT = {
   boxSizing: 'border-box',
 }
 
-function Field({ label, children }) {
+function Field({ label, children, onHelp }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em' }}>{label}</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em' }}>{label}</label>
+        {onHelp && (
+          <button
+            type="button"
+            onClick={onHelp}
+            style={{
+              width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
+              background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)',
+              color: '#00d4ff', fontSize: '9px', fontWeight: 700, lineHeight: 1,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 0,
+            }}
+          >
+            ?
+          </button>
+        )}
+      </div>
       {children}
     </div>
   )
@@ -41,6 +58,7 @@ export default function Report() {
   const [generating, setGenerating]                          = useState(false)
   const [downloaded, setDownloaded]                          = useState(false)
   const [formOpen, setFormOpen]                              = useState(false)
+  const [showVerdictGuide, setShowVerdictGuide]              = useState(false)
 
   function setField(key) {
     return e => setPocMeta({ [key]: e.target.value })
@@ -227,9 +245,9 @@ export default function Report() {
               <Field label={t('report.version')}>
                 <input style={INPUT} placeholder="1.0" value={pocMeta.version} onChange={setField('version')} />
               </Field>
-              <Field label={t('report.verdict')}>
+              <Field label={t('report.verdict')} onHelp={() => setShowVerdictGuide(true)}>
                 <select style={{ ...INPUT, cursor: 'pointer' }} value={pocMeta.verdict} onChange={setField('verdict')}>
-                  <option value="">{t('report.verdictApproved')}</option>
+                  <option value="">— selecione —</option>
                   <option value={t('report.verdictApproved')}>{t('report.verdictApproved')}</option>
                   <option value={t('report.verdictCond')}>{t('report.verdictCond')}</option>
                   <option value={t('report.verdictRejected')}>{t('report.verdictRejected')}</option>
@@ -260,6 +278,7 @@ export default function Report() {
         )}
       </div>
 
+      {showVerdictGuide && <VerdictGuideModal onClose={() => setShowVerdictGuide(false)} />}
     </div>
   )
 }
@@ -301,6 +320,96 @@ function SummaryCard({ icon: Icon, color, label, value, sub, loading, error }) {
         <div className="text-3xl font-bold" style={{ color: '#f1f5f9' }}>{value}</div>
       )}
       <div className="text-xs" style={{ color: '#64748b' }}>{sub}</div>
+    </div>
+  )
+}
+
+// ─── VerdictGuideModal ────────────────────────────────────────────────────────
+
+function VerdictGuideModal({ onClose }) {
+  const { t } = useLocale()
+
+  const verdicts = [
+    { key: 'approved', color: '#22c55e', bg: 'rgba(34,197,94,0.07)',   border: 'rgba(34,197,94,0.2)'   },
+    { key: 'cond',     color: '#f59e0b', bg: 'rgba(245,158,11,0.07)',  border: 'rgba(245,158,11,0.2)'  },
+    { key: 'rejected', color: '#ef4444', bg: 'rgba(239,68,68,0.07)',   border: 'rgba(239,68,68,0.2)'   },
+  ]
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)',
+        padding: '16px',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'linear-gradient(160deg, #0d1526 0%, #0a0e1a 100%)',
+          border: '1px solid rgba(0,212,255,0.2)',
+          borderRadius: '16px',
+          width: '100%', maxWidth: '580px', maxHeight: '85vh', overflowY: 'auto',
+          boxShadow: '0 0 60px rgba(0,212,255,0.1), 0 25px 50px rgba(0,0,0,0.6)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '18px 24px 14px',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <h2 style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>
+            {t('report.verdictGuide.title')}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '6px', color: '#64748b', fontSize: '16px', lineHeight: 1,
+              padding: '3px 8px', cursor: 'pointer',
+            }}
+          >×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {verdicts.map(v => (
+            <div key={v.key} style={{
+              background: v.bg, border: `1px solid ${v.border}`,
+              borderRadius: '10px', padding: '14px 16px',
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: v.color, marginBottom: '10px' }}>
+                {t(`report.verdictGuide.${v.key}.title`)}
+              </div>
+
+              <div style={{ marginBottom: '8px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  {t('report.verdictGuide.meaningLabel')}
+                </span>
+                <p style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.65', margin: '4px 0 0' }}>
+                  {t(`report.verdictGuide.${v.key}.meaning`)}
+                </p>
+              </div>
+
+              <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: '1.65', margin: '0 0 8px' }}>
+                {t(`report.verdictGuide.${v.key}.detail`)}
+              </p>
+
+              <div>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                  {t('report.verdictGuide.alignLabel')}
+                </span>
+                <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: '1.65', margin: '4px 0 0', fontStyle: 'italic' }}>
+                  {t(`report.verdictGuide.${v.key}.alignment`)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

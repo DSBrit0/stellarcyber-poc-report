@@ -122,6 +122,29 @@ export default {
     sePlaceholder:     'Ex: John Smith',
     partnerPlaceholder:'Ex: Stellar Cyber US',
     emailPlaceholder:  'se@partner.com',
+    verdictGuide: {
+      title:        'Verdict Guide',
+      meaningLabel: 'Meaning:',
+      alignLabel:   'Alignment with Best Practices:',
+      approved: {
+        title:     'Approved',
+        meaning:   'The solution fully meets the technical and operational requirements defined in the test plan and test book.',
+        detail:    'The product demonstrated the ability to close critical gaps identified in the Identify phase of NIST, CIS, and others. There is confidence that the tool can be integrated into the SOC automation pipeline without excessive friction and ensures a high level of threat detection from the MITRE ATT&CK framework.',
+        alignment: 'Validated as an effective control to mitigate specific risks. Complies with Continuous Monitoring and Asset Protection requirements.',
+      },
+      cond: {
+        title:     'Approved with Conditions',
+        meaning:   'The tool delivers the promised value, but there are external dependencies, infrastructure limitations, or need for heavy customization.',
+        detail:    'Represents a residual risk that must be accepted or mitigated by other compensatory controls. May indicate that the solution requires more SOC man-hours (H/H) than originally planned for tuning and incident response.',
+        alignment: 'Points to the need for Plans of Action and Milestones (POA&M). According to CIS Controls, it may suggest that while the technical control exists, governance over it (e.g., log management or integrations) is not yet mature.',
+      },
+      rejected: {
+        title:     'Not Approved',
+        meaning:   'The solution failed critical success criteria, showed instability, or does not integrate into the current security ecosystem.',
+        detail:    'Strategic decision to avoid capital waste (CapEx/OpEx) on a tool that does not reduce organizational risk or may introduce new vulnerabilities (e.g., high false-positive rate causing alert fatigue).',
+        alignment: 'Based on the Defense in Depth principle. If the tool does not strengthen the security posture or fails to detect common MITRE ATT&CK framework tactics, it is discarded to prioritize more efficient investments.',
+      },
+    },
   },
   recommendations: {
     title:     'Recommendations',

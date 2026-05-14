@@ -122,6 +122,29 @@ export default {
     sePlaceholder:     'Ex: João Silva',
     partnerPlaceholder:'Ex: Stellar Cyber Brasil',
     emailPlaceholder:  'se@parceiro.com',
+    verdictGuide: {
+      title:        'Guia de Veredicto',
+      meaningLabel: 'Significado:',
+      alignLabel:   'Alinhamento com Melhores Práticas:',
+      approved: {
+        title:     'Aprovado',
+        meaning:   'A solução atende integralmente aos requisitos técnicos e operacionais definidos no plano e caderno de teste.',
+        detail:    'O produto demonstrou capacidade de fechar lacunas críticas (gaps) identificadas na fase de Identify do NIST, CIS e outros. Há confiança de que a ferramenta pode ser integrada ao pipeline de automação do SOC sem gerar fricção excessiva e garante um alto nível de detecção de ameaças do framework MITRE ATT&CK.',
+        alignment: 'Validado como controle eficaz para mitigar riscos específicos. Cumpre com os requisitos de Monitoramento Contínuo e Proteção de Ativos.',
+      },
+      cond: {
+        title:     'Aprovado com Ressalvas',
+        meaning:   'A ferramenta entrega o valor prometido, mas existem dependências externas, limitações de infraestrutura ou necessidade de customização pesada.',
+        detail:    'Representa um risco residual que precisa ser aceito ou mitigado por outros controles compensatórios. Pode indicar que a solução exige mais mão de obra (H/H) do SOC do que o planejado para tuning e resposta a incidentes.',
+        alignment: 'Remete à necessidade de Planos de Ação e Marcos (POAM). Segundo o CIS Controls, pode sugerir que, embora o controle técnico exista, a governança sobre ele (ex: gerenciamento de logs ou integrações) ainda não está madura.',
+      },
+      rejected: {
+        title:     'Não Aprovado',
+        meaning:   'A solução falhou em critérios críticos de sucesso, apresentou instabilidade ou não se integra ao ecossistema atual de segurança.',
+        detail:    'Decisão estratégica de evitar o desperdício de capital (CapEx/OpEx) em uma ferramenta que não reduz o risco organizacional ou que pode introduzir novas vulnerabilidades (ex: alto índice de falsos positivos que causa fadiga de alertas).',
+        alignment: 'Baseado no princípio de Defesa em Profundidade. Se a ferramenta não fortalece a postura de segurança ou falha em detectar táticas comuns do framework MITRE ATT&CK, ela é descartada para priorizar investimentos mais eficientes.',
+      },
+    },
   },
   recommendations: {
     title:     'Recomendações',

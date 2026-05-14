@@ -122,6 +122,29 @@ export default {
     sePlaceholder:     'Ej: Juan García',
     partnerPlaceholder:'Ej: Stellar Cyber España',
     emailPlaceholder:  'se@partner.com',
+    verdictGuide: {
+      title:        'Guía de Veredicto',
+      meaningLabel: 'Significado:',
+      alignLabel:   'Alineación con Mejores Prácticas:',
+      approved: {
+        title:     'Aprobado',
+        meaning:   'La solución cumple íntegramente con los requisitos técnicos y operativos definidos en el plan y cuaderno de pruebas.',
+        detail:    'El producto demostró capacidad para cerrar brechas críticas (gaps) identificadas en la fase de Identificación del NIST, CIS y otros. Existe confianza de que la herramienta puede integrarse al pipeline de automatización del SOC sin generar fricción excesiva y garantiza un alto nivel de detección de amenazas del framework MITRE ATT&CK.',
+        alignment: 'Validado como control eficaz para mitigar riesgos específicos. Cumple con los requisitos de Monitoreo Continuo y Protección de Activos.',
+      },
+      cond: {
+        title:     'Aprobado con Condiciones',
+        meaning:   'La herramienta entrega el valor prometido, pero existen dependencias externas, limitaciones de infraestructura o necesidad de personalización intensiva.',
+        detail:    'Representa un riesgo residual que debe ser aceptado o mitigado por otros controles compensatorios. Puede indicar que la solución requiere más horas-hombre (H/H) del SOC de lo planificado para el ajuste y la respuesta a incidentes.',
+        alignment: 'Apunta a la necesidad de Planes de Acción e Hitos (POA&M). Según los CIS Controls, puede sugerir que, aunque el control técnico existe, la gobernanza sobre él (ej: gestión de logs o integraciones) aún no está madura.',
+      },
+      rejected: {
+        title:     'No Aprobado',
+        meaning:   'La solución falló en criterios críticos de éxito, presentó inestabilidad o no se integra al ecosistema de seguridad actual.',
+        detail:    'Decisión estratégica para evitar el desperdicio de capital (CapEx/OpEx) en una herramienta que no reduce el riesgo organizacional o que puede introducir nuevas vulnerabilidades (ej: alto índice de falsos positivos que causa fatiga de alertas).',
+        alignment: 'Basado en el principio de Defensa en Profundidad. Si la herramienta no fortalece la postura de seguridad o falla en detectar tácticas comunes del framework MITRE ATT&CK, se descarta para priorizar inversiones más eficientes.',
+      },
+    },
   },
   recommendations: {
     title:     'Recomendaciones',
