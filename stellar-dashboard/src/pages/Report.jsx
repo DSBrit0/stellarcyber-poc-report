@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   FileText, Download, RefreshCw, CheckCircle2, AlertTriangle,
   XCircle, Shield, Layers, Radio, Lightbulb, Loader,
-  Activity, Clock, Settings2,
+  Clock, Settings2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -258,38 +258,6 @@ export default function Report() {
             </Field>
           </div>
         )}
-      </div>
-
-      {/* PDF contents preview */}
-      <div className="rounded-xl p-5" style={{ background: 'rgba(15,22,40,0.7)', border: '1px solid rgba(255,255,255,0.07)' }}>
-        <h2 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: '#94a3b8' }}>
-          <Activity size={14} />
-          {t('report.pdfContents')}
-        </h2>
-        <div className="space-y-2">
-          {[
-            { label: 'Capa',                              desc: `Cliente: ${pocMeta.clientName || '—'} · SE: ${pocMeta.seName || '—'} · Veredicto: ${pocMeta.verdict}` },
-            { label: '1. Sumário Executivo',              desc: `Indicadores-chave do PoC · período · fontes · veredicto` },
-            { label: '2. Escopo e Metodologia',           desc: 'Ambiente avaliado, metodologia em 5 fases, critérios de sucesso' },
-            { label: '3. Visão Técnica da Plataforma',    desc: `Arquitetura, implantação (${auth?.url || '—'}), ${connectors.length} integrações` },
-            { label: `4. Detecção e Resposta (${cases.length} cases)`, desc: `Ordenados por severidade · ${critCases} críticos · métricas` },
-            { label: '5. Cobertura MITRE ATT&CK',         desc: `14 táticas · ${mitreRecs} correlações detectadas` },
-            { label: '6. Avaliação Operacional',          desc: 'SOC, fluxo IR, automação e playbooks' },
-            { label: '7. ROI e Consolidação',             desc: 'TCO comparativo 3 anos, benefícios qualitativos' },
-            { label: `8. Riscos e Recomendações (${recommendations.length})`, desc: `Gaps operacionais + ${mitreRecs} MITRE ATT&CK` },
-            { label: '9. Próximos Passos',                desc: 'Plano de ação com 7 etapas e prazos' },
-            { label: '10. Conclusão',                     desc: 'Scorecard final, veredicto, assinaturas' },
-            { label: 'Apêndices',                         desc: 'Glossário (12 termos) · Controle de versões' },
-          ].map(item => (
-            <div key={item.label} className="flex items-start gap-3 text-sm">
-              <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" style={{ color: '#22c55e' }} />
-              <div>
-                <span className="font-medium" style={{ color: '#e2e8f0' }}>{item.label}</span>
-                <span className="ml-2 text-xs" style={{ color: '#64748b' }}>{item.desc}</span>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* MITRE overview */}
