@@ -57,7 +57,6 @@ export default function Report() {
   const { pocMeta, setPocMeta }                               = usePocMeta()
   const [generating, setGenerating]                          = useState(false)
   const [downloaded, setDownloaded]                          = useState(false)
-  const [formOpen, setFormOpen]                              = useState(false)
   const [showVerdictGuide, setShowVerdictGuide]              = useState(false)
 
   function setField(key) {
@@ -189,23 +188,12 @@ export default function Report() {
 
       {/* PoC metadata form */}
       <div className="rounded-xl" style={{ background: 'rgba(15,22,40,0.7)', border: '1px solid rgba(0,212,255,0.12)' }}>
-        <button
-          onClick={() => setFormOpen(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold"
-          style={{ color: '#94a3b8' }}
-        >
-          <span className="flex items-center gap-2">
-            <Settings2 size={15} style={{ color: '#00d4ff' }} />
-            {t('report.formTitle')}
-          </span>
-          <span style={{ color: '#00d4ff', fontSize: '11px' }}>{formOpen ? t('report.collapse') : t('report.expand')}</span>
-        </button>
+        <div className="flex items-center gap-2 px-5 py-4 text-sm font-semibold" style={{ color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <Settings2 size={15} style={{ color: '#00d4ff' }} />
+          {t('report.formTitle')}
+        </div>
 
-        {formOpen && (
-          <div className="px-5 pb-5 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <p className="text-xs pt-3" style={{ color: '#64748b' }}>
-              Estes dados aparecem na capa, cabeçalho e rodapé do PDF.
-            </p>
+        <div className="px-5 pb-5 pt-4 space-y-4">
 
             {/* Row 1 */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -275,7 +263,6 @@ export default function Report() {
               </div>
             </Field>
           </div>
-        )}
       </div>
 
       {showVerdictGuide && <VerdictGuideModal onClose={() => setShowVerdictGuide(false)} />}
