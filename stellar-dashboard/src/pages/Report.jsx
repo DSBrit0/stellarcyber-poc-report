@@ -260,43 +260,6 @@ export default function Report() {
         )}
       </div>
 
-      {/* MITRE overview */}
-      {mitreRecs > 0 && (
-        <div className="rounded-xl p-5"
-          style={{ background: 'rgba(10,30,70,0.5)', border: '1px solid rgba(0,102,255,0.2)' }}>
-          <h2 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: '#93c5fd' }}>
-            <Shield size={14} />
-            {t('report.mitreDetections')}
-          </h2>
-          <div className="grid gap-2">
-            {recommendations
-              .filter(r => r.category === 'MITRE ATT&CK')
-              .map(r => (
-                <div key={r.id}
-                  className="flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="min-w-0">
-                    <span className="font-mono text-xs font-bold mr-2" style={{ color: '#60a5fa' }}>
-                      {r.mitre?.technique?.id}
-                    </span>
-                    <span style={{ color: '#e2e8f0' }}>{r.mitre?.technique?.name}</span>
-                    <span className="ml-2 text-xs" style={{ color: '#64748b' }}>· {r.mitre?.tactic?.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                      style={{
-                        background: r.priority === 'critical' ? 'rgba(239,68,68,0.15)' : 'rgba(249,115,22,0.15)',
-                        color:      r.priority === 'critical' ? '#fca5a5' : '#fdba74',
-                        border:     r.priority === 'critical' ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(249,115,22,0.3)',
-                      }}>
-                      {t('report.casesN', { n: r.mitre?.affectedCases ?? 0 })}
-                    </span>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
