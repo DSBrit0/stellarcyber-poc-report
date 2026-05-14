@@ -70,7 +70,7 @@ export default function Login() {
             <ShieldCheck size={32} color="white" />
           </div>
           <h1 className="text-2xl font-bold tracking-wide" style={{ color: '#f1f5f9' }}>
-            Stellar Dashboard
+            Stellar Cyber POC Report
           </h1>
           <p className="text-xs mt-1" style={{ color: '#64748b' }}>
             {t('login.subtitle')}

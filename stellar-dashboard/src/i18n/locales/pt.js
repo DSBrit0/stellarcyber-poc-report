@@ -17,7 +17,7 @@ export default {
     sensors:         'Sensors',
     recommendations: 'Recomendações',
     settings:        'Configurações',
-    footer:          'Stellar Cyber Dashboard',
+    footer:          'Stellar Cyber POC Report',
   },
   header: {
     connected:   'Conectado',

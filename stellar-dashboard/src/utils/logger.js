@@ -1,5 +1,5 @@
 /**
- * logger.js — Sistema de logs e debug do Stellar Dashboard
+ * logger.js — Sistema de logs e debug do Stellar Cyber POC Report
  *
  * Funcionalidades:
  *   - Níveis: DEBUG | INFO | WARN | ERROR
