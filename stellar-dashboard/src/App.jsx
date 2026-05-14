@@ -2,9 +2,8 @@ import { useState, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { DataProvider } from './context/DataContext'
-import { PocMetaProvider, usePocMeta } from './context/PocMetaContext'
+import { PocMetaProvider } from './context/PocMetaContext'
 import { LocaleProvider } from './i18n'
-import PocSetupModal from './components/PocSetupModal'
 import Sidebar from './components/Layout/Sidebar'
 import Header from './components/Layout/Header'
 import Login from './pages/Login'
@@ -48,13 +47,10 @@ class ErrorBoundary extends Component {
 
 function ProtectedLayout() {
   const { auth } = useAuth()
-  const { setupDone } = usePocMeta()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [darkMode, setDarkMode]       = useState(true)
 
   if (!auth) return <Navigate to="/" replace />
-
-  if (!setupDone) return <PocSetupModal />
 
   return (
     <DataProvider>

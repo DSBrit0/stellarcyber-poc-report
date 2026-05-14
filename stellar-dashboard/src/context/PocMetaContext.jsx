@@ -1,7 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 
 const STORAGE_KEY = 'poc_meta'
-const SETUP_KEY   = 'poc_setup_done'
 
 const DEFAULTS = {
   clientName:   '',
@@ -28,10 +27,6 @@ export function PocMetaProvider({ children }) {
     }
   })
 
-  const [setupDone, setSetupDone] = useState(() => {
-    return localStorage.getItem(SETUP_KEY) === 'true'
-  })
-
   function setPocMeta(updates) {
     setPocMetaState(prev => {
       const next = { ...prev, ...updates }
@@ -40,21 +35,8 @@ export function PocMetaProvider({ children }) {
     })
   }
 
-  function completeSetup(formData) {
-    const next = { ...pocMeta, ...formData }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    setPocMetaState(next)
-    setSetupDone(true)
-    localStorage.setItem(SETUP_KEY, 'true')
-  }
-
-  function resetSetup() {
-    setSetupDone(false)
-    localStorage.removeItem(SETUP_KEY)
-  }
-
   return (
-    <PocMetaContext.Provider value={{ pocMeta, setPocMeta, setupDone, completeSetup, resetSetup }}>
+    <PocMetaContext.Provider value={{ pocMeta, setPocMeta }}>
       {children}
     </PocMetaContext.Provider>
   )
