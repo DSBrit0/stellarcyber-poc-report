@@ -347,16 +347,13 @@ export function generatePDFReport({
   doc.setTextColor(...C.navy)
   doc.text(s.preparedFor || 'PREPARED FOR', ML + 4, 122)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(12)
+  doc.setFontSize(10)
   doc.setTextColor(...C.text)
-  doc.text(trunc(clientDisplay, 26), ML + 4, 134)
+  const clientNameLines = doc.splitTextToSize(clientDisplay, 78)
+  doc.text(clientNameLines, ML + 4, 130)
   doc.setFontSize(8.5)
   doc.setTextColor(...C.muted)
-  doc.text(trunc(clientDept || '—', 32), ML + 4, 143)
-  if (pocStartDate && pocEndDate) {
-    doc.setFontSize(7.5)
-    doc.text(`${fmt(pocStartDate)} — ${fmt(pocEndDate)}`, ML + 4, 152)
-  }
+  doc.text(trunc(clientDept || '—', 36), ML + 4, 130 + clientNameLines.length * 5 + 4)
 
   // Prepared by box
   const rx = PW - MR - 86
@@ -381,18 +378,15 @@ export function generatePDFReport({
   autoTable(doc, {
     startY: 176,
     body: [
-      [s.metaVersion || 'Versão',  version,
-       s.metaPeriod  || 'Período', period],
-      [s.metaDate    || 'Data',    fmt(generatedAt.toISOString()),
-       s.metaVerdict || 'Veredicto', verdict],
+      [s.metaVersion || 'Versão',  version],
+      [s.metaPeriod  || 'Período', period],
+      [s.metaDate    || 'Data',    fmt(generatedAt.toISOString())],
     ],
     styles:     { fontSize: 9.5, cellPadding: 4.5, textColor: C.text },
     bodyStyles: { fillColor: C.rowAlt },
     columnStyles: {
-      0: { fontStyle: 'bold', textColor: C.navy, cellWidth: 40 },
-      1: { cellWidth: 51 },
-      2: { fontStyle: 'bold', textColor: C.navy, cellWidth: 40 },
-      3: { cellWidth: 51, fontStyle: 'bold', textColor: verdictColor },
+      0: { fontStyle: 'bold', textColor: C.navy, cellWidth: 55 },
+      1: { cellWidth: CW - 55 },
     },
     margin:         { left: ML, right: MR },
     tableLineColor: C.blue,
