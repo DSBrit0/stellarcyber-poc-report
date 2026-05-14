@@ -37,7 +37,6 @@ export default {
     tenantPlaceholder: 'Ej: 6951699ec7314422bd3bec86f9d354ab',
     submit:          'Conectar',
     submitting:      'Autenticando…',
-    demo:            'Explorar en modo demo',
     authFlow:        'Flujo de autenticación',
     authStep1:       'Credenciales enviadas vía HTTP Basic Auth',
     authStep2:       'Instancia retorna access_token (JWT)',

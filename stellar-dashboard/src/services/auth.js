@@ -24,11 +24,6 @@ export async function testConnectivity(url) {
 }
 
 export async function authenticate({ url, username, password, jwtToken }) {
-  if (jwtToken === 'DEMO_MODE_TOKEN') {
-    info('auth', 'Demo mode — skipping real auth')
-    return { token: 'DEMO_MODE_TOKEN', exp: null, payload: null }
-  }
-
   if (jwtToken && jwtToken.trim()) {
     info('auth', 'Manual JWT token provided — bypass login')
     return { token: jwtToken.trim(), exp: null, payload: null }

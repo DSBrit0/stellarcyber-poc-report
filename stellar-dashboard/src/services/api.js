@@ -4,8 +4,6 @@ import { debug, info, warn, error as logError, logApiError } from '../utils/logg
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const IS_DEMO = (auth) => auth.token === 'DEMO_MODE_TOKEN'
-
 function handleError(err, endpoint) {
   const message = logApiError(err, endpoint)
   const error = new Error(message)
@@ -13,112 +11,9 @@ function handleError(err, endpoint) {
   throw error
 }
 
-// ─── Demo data ────────────────────────────────────────────────────────────────
-
-function demoCases() {
-  const severities = ['Critical', 'High', 'High', 'Medium', 'Medium', 'Medium', 'Low']
-  const names = [
-    'Lateral movement detected from endpoint',
-    'Unusual outbound DNS traffic spike',
-    'Brute-force login attempt on VPN gateway',
-    'Ransomware behavior pattern on workstation',
-    'Privileged account login from unknown IP',
-    'Data exfiltration via cloud storage',
-    'Port scan from internal host',
-    'Credential dump attempt detected',
-    'C2 beacon communication detected',
-    'Suspicious PowerShell execution',
-  ]
-  return Array.from({ length: 37 }, (_, i) => ({
-    id: `CASE-${1000 + i}`,
-    name: names[i % names.length],
-    severity: severities[i % severities.length],
-    status: i % 8 === 0 ? 'Closed' : 'New',
-    score: +(Math.random() * 10).toFixed(1),
-    assetsAffected: Math.floor(Math.random() * 8) + 1,
-    tenantName: ['Acme Corp', 'Demo Tenant', 'Test Org'][i % 3],
-    createdAt: new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(),
-  }))
-}
-
-function demoEntityUsage() {
-  return Array.from({ length: 30 }, (_, i) => ({
-    date:         new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
-    entity_count: Math.floor(40 + Math.random() * 60),
-  }))
-}
-
-function demoConnectors() {
-  return [
-    { id: 'C1', name: 'Office365-HQ',   active: true,  type: 'office365',     category: 'saas',         tenantId: 'T1', lastActivity: new Date().toISOString(),                          statusCode: 0 },
-    { id: 'C2', name: 'Cisco-Umbrella', active: true,  type: 'ciscoumbrella', category: 'dns_security', tenantId: 'T1', lastActivity: new Date(Date.now() - 1800000).toISOString(),      statusCode: 0 },
-    { id: 'C3', name: 'Azure-EventHub', active: false, type: 'azure_eventhub',category: 'paas',         tenantId: 'T2', lastActivity: new Date(Date.now() - 5 * 3600000).toISOString(), statusCode: 2 },
-    { id: 'C4', name: 'AWS-CloudTrail', active: true,  type: 'aws_cloudtrail',category: 'cloud',        tenantId: 'T3', lastActivity: new Date(Date.now() - 600000).toISOString(),       statusCode: 0 },
-    { id: 'C5', name: 'CrowdStrike-EDR',active: true,  type: 'crowdstrike',   category: 'endpoint',     tenantId: 'T1', lastActivity: new Date(Date.now() - 3600000).toISOString(),      statusCode: 0 },
-    { id: 'C6', name: 'Palo-Alto-FW',  active: false, type: 'paloalto',      category: 'network',      tenantId: 'T2', lastActivity: new Date(Date.now() - 8 * 3600000).toISOString(),  statusCode: 2 },
-  ]
-}
-
-function demoIngestionBySensor() {
-  const sensors = [
-    { name: 'Cisco-Umbrella',  type: 'ciscoumbrella',   gb: 42.3 },
-    { name: 'CrowdStrike-EDR', type: 'crowdstrike',      gb: 128.7 },
-    { name: 'Office365-HQ',    type: 'office365',        gb: 85.1 },
-    { name: 'Palo-Alto-FW',    type: 'paloalto',         gb: 210.4 },
-    { name: 'AWS-CloudTrail',  type: 'aws_cloudtrail',   gb: 67.9 },
-    { name: 'Azure-EventHub',  type: 'azure_eventhub',   gb: 33.2 },
-  ]
-  return sensors.map((s, i) => ({
-    id:            `sensor-${i}`,
-    name:          s.name,
-    type:          s.type,
-    gbIngested:    s.gb,
-    bytesIngested: Math.round(s.gb * 1073741824),
-    eventsCount:   Math.floor(s.gb * 12000),
-  }))
-}
-
-function demoIngestionByConnector() {
-  const connectors = [
-    { name: 'Office365-HQ',    type: 'office365',        gb: 85.1,  events: 1020000 },
-    { name: 'Cisco-Umbrella',  type: 'ciscoumbrella',    gb: 42.3,  events: 507600  },
-    { name: 'Azure-EventHub',  type: 'azure_eventhub',   gb: 33.2,  events: 398400  },
-    { name: 'AWS-CloudTrail',  type: 'aws_cloudtrail',   gb: 67.9,  events: 814800  },
-    { name: 'CrowdStrike-EDR', type: 'crowdstrike',      gb: 128.7, events: 1544400 },
-    { name: 'Palo-Alto-FW',    type: 'paloalto',         gb: 210.4, events: 2524800 },
-  ]
-  return connectors.map((c, i) => ({
-    id:            `conn-${i}`,
-    name:          c.name,
-    type:          c.type,
-    gbIngested:    c.gb,
-    bytesIngested: Math.round(c.gb * 1073741824),
-    eventsCount:   c.events,
-  }))
-}
-
-function demoIngestionStats() {
-  return Array.from({ length: 7 }, (_, i) => ({
-    date: new Date(Date.now() - (6 - i) * 86400000).toISOString().split('T')[0],
-    gb: +(180 + Math.random() * 320).toFixed(1),
-  }))
-}
-
-function demoIngestionTimeline() {
-  const sources = ['office365', 'aws-cloudtrail', 'crowdstrike', 'paloalto-fw', 'cisco-umbrella', 'azure-eventhub']
-  return sources.map((src, i) => ({
-    id: `EVT-${i}`,
-    source: src,
-    timestamp: new Date(Date.now() - i * (i < 3 ? 1200000 : 3600000 * (i - 1))).toISOString(),
-    size: +(5 + Math.random() * 80).toFixed(1),
-    status: i % 4 === 0 ? 'error' : 'success',
-  }))
-}
-
 // ─── Cases ────────────────────────────────────────────────────────────────────
 
 export async function fetchCases(auth) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchCases → demo'); return demoCases() }
   try {
     const params = { limit: HTTP.DEFAULT_LIMIT, tenantid: auth.tenant }
     debug('api', `GET ${ENDPOINTS.CASES}`, params)
@@ -142,7 +37,6 @@ export async function fetchCases(auth) {
 // Returns the raw daily array; consumers compute the average.
 
 export async function fetchEntityUsage(auth) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchEntityUsage → demo'); return demoEntityUsage() }
   try {
     const params = { days: 30, cust_id: auth.tenant }
     debug('api', `GET ${ENDPOINTS.ENTITY_USAGE_DAILY}`, params)
@@ -166,7 +60,6 @@ export async function fetchEntityUsage(auth) {
 // ─── Connectors (Sensors) ────────────────────────────────────────────────────
 
 export async function fetchConnectors(auth) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchConnectors → demo'); return demoConnectors() }
   try {
     const params = { cust_id: auth.tenant }
     debug('api', `GET ${ENDPOINTS.CONNECTORS}`, params)
@@ -186,7 +79,6 @@ export async function fetchConnectors(auth) {
 // ─── Ingestion stats (derived from connectors — used by Dashboard charts) ────
 
 export async function fetchIngestionStats(auth) {
-  if (IS_DEMO(auth)) return demoIngestionStats()
   try {
     const connectors = await fetchConnectors(auth)
     return deriveIngestionStats(connectors)
@@ -197,7 +89,6 @@ export async function fetchIngestionStats(auth) {
 }
 
 export async function fetchIngestionTimeline(auth) {
-  if (IS_DEMO(auth)) return demoIngestionTimeline()
   try {
     const connectors = await fetchConnectors(auth)
     return deriveTimeline(connectors)
@@ -211,7 +102,6 @@ export async function fetchIngestionTimeline(auth) {
 // GET /connect/api/v1/ingestion-stats/sensor?cust_id=<tenant>&start_time=<ms>&end_time=<ms>
 
 export async function fetchIngestionBySensor(auth, { pocStartDate, pocEndDate } = {}) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchIngestionBySensor → demo'); return demoIngestionBySensor() }
   try {
     const endTime   = pocEndDate   ? new Date(pocEndDate).getTime()   : Date.now()
     const startTime = pocStartDate ? new Date(pocStartDate).getTime() : (endTime - 30 * 86400000)
@@ -233,7 +123,6 @@ export async function fetchIngestionBySensor(auth, { pocStartDate, pocEndDate } 
 // GET /connect/api/v1/ingestion-stats/connector?cust_id=<tenant>&start_time=<ms>&end_time=<ms>
 
 export async function fetchIngestionByConnector(auth, { pocStartDate, pocEndDate } = {}) {
-  if (IS_DEMO(auth)) { debug('api', 'fetchIngestionByConnector → demo'); return demoIngestionByConnector() }
   try {
     const endTime   = pocEndDate   ? new Date(pocEndDate).getTime()   : Date.now()
     const startTime = pocStartDate ? new Date(pocStartDate).getTime() : (endTime - 30 * 86400000)

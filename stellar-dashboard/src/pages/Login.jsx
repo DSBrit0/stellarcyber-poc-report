@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   ShieldCheck, Eye, EyeOff, Loader, AlertCircle,
-  Zap, Globe, User, Lock, Hash,
+  Globe, User, Lock, Hash,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLocale, LOCALE_OPTIONS } from '../i18n'
@@ -107,15 +107,6 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
     await onSubmit({ url: form.url, username: form.username, password: form.password, tenant: form.tenantId.trim() })
   }
 
-  async function handleDemo() {
-    await onSubmit({
-      url:      'https://demo.stellarcyber.ai',
-      username: 'demo',
-      password: 'demo',
-      jwtToken: 'DEMO_MODE_TOKEN',
-    })
-  }
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <IconField
@@ -187,23 +178,6 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
 
       <SubmitButton connecting={connecting} />
 
-      <Divider />
-
-      <button
-        type="button"
-        onClick={handleDemo}
-        disabled={connecting}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-60"
-        style={{
-          background: 'rgba(124,58,237,0.1)',
-          border: '1px solid rgba(124,58,237,0.25)',
-          color: '#a78bfa',
-        }}
-      >
-        <Zap size={14} />
-        {t('login.demo')}
-      </button>
-
       <AuthFlowInfo />
     </form>
   )
@@ -247,17 +221,6 @@ function SubmitButton({ connecting }) {
         <><Loader size={16} className="animate-spin" />{t('login.submitting')}</>
       ) : t('login.submit')}
     </button>
-  )
-}
-
-function Divider() {
-  const { t } = useLocale()
-  return (
-    <div className="flex items-center gap-3 my-1">
-      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-      <span className="text-xs" style={{ color: '#334155' }}>{t('common.or')}</span>
-      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-    </div>
   )
 }
 
