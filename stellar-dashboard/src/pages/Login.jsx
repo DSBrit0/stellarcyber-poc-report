@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   ShieldCheck, Eye, EyeOff, Loader, AlertCircle,
-  Globe, User, Lock, Hash,
+  Globe, User, Lock, Hash, HelpCircle, X, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useLocale, LOCALE_OPTIONS } from '../i18n'
@@ -97,6 +97,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
   const { t } = useLocale()
   const [form, setForm]         = useState({ url: '', username: '', password: '', tenantId: '' })
   const [showPass, setShowPass] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
 
   function set(k) {
     return e => setForm(prev => ({ ...prev, [k]: e.target.value }))
@@ -178,7 +179,21 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
 
       <SubmitButton connecting={connecting} />
 
-      <AuthFlowInfo />
+      <button
+        type="button"
+        onClick={() => setShowGuide(true)}
+        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium transition-all"
+        style={{
+          background: 'rgba(0,102,255,0.06)',
+          border: '1px solid rgba(0,102,255,0.15)',
+          color: '#60a5fa',
+        }}
+      >
+        <HelpCircle size={13} />
+        {t('login.apiGuideBtn')}
+      </button>
+
+      {showGuide && <ApiGuideModal onClose={() => setShowGuide(false)} />}
     </form>
   )
 }
@@ -224,23 +239,124 @@ function SubmitButton({ connecting }) {
   )
 }
 
-function AuthFlowInfo() {
+function ApiGuideModal({ onClose }) {
   const { t } = useLocale()
+  const g = key => t(`login.apiGuide.${key}`)
+
+  const steps = [
+    {
+      label: g('step1'),
+      sub: [g('step1_1'), g('step1_2')],
+    },
+    {
+      label: g('step2'),
+      sub: [g('step2_1'), g('step2_2'), g('step2_3'), g('step2_4')],
+    },
+    {
+      label: g('step3'),
+      sub: [g('step3_1'), g('step3_2')],
+    },
+  ]
+
   return (
     <div
-      className="mt-2 rounded-lg px-4 py-3 text-xs"
-      style={{
-        background: 'rgba(0,102,255,0.05)',
-        border: '1px solid rgba(0,102,255,0.12)',
-        color: '#475569',
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+      onClick={onClose}
     >
-      <div className="font-medium mb-1" style={{ color: '#64748b' }}>{t('login.authFlow')}</div>
-      <ol className="space-y-0.5 list-decimal list-inside">
-        <li>{t('login.authStep1').replace('HTTP Basic Auth', '')} <code className="text-blue-400">HTTP Basic Auth</code></li>
-        <li>{t('login.authStep2').replace('access_token', '')} <code className="text-blue-400">access_token</code> (JWT)</li>
-        <li>{t('login.authStep3').replace('Bearer', '')} <code className="text-blue-400">Bearer</code></li>
-      </ol>
+      <div
+        className="w-full max-w-lg rounded-2xl overflow-hidden animate-fade-in"
+        style={{
+          background: 'rgba(12,18,35,0.98)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 0 60px rgba(0,102,255,0.2), 0 24px 48px rgba(0,0,0,0.6)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-6 py-4"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+        >
+          <div className="flex items-center gap-2">
+            <HelpCircle size={16} style={{ color: '#00d4ff' }} />
+            <span className="text-sm font-semibold" style={{ color: '#f1f5f9' }}>
+              {g('title')}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 transition-colors"
+            style={{ color: '#475569' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Steps */}
+        <div className="px-6 py-5 space-y-5">
+          {steps.map((step, i) => (
+            <div key={i} className="flex gap-3">
+              <div
+                className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5"
+                style={{
+                  background: 'linear-gradient(135deg, #0066ff, #00d4ff)',
+                  color: 'white',
+                }}
+              >
+                {i + 1}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium" style={{ color: '#e2e8f0' }}>
+                  {step.label}
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {step.sub.map((s, j) => (
+                    <li key={j} className="flex items-start gap-2 text-xs" style={{ color: '#94a3b8' }}>
+                      <span
+                        className="flex-shrink-0 mt-1 w-1.5 h-1.5 rounded-full"
+                        style={{ background: '#00d4ff' }}
+                      />
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))}
+
+          {/* Warning */}
+          <div
+            className="flex items-start gap-2 rounded-lg px-4 py-3 text-xs"
+            style={{
+              background: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.25)',
+              color: '#fcd34d',
+            }}
+          >
+            <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
+            <span>{g('warning')}</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          className="px-6 py-4 flex justify-end"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
+        >
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
+            style={{
+              background: 'linear-gradient(135deg, #0066ff, #00d4ff)',
+              color: 'white',
+              boxShadow: '0 0 16px rgba(0,212,255,0.25)',
+            }}
+          >
+            {g('close')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
