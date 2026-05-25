@@ -119,7 +119,10 @@ _env_set() {
 [[ -f "$ENV_FILE" ]] || cp "$SCRIPT_DIR/.env.example" "$ENV_FILE" 2>/dev/null || touch "$ENV_FILE"
 _env_set "DOMAIN"            "$DOMAIN"
 _env_set "LETSENCRYPT_EMAIL" "$LETSENCRYPT_EMAIL"
-success ".env atualizado  (DOMAIN, LETSENCRYPT_EMAIL)"
+# Node deve ouvir apenas em localhost quando atrás do Nginx (mais seguro)
+_env_set "HOST"              "127.0.0.1"
+success ".env atualizado  (DOMAIN, LETSENCRYPT_EMAIL, HOST=127.0.0.1)"
+warn "HOST alterado para 127.0.0.1 — rode 'bash update.sh' após o setup para aplicar"
 
 # ─── Instalar nginx ───────────────────────────────────────────────────────────
 if command -v nginx &>/dev/null; then
@@ -142,11 +145,14 @@ else
   success "certbot instalado"
 fi
 
-# ─── Abrir portas no ufw (se ativo) ──────────────────────────────────────────
+# ─── Configurar ufw (se ativo) ───────────────────────────────────────────────
 if command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
   ufw allow 80/tcp  > /dev/null
   ufw allow 443/tcp > /dev/null
   success "ufw : portas 80 e 443 liberadas"
+  # Fechar porta do Node.js para acesso externo — tráfego deve vir só pelo Nginx
+  ufw deny "$NODE_PORT"/tcp > /dev/null 2>&1 || true
+  success "ufw : porta $NODE_PORT bloqueada externamente (acesso apenas via Nginx)"
 fi
 
 # ─── Paths da configuração Nginx ─────────────────────────────────────────────
@@ -269,7 +275,14 @@ echo -e "${GREEN}${BOLD}║${NC}  Config Nginx  : $NGINX_CONF"
 echo -e "${GREEN}${BOLD}║${NC}  Porta Node.js : $NODE_PORT  (interno)"
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-info "Verificar Nginx       : systemctl status nginx"
-info "Testar renovação cert : certbot renew --dry-run"
-info "Rerodar setup         : sudo bash $0"
+info "Verificar Nginx         : systemctl status nginx"
+info "Testar renovação cert   : certbot renew --dry-run"
+info "Rerodar setup           : sudo bash $0"
+echo ""
+warn "PRÓXIMOS PASSOS obrigatórios:"
+warn "  1. Configurar PM2 para iniciar no boot do servidor:"
+warn "     pm2 startup   (copie e execute o comando que aparecer)"
+warn "     pm2 save"
+warn "  2. Aplicar HOST=127.0.0.1 ao processo Node.js:"
+warn "     bash update.sh"
 echo ""
