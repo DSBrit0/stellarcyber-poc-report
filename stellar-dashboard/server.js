@@ -71,7 +71,10 @@ const server = app.listen(PORT, HOST, () => {
 })
 
 // Graceful shutdown: releases port 8080 before PM2 starts the new process.
-// Without this, pm2 restart causes EADDRINUSE on the new process.
+// closeAllConnections() forces Nginx keep-alive connections to close immediately
+// (without it, server.close() hangs until PM2 sends SIGKILL, racing with the new process)
 process.on('SIGTERM', () => {
+  server.closeAllConnections?.()             // Node 18.2+ — force-close keep-alive sockets
   server.close(() => process.exit(0))
+  setTimeout(() => process.exit(0), 5000).unref()  // safety: exit if close hangs
 })
