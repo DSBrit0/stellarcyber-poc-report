@@ -289,7 +289,7 @@ run_update() {
   pm2 save
 
   step "5/5 — Verificando resposta (porta $PORT)"
-  local ATTEMPTS=15
+  local ATTEMPTS=30
   for i in $(seq 1 $ATTEMPTS); do
     if curl -sf "http://127.0.0.1:${PORT}/health" &>/dev/null ||
        curl -sf "http://127.0.0.1:${PORT}"        &>/dev/null; then
@@ -297,9 +297,20 @@ run_update() {
       break
     fi
     if [[ $i -eq $ATTEMPTS ]]; then
-      warn "App não respondeu após ${ATTEMPTS}s"
-      warn "Diagnóstico: pm2 logs $APP"
-      warn "Nginx pode estar retornando 502 — verifique: journalctl -u nginx -f"
+      warn "App não respondeu após ${ATTEMPTS}s — coletando diagnóstico..."
+      echo ""
+      echo "── PM2 status ──────────────────────────────────────────────────────"
+      pm2 status
+      echo ""
+      echo "── Últimas linhas de log ────────────────────────────────────────────"
+      pm2 logs "$APP" --lines 30 --nostream 2>/dev/null || true
+      echo ""
+      echo "── Porta $PORT ──────────────────────────────────────────────────────"
+      ss -tlnp 2>/dev/null | grep ":${PORT}" || echo "(nenhum processo escutando na porta $PORT)"
+      echo ""
+      warn "Se o app crashar em loop: verifique os logs acima para o erro FATAL"
+      warn "Para testar manualmente: node server.js"
+      warn "Para logs do Nginx: journalctl -u nginx -f"
       exit 1
     fi
     sleep 1

@@ -63,7 +63,7 @@ pm2 save
 # Confirma que o app voltou a responder antes de declarar sucesso.
 # Nginx retornaria 502 se esta checagem falhar.
 ok "Verificando resposta do servidor (porta $PORT)..."
-ATTEMPTS=15
+ATTEMPTS=30
 for i in $(seq 1 $ATTEMPTS); do
   if curl -sf "http://127.0.0.1:${PORT}/health" &>/dev/null ||
      curl -sf "http://127.0.0.1:${PORT}"        &>/dev/null; then
@@ -71,9 +71,16 @@ for i in $(seq 1 $ATTEMPTS); do
     break
   fi
   if [[ $i -eq $ATTEMPTS ]]; then
-    warn "App não respondeu após ${ATTEMPTS}s"
-    warn "Verifique:  pm2 logs $APP"
-    warn "Nginx pode estar retornando 502 — monitore: journalctl -u nginx -f"
+    warn "App não respondeu após ${ATTEMPTS}s — coletando diagnóstico..."
+    echo ""
+    pm2 status
+    echo ""
+    pm2 logs "$APP" --lines 30 --nostream 2>/dev/null || true
+    echo ""
+    ss -tlnp 2>/dev/null | grep ":${PORT}" || echo "(nenhum processo na porta $PORT)"
+    echo ""
+    warn "Se o app crashar em loop: veja os logs [FATAL] acima para o erro real"
+    warn "Teste manual: node server.js"
     exit 1
   fi
   sleep 1

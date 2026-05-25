@@ -9,6 +9,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 8080
 const HOST = process.env.HOST || '0.0.0.0'
 
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err.message)
+  console.error(err.stack)
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
+  process.exit(1)
+})
+
 const app = express()
 
 // ── Static build ──────────────────────────────────────────────────────────────
