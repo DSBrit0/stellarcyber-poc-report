@@ -65,7 +65,13 @@ app.get('*', (_req, res) => {
 })
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`Stellar Dashboard → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`)
   console.log(`Acessível em → http://<ip-do-servidor>:${PORT}`)
+})
+
+// Graceful shutdown: releases port 8080 before PM2 starts the new process.
+// Without this, pm2 restart causes EADDRINUSE on the new process.
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0))
 })
