@@ -274,15 +274,21 @@ export function generatePDFReport({
 
   // pocMeta fields (user-entered)
   const {
-    clientName   = '',
-    clientDept   = '',
-    seName       = '',
-    partnerName  = '',
-    seEmail      = '',
-    pocStartDate = '',
-    pocEndDate   = '',
-    version      = '1.0',
-    verdict      = s.verdictApproved || 'Approved',
+    clientName       = '',
+    clientDept       = '',
+    clientEmail      = '',
+    analysts         = [],
+    successCriteria  = '',
+    seName           = '',
+    seEmail          = '',
+    sePhone          = '',
+    partnerName      = '',
+    partnerEmail     = '',
+    partnerSite      = '',
+    pocStartDate     = '',
+    pocEndDate       = '',
+    version          = '1.0',
+    verdict          = s.verdictApproved || 'Approved',
   } = pocMeta
 
   const clientDisplay  = clientName  || '—'
@@ -338,10 +344,10 @@ export function generatePDFReport({
 
   // Prepared for box
   doc.setFillColor(...C.rowAlt)
-  doc.roundedRect(ML, 114, 86, 52, 2, 2, 'F')
+  doc.roundedRect(ML, 114, 86, 72, 2, 2, 'F')
   doc.setDrawColor(...C.midBlue)
   doc.setLineWidth(0.4)
-  doc.roundedRect(ML, 114, 86, 52, 2, 2, 'S')
+  doc.roundedRect(ML, 114, 86, 72, 2, 2, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C.navy)
@@ -351,16 +357,35 @@ export function generatePDFReport({
   doc.setTextColor(...C.text)
   const clientNameLines = doc.splitTextToSize(clientDisplay, 78)
   doc.text(clientNameLines, ML + 4, 130)
+  let pfY = 130 + clientNameLines.length * 5 + 4
   doc.setFontSize(8.5)
   doc.setTextColor(...C.muted)
-  doc.text(trunc(clientDept || '—', 36), ML + 4, 130 + clientNameLines.length * 5 + 4)
+  doc.text(trunc(clientDept || '—', 36), ML + 4, pfY)
+  pfY += 7
+  if (clientEmail) {
+    doc.setFontSize(8)
+    doc.text(trunc(clientEmail, 38), ML + 4, pfY)
+    pfY += 7
+  }
+  const analystList = (analysts || []).filter(Boolean)
+  if (analystList.length > 0) {
+    doc.setFontSize(7)
+    doc.setTextColor(...C.navy)
+    doc.text(s.coverAnalysts || 'Stakeholders:', ML + 4, pfY)
+    pfY += 5
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C.muted)
+    const shown = analystList.slice(0, 3)
+    const suffix = analystList.length > 3 ? ` +${analystList.length - 3}` : ''
+    doc.text(trunc(shown.join(', ') + suffix, 44), ML + 4, pfY)
+  }
 
   // Prepared by box
   const rx = PW - MR - 86
   doc.setFillColor(...C.rowAlt)
-  doc.roundedRect(rx, 114, 86, 52, 2, 2, 'F')
+  doc.roundedRect(rx, 114, 86, 72, 2, 2, 'F')
   doc.setDrawColor(...C.midBlue)
-  doc.roundedRect(rx, 114, 86, 52, 2, 2, 'S')
+  doc.roundedRect(rx, 114, 86, 72, 2, 2, 'S')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...C.navy)
@@ -372,11 +397,26 @@ export function generatePDFReport({
   doc.setFontSize(8.5)
   doc.setTextColor(...C.muted)
   doc.text(trunc(partnerDisplay, 32), rx + 4, 143)
-  if (seEmail) doc.text(trunc(seEmail, 36), rx + 4, 152)
+  let pbY = 152
+  if (seEmail) { doc.text(trunc(seEmail, 38), rx + 4, pbY); pbY += 8 }
+  if (sePhone) {
+    doc.setFontSize(8)
+    doc.text(trunc(sePhone, 38), rx + 4, pbY)
+    pbY += 8
+  }
+  if (partnerEmail) {
+    doc.setFontSize(8)
+    doc.text(trunc(partnerEmail, 38), rx + 4, pbY)
+    pbY += 7
+  }
+  if (partnerSite) {
+    doc.setFontSize(8)
+    doc.text(trunc(partnerSite, 38), rx + 4, pbY)
+  }
 
   // Metadata table
   autoTable(doc, {
-    startY: 176,
+    startY: 196,
     body: [
       [s.metaVersion || 'Versão',  version],
       [s.metaPeriod  || 'Período', period],
@@ -590,6 +630,16 @@ export function generatePDFReport({
       }
     },
   })
+
+  // Additional success criteria (user-entered free text)
+  const successCriteriaText = (successCriteria || '').trim()
+  if (successCriteriaText) {
+    y = (doc.lastAutoTable?.finalY ?? y) + 6
+    if (needsPage(doc, y, 24)) { y = newPage(doc) }
+    y = subTitle(doc, s.successCriteriaAdditional || 'Critérios Adicionais', y)
+    y = bodyText(doc, successCriteriaText, y)
+    y += 4
+  }
 
   // ══════════════════════════════════════════════════════════════════════════════
   // SECTION 3 — PLATFORM OVERVIEW & INTEGRATIONS
@@ -1188,11 +1238,13 @@ export function generatePDFReport({
   y += 10
 
   // Signatures
-  if (needsPage(doc, y, 45)) { y = newPage(doc) }
+  if (needsPage(doc, y, 70)) { y = newPage(doc) }
   y = subTitle(doc, s.sec10_2 || '10.2 Signatures', y)
 
   doc.setDrawColor(...C.muted)
   doc.setLineWidth(0.3)
+
+  // ── SE / Partner signature (left column) ──
   doc.line(ML, y + 20, ML + 82, y + 20)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8.5)
@@ -1201,15 +1253,38 @@ export function generatePDFReport({
   doc.setFontSize(7.5)
   doc.setTextColor(...C.muted)
   doc.text(`${s.seRole || 'Systems Engineer'} — ${partnerDisplay}`, ML, y + 31)
-  if (seEmail) doc.text(seEmail, ML, y + 37)
+  let seY = y + 37
+  if (seEmail)      { doc.text(trunc(seEmail, 44), ML, seY);       seY += 6 }
+  if (sePhone)      { doc.text(trunc(sePhone, 44), ML, seY);       seY += 6 }
+  if (partnerEmail) { doc.text(trunc(partnerEmail, 44), ML, seY);  seY += 6 }
+  if (partnerSite)  { doc.text(trunc(partnerSite, 44), ML, seY); }
 
+  // ── Client signature (right column) ──
   doc.line(PW - MR - 82, y + 20, PW - MR, y + 20)
   doc.setFontSize(8.5)
   doc.setTextColor(...C.text)
   doc.text(clientDisplay, PW - MR - 82, y + 25)
   doc.setFontSize(7.5)
   doc.setTextColor(...C.muted)
-  doc.text(clientDept || '—', PW - MR - 82, y + 31)
+  let cliY = y + 31
+  doc.text(clientDept || '—', PW - MR - 82, cliY)
+  cliY += 6
+  if (clientEmail) { doc.text(trunc(clientEmail, 44), PW - MR - 82, cliY); cliY += 6 }
+
+  // ── Analysts / Stakeholders ──
+  const analystSigList = (analysts || []).filter(Boolean)
+  if (analystSigList.length > 0) {
+    const afterSigs = Math.max(seY, cliY) + 12
+    if (needsPage(doc, afterSigs, 18)) { y = newPage(doc) } else { y = afterSigs }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...C.navy)
+    doc.text(s.stakeholders || 'Stakeholders', ML, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...C.text)
+    doc.text(analystSigList.join('   ·   '), ML, y + 7)
+  }
 
   // ══════════════════════════════════════════════════════════════════════════════
   // APPENDIX A — GLOSSARY

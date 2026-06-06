@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   FileText, Download, RefreshCw, CheckCircle2, AlertTriangle,
   XCircle, Shield, Layers, Radio, Lightbulb, Loader,
-  Clock, Settings2,
+  Clock, Settings2, User, Building2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -46,6 +46,94 @@ function Field({ label, children, onHelp }) {
         )}
       </div>
       {children}
+    </div>
+  )
+}
+
+function SubSection({ label, icon: Icon }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '7px',
+      padding: '6px 0', marginTop: '6px',
+      borderBottom: '1px solid rgba(0,212,255,0.12)',
+    }}>
+      {Icon && <Icon size={13} style={{ color: '#00d4ff', flexShrink: 0 }} />}
+      <span style={{ fontSize: '11px', fontWeight: 700, color: '#00d4ff', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+    </div>
+  )
+}
+
+function AnalystsList({ analysts, setPocMeta, t }) {
+  const [inputValue, setInputValue] = useState('')
+  const list = analysts || []
+
+  function addAnalyst() {
+    const name = inputValue.trim()
+    if (!name || list.includes(name)) return
+    setPocMeta({ analysts: [...list, name] })
+    setInputValue('')
+  }
+
+  function removeAnalyst(index) {
+    setPocMeta({ analysts: list.filter((_, i) => i !== index) })
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); addAnalyst() }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <input
+          style={{ ...INPUT, flex: 1 }}
+          placeholder={t('report.analystPlaceholder')}
+          value={inputValue}
+          onChange={e => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          maxLength={60}
+        />
+        <button
+          type="button"
+          onClick={addAnalyst}
+          disabled={!inputValue.trim()}
+          style={{
+            padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+            background: inputValue.trim() ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${inputValue.trim() ? 'rgba(0,212,255,0.35)' : 'rgba(255,255,255,0.08)'}`,
+            color: inputValue.trim() ? '#00d4ff' : '#475569',
+            cursor: inputValue.trim() ? 'pointer' : 'default',
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}
+        >
+          {t('report.addAnalyst')}
+        </button>
+      </div>
+      {list.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+          {list.map((name, i) => (
+            <span key={i} style={{
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+              padding: '3px 10px 3px 10px', borderRadius: '20px', fontSize: '11px',
+              background: 'rgba(0,212,255,0.07)', border: '1px solid rgba(0,212,255,0.18)',
+              color: '#cbd5e1',
+            }}>
+              {name}
+              <button
+                type="button"
+                onClick={() => removeAnalyst(i)}
+                style={{
+                  background: 'none', border: 'none', color: '#64748b',
+                  cursor: 'pointer', padding: 0, fontSize: '14px', lineHeight: 1,
+                  display: 'flex', alignItems: 'center',
+                }}
+              >×</button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -195,74 +283,118 @@ export default function Report() {
 
         <div className="px-5 pb-5 pt-4 space-y-4">
 
-            {/* Row 1 */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label={t('report.clientName')}>
-                <input style={INPUT} placeholder={t('report.clientPlaceholder')} value={pocMeta.clientName} onChange={setField('clientName')} />
-              </Field>
-              <Field label={t('report.clientDept')}>
-                <input style={INPUT} placeholder={t('report.deptPlaceholder')} value={pocMeta.clientDept} onChange={setField('clientDept')} />
-              </Field>
-            </div>
+          {/* ── Informações do Cliente ── */}
+          <SubSection label={t('report.clientSection')} icon={User} />
 
-            {/* Row 2 */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label={t('report.seName')}>
-                <input style={INPUT} placeholder={t('report.sePlaceholder')} value={pocMeta.seName} onChange={setField('seName')} />
-              </Field>
-              <Field label={t('report.partnerName')}>
-                <input style={INPUT} placeholder={t('report.partnerPlaceholder')} value={pocMeta.partnerName} onChange={setField('partnerName')} />
-              </Field>
-            </div>
-
-            {/* Row 3 */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label={t('report.seEmail')}>
-                <input style={INPUT} type="email" placeholder={t('report.emailPlaceholder')} value={pocMeta.seEmail} onChange={setField('seEmail')} />
-              </Field>
-              <Field label={t('report.pocStart')}>
-                <input style={INPUT} type="date" value={pocMeta.pocStartDate} onChange={setField('pocStartDate')} />
-              </Field>
-              <Field label={t('report.pocEnd')}>
-                <input style={INPUT} type="date" value={pocMeta.pocEndDate} onChange={setField('pocEndDate')} />
-              </Field>
-            </div>
-
-            {/* Row 4 */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label={t('report.version')}>
-                <input style={INPUT} placeholder="1.0" value={pocMeta.version} onChange={setField('version')} />
-              </Field>
-              <Field label={t('report.verdict')} onHelp={() => setShowVerdictGuide(true)}>
-                <select style={{ ...INPUT, cursor: 'pointer' }} value={pocMeta.verdict} onChange={setField('verdict')}>
-                  <option value="">— selecione —</option>
-                  <option value={t('report.verdictApproved')}>{t('report.verdictApproved')}</option>
-                  <option value={t('report.verdictCond')}>{t('report.verdictCond')}</option>
-                  <option value={t('report.verdictRejected')}>{t('report.verdictRejected')}</option>
-                </select>
-              </Field>
-            </div>
-
-            {/* Comments */}
-            <Field label={t('report.comments')}>
-              <div style={{ position: 'relative' }}>
-                <textarea
-                  style={{ ...INPUT, resize: 'vertical', minHeight: '96px', lineHeight: '1.5' }}
-                  placeholder={t('report.commentsPlaceholder')}
-                  maxLength={1500}
-                  value={pocMeta.comments}
-                  onChange={setField('comments')}
-                />
-                <span style={{
-                  position: 'absolute', bottom: '8px', right: '10px',
-                  fontSize: '10px', color: (pocMeta.comments?.length ?? 0) >= 1400 ? '#f59e0b' : '#475569',
-                  pointerEvents: 'none',
-                }}>
-                  {t('report.commentsChars', { n: pocMeta.comments?.length ?? 0 })}
-                </span>
-              </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label={t('report.clientName')}>
+              <input style={INPUT} placeholder={t('report.clientPlaceholder')} value={pocMeta.clientName} onChange={setField('clientName')} />
+            </Field>
+            <Field label={t('report.clientDept')}>
+              <input style={INPUT} placeholder={t('report.deptPlaceholder')} value={pocMeta.clientDept} onChange={setField('clientDept')} />
+            </Field>
+            <Field label={t('report.clientEmail')}>
+              <input style={INPUT} type="email" placeholder={t('report.clientEmailPlaceholder')} value={pocMeta.clientEmail} onChange={setField('clientEmail')} />
             </Field>
           </div>
+
+          <Field label={t('report.analysts')}>
+            <AnalystsList analysts={pocMeta.analysts} setPocMeta={setPocMeta} t={t} />
+          </Field>
+
+          <Field label={t('report.successCriteria')}>
+            <div style={{ position: 'relative' }}>
+              <textarea
+                style={{ ...INPUT, resize: 'vertical', minHeight: '72px', lineHeight: '1.5' }}
+                placeholder={t('report.successCriteriaPlaceholder')}
+                maxLength={550}
+                value={pocMeta.successCriteria}
+                onChange={setField('successCriteria')}
+              />
+              <span style={{
+                position: 'absolute', bottom: '8px', right: '10px',
+                fontSize: '10px', color: (pocMeta.successCriteria?.length ?? 0) >= 500 ? '#f59e0b' : '#475569',
+                pointerEvents: 'none',
+              }}>
+                {t('report.successCriteriaChars', { n: pocMeta.successCriteria?.length ?? 0 })}
+              </span>
+            </div>
+          </Field>
+
+          {/* ── Sales Engineer Stellar Cyber ── */}
+          <SubSection label={t('report.seSection')} icon={Shield} />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label={t('report.seName')}>
+              <input style={INPUT} placeholder={t('report.sePlaceholder')} maxLength={20} value={pocMeta.seName} onChange={setField('seName')} />
+            </Field>
+            <Field label={t('report.seEmail')}>
+              <input style={INPUT} type="email" placeholder={t('report.emailPlaceholder')} maxLength={50} value={pocMeta.seEmail} onChange={setField('seEmail')} />
+            </Field>
+            <Field label={t('report.sePhone')}>
+              <input style={INPUT} type="tel" placeholder={t('report.sePhonePlaceholder')} maxLength={20} value={pocMeta.sePhone} onChange={setField('sePhone')} />
+            </Field>
+          </div>
+
+          {/* ── Parceiro ── */}
+          <SubSection label={t('report.partnerSection')} icon={Building2} />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label={t('report.partnerName')}>
+              <input style={INPUT} placeholder={t('report.partnerPlaceholder')} value={pocMeta.partnerName} onChange={setField('partnerName')} />
+            </Field>
+            <Field label={t('report.partnerEmail')}>
+              <input style={INPUT} type="email" placeholder={t('report.partnerEmailPlaceholder')} value={pocMeta.partnerEmail} onChange={setField('partnerEmail')} />
+            </Field>
+            <Field label={t('report.partnerSite')}>
+              <input style={INPUT} placeholder={t('report.partnerSitePlaceholder')} value={pocMeta.partnerSite} onChange={setField('partnerSite')} />
+            </Field>
+          </div>
+
+          {/* ── Informações Gerais ── */}
+          <SubSection label={t('report.generalSection')} icon={FileText} />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field label={t('report.pocStart')}>
+              <input style={INPUT} type="date" value={pocMeta.pocStartDate} onChange={setField('pocStartDate')} />
+            </Field>
+            <Field label={t('report.pocEnd')}>
+              <input style={INPUT} type="date" value={pocMeta.pocEndDate} onChange={setField('pocEndDate')} />
+            </Field>
+            <Field label={t('report.version')}>
+              <input style={INPUT} placeholder="1.0" value={pocMeta.version} onChange={setField('version')} />
+            </Field>
+          </div>
+
+          <Field label={t('report.verdict')} onHelp={() => setShowVerdictGuide(true)}>
+            <select style={{ ...INPUT, cursor: 'pointer' }} value={pocMeta.verdict} onChange={setField('verdict')}>
+              <option value="">— selecione —</option>
+              <option value={t('report.verdictApproved')}>{t('report.verdictApproved')}</option>
+              <option value={t('report.verdictCond')}>{t('report.verdictCond')}</option>
+              <option value={t('report.verdictRejected')}>{t('report.verdictRejected')}</option>
+            </select>
+          </Field>
+
+          {/* Comments */}
+          <Field label={t('report.comments')}>
+            <div style={{ position: 'relative' }}>
+              <textarea
+                style={{ ...INPUT, resize: 'vertical', minHeight: '96px', lineHeight: '1.5' }}
+                placeholder={t('report.commentsPlaceholder')}
+                maxLength={1500}
+                value={pocMeta.comments}
+                onChange={setField('comments')}
+              />
+              <span style={{
+                position: 'absolute', bottom: '8px', right: '10px',
+                fontSize: '10px', color: (pocMeta.comments?.length ?? 0) >= 1400 ? '#f59e0b' : '#475569',
+                pointerEvents: 'none',
+              }}>
+                {t('report.commentsChars', { n: pocMeta.comments?.length ?? 0 })}
+              </span>
+            </div>
+          </Field>
+        </div>
       </div>
 
       {showVerdictGuide && <VerdictGuideModal onClose={() => setShowVerdictGuide(false)} />}

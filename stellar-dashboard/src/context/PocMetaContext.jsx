@@ -3,16 +3,22 @@ import { createContext, useContext, useState } from 'react'
 const STORAGE_KEY = 'poc_meta'
 
 const DEFAULTS = {
-  clientName:   '',
-  clientDept:   '',
-  seName:       '',
-  partnerName:  '',
-  seEmail:      '',
-  pocStartDate: '',
-  pocEndDate:   '',
-  version:      '1.0',
-  verdict:      '',
-  comments:     '',
+  clientName:      '',
+  clientDept:      '',
+  clientEmail:     '',
+  analysts:        [],
+  successCriteria: '',
+  seName:          '',
+  seEmail:         '',
+  sePhone:         '',
+  partnerName:     '',
+  partnerEmail:    '',
+  partnerSite:     '',
+  pocStartDate:    '',
+  pocEndDate:      '',
+  version:         '1.0',
+  verdict:         '',
+  comments:        '',
 }
 
 const PocMetaContext = createContext(null)
