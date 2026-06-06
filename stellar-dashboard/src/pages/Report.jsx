@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   FileText, Download, RefreshCw, CheckCircle2, AlertTriangle,
   XCircle, Shield, Layers, Radio, Lightbulb, Loader,
-  Clock, Settings2, User, Building2, CalendarDays, Info,
+  Clock, Settings2, User, Building2, CalendarDays, Info, Upload, Trash2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -146,6 +146,26 @@ export default function Report() {
   const [generating, setGenerating]                      = useState(false)
   const [downloaded, setDownloaded]                      = useState(false)
   const [showVerdictGuide, setShowVerdictGuide]          = useState(false)
+  const archImageRef                                     = useRef(null)
+
+  function handleArchImageUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const dataUrl = ev.target.result
+      const img = new window.Image()
+      img.onload = () => {
+        setPocMeta({
+          architectureImage:     dataUrl,
+          architectureImageDims: { w: img.naturalWidth, h: img.naturalHeight },
+        })
+      }
+      img.src = dataUrl
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
 
   const hasDates = !!(pocMeta.pocStartDate && pocMeta.pocEndDate)
   const isSynced = hasDates && !!syncedAt &&
@@ -393,6 +413,57 @@ export default function Report() {
               </span>
             </div>
           </Field>
+
+          {/* ── Arquitetura Mínima Sugerida ── */}
+          <SubSection label={t('report.archSection')} icon={Layers} />
+
+          <input
+            ref={archImageRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleArchImageUpload}
+          />
+
+          {pocMeta.architectureImage ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <img
+                src={pocMeta.architectureImage}
+                alt="architecture"
+                style={{
+                  width: '100%', borderRadius: '8px', objectFit: 'contain',
+                  border: '1px solid rgba(0,212,255,0.18)', maxHeight: '320px',
+                  background: 'rgba(0,0,0,0.2)',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setPocMeta({ architectureImage: '', architectureImageDims: null })}
+                style={{
+                  alignSelf: 'flex-start',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+                  background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                  color: '#fca5a5', cursor: 'pointer',
+                }}
+              >
+                <Trash2 size={12} />{t('report.archRemove')}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => archImageRef.current?.click()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                background: 'rgba(0,212,255,0.06)', border: '1px dashed rgba(0,212,255,0.3)',
+                color: '#00d4ff', cursor: 'pointer', width: '100%', justifyContent: 'center',
+              }}
+            >
+              <Upload size={14} />{t('report.archUpload')}
+            </button>
+          )}
         </div>
       </div>
 

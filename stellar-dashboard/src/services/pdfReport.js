@@ -530,13 +530,41 @@ export function generatePDFReport({
   ), y)
   y += 10
 
-  // ─── 1.3 Comments ─────────────────────────────────────────────────────────
-  if (needsPage(doc, y, 30)) { y = newPage(doc) }
-  y = subTitle(doc, s.sec1_3 || '1.3 SE Comments & Notes', y)
-  const commentsText = (pocMeta.comments || '').trim()
-  y = commentsText
-    ? bodyText(doc, commentsText, y)
-    : infoNote(doc, s.noComments || 'No additional comments recorded.', y)
+  // ══════════════════════════════════════════════════════════════════════════════
+  // ARCHITECTURE PAGE
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  y = newPage(doc)
+  y = appendixTitle(doc, s.secArch || 'Arquitetura Mínima Sugerida', y)
+
+  const archImg  = pocMeta.architectureImage || ''
+  const archDims = pocMeta.architectureImageDims || null
+
+  if (archImg) {
+    const imgFormat = archImg.startsWith('data:image/png') ? 'PNG'
+      : archImg.startsWith('data:image/gif') ? 'GIF'
+      : 'JPEG'
+
+    const maxW = CW
+    const maxH = PH - y - 25
+
+    let imgW = maxW
+    let imgH = maxH
+
+    if (archDims && archDims.w > 0) {
+      const aspect = archDims.h / archDims.w
+      imgH = imgW * aspect
+      if (imgH > maxH) {
+        imgH = maxH
+        imgW = imgH / aspect
+      }
+    }
+
+    const imgX = ML + (CW - imgW) / 2
+    doc.addImage(archImg, imgFormat, imgX, y, imgW, imgH, '', 'FAST')
+  } else {
+    y = infoNote(doc, s.noArchImage || 'Nenhuma imagem de arquitetura fornecida. Faça upload na tela de configuração do report.', y)
+  }
 
   // ══════════════════════════════════════════════════════════════════════════════
   // SECTION 2 — SCOPE AND METHODOLOGY
@@ -1257,7 +1285,16 @@ export function generatePDFReport({
     s.body10 || 'Based on the PoC results ({period}), the Stellar Cyber Open XDR platform demonstrated robust detection capabilities with {mitrePct}% MITRE ATT&CK coverage and {caseCount} cases detected for {client}.',
     { period, mitrePct: mitreCovPct, caseCount: totalCasesStr, client: clientDisplay }
   ), y)
-  y += 10
+  y += 8
+
+  // ─── 1.3 SE Comments (moved here to compose the final verdict page) ────────
+  const commentsText = (pocMeta.comments || '').trim()
+  if (commentsText) {
+    if (needsPage(doc, y, 30)) { y = newPage(doc) }
+    y = subTitle(doc, s.sec1_3 || '1.3 SE Comments & Notes', y)
+    y = bodyText(doc, commentsText, y)
+    y += 8
+  }
 
   // Signatures
   if (needsPage(doc, y, 70)) { y = newPage(doc) }
