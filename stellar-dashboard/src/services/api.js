@@ -1,6 +1,6 @@
 import { createApiClient } from './apiClient'
-import { ENDPOINTS, HTTP } from './endpoints'
-import { debug, info, warn, error as logError, logApiError } from '../utils/logger'
+import { ENDPOINTS } from './endpoints'
+import { debug, info, warn, logApiError } from '../utils/logger'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -16,33 +16,56 @@ function dayStart(dateStr) { return new Date(dateStr).getTime() + 1000 }      //
 function dayEnd(dateStr)   { return new Date(dateStr).getTime() + 86399000 }  // 23:59:59.000
 
 // ─── Cases ────────────────────────────────────────────────────────────────────
+// The API ignores start_time/end_time for the cases endpoint — date filtering
+// is applied client-side. Four parallel requests (one per severity) are made
+// so Critical/High cases outside the recent 500-result window are not missed.
+//
+// Returns: { cases: [...critical, ...high, ...mediumTop100], lowCount, mediumTotal }
+//   - cases:       all Critical + all High + top 100 Medium within the POC period
+//   - lowCount:    count of Low cases in period (number, or '500+' if ≥ 500 found)
+//   - mediumTotal: total Medium cases found in period (may be > 100)
 
 export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
   try {
-    const params = { limit: HTTP.DEFAULT_LIMIT, tenantid: auth.tenant }
-    if (pocStartDate) params.start_time = dayStart(pocStartDate)  // 00:00:01
-    if (pocEndDate)   params.end_time   = dayEnd(pocEndDate)       // 23:59:59
-    debug('api', `GET ${ENDPOINTS.CASES}`, params)
+    const startMs = pocStartDate ? dayStart(pocStartDate) : 0
+    const endMs   = pocEndDate   ? dayEnd(pocEndDate)     : Infinity
 
-    const res   = await createApiClient(auth).get(ENDPOINTS.CASES, { params })
-    const raw   = res.data
-    // Real response: { data: { total: N, cases: [...] } }
-    const total = raw?.data?.total ?? null
-    const items = raw?.data?.cases ?? raw?.cases ?? (Array.isArray(raw) ? raw : [])
-    let result  = normalizeCases(items)
-
-    // Client-side guard: ensure only cases within the configured period are shown
-    if (pocStartDate || pocEndDate) {
-      const startMs = pocStartDate ? dayStart(pocStartDate) : 0
-      const endMs   = pocEndDate   ? dayEnd(pocEndDate)     : Infinity
-      result = result.filter(c => {
-        if (c.rawDate == null) return false
-        return c.rawDate >= startMs && c.rawDate <= endMs
-      })
+    function filterByDate(arr) {
+      if (!pocStartDate && !pocEndDate) return arr
+      return arr.filter(c => c.rawDate != null && c.rawDate >= startMs && c.rawDate <= endMs)
     }
 
-    info('api', `fetchCases ✅ ${result.length} / ${total ?? '?'} cases (period filter applied)`)
-    return result
+    function extract(settled) {
+      if (settled.status !== 'fulfilled') return []
+      const raw = settled.value.data
+      return normalizeCases(raw?.data?.cases ?? raw?.cases ?? (Array.isArray(raw) ? raw : []))
+    }
+
+    const base   = { tenantid: auth.tenant, limit: 500, sort: 'start_timestamp', order: 'desc' }
+    const client = createApiClient(auth)
+    debug('api', `GET ${ENDPOINTS.CASES} ×4 (by severity)`, base)
+
+    const [critRes, highRes, medRes, lowRes] = await Promise.allSettled([
+      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'Critical' } }),
+      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'High' } }),
+      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'Medium' } }),
+      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'Low' } }),
+    ])
+
+    const critCases = filterByDate(extract(critRes))
+    const highCases = filterByDate(extract(highRes))
+
+    const medFiltered = filterByDate(extract(medRes))
+    const mediumTotal = medFiltered.length
+    const medTop100   = medFiltered.slice(0, 100)
+
+    const lowFiltered = filterByDate(extract(lowRes))
+    const lowCount    = lowFiltered.length >= 500 ? '500+' : lowFiltered.length
+
+    const cases = [...critCases, ...highCases, ...medTop100]
+
+    info('api', `fetchCases ✅ Critical:${critCases.length} High:${highCases.length} Medium:${mediumTotal}(top ${medTop100.length}) Low:${lowCount}`)
+    return { cases, lowCount, mediumTotal }
   } catch (err) {
     handleError(err, ENDPOINTS.CASES)
   }

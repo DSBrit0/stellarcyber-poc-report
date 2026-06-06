@@ -156,7 +156,7 @@ export default function Report() {
     return e => setPocMeta({ [key]: e.target.value })
   }
 
-  const { cases, assets, connectors, ingestionTimeline, ingestionBySensor, ingestionByConnector } = data
+  const { cases, lowCount, mediumTotal, assets, connectors, ingestionTimeline, ingestionBySensor, ingestionByConnector } = data
 
 
   const recommendations = generateRecommendations({ cases, connectors, ingestionTimeline })
@@ -170,8 +170,13 @@ export default function Report() {
     ? Math.round(assets.reduce((s, d) => s + (d.entity_count || 0), 0) / assets.length)
     : 0
 
+  // Total real: Critical + High + all Medium + Low (lowCount may be '500+')
+  const lowNum       = typeof lowCount === 'number' ? lowCount : 500
+  const totalCases   = critCases + cases.filter(c => c.severity?.toLowerCase() === 'high').length + mediumTotal + lowNum
+  const totalCasesDisplay = typeof lowCount === 'string' ? `${totalCases}+` : totalCases
+
   const hasErrors = Object.keys(errors).length > 0
-  const apiOk     = !hasErrors && cases.length + connectors.length > 0
+  const apiOk     = !hasErrors && (totalCases > 0 || connectors.length > 0)
 
   async function handleDownload() {
     setGenerating(true)
@@ -180,6 +185,8 @@ export default function Report() {
       downloadPDFReport({
         auth,
         cases,
+        lowCount,
+        mediumTotal,
         connectors,
         assets,
         recommendations,
@@ -266,7 +273,7 @@ export default function Report() {
 
       {/* Data summary */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <SummaryCard icon={Shield}    color="#ff4444" label={t('report.cases')}           value={cases.length}           sub={`${openCases} · ${critCases} ${t('report.critical')}`}              loading={loading} error={!!errors.cases} />
+        <SummaryCard icon={Shield}    color="#ff4444" label={t('report.cases')}           value={totalCasesDisplay}      sub={`${openCases} · ${critCases} ${t('report.critical')}`}              loading={loading} error={!!errors.cases} />
         <SummaryCard icon={Layers}    color="#00d4ff" label={t('report.assets')}           value={avgEntities}            sub={t('report.assetsMonitored')}                                        loading={loading} error={!!errors.assets} />
         <SummaryCard icon={Radio}     color="#22c55e" label={t('report.sensors')}          value={connectors.length}      sub={`${activeConn} ${t('report.active')}`}                             loading={loading} error={!!errors.connectors} />
         <SummaryCard icon={Lightbulb} color="#f59e0b" label={t('report.recommendations')} value={recommendations.length} sub={`${critRecs} ${t('report.critical')} · ${mitreRecs} ${t('report.mitre')}`} loading={loading} error={false} />

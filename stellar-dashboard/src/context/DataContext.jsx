@@ -14,6 +14,8 @@ const DataContext = createContext(null)
 
 const EMPTY_DATA = {
   cases:                [],
+  lowCount:             0,
+  mediumTotal:          0,
   assets:               [],
   connectors:           [],
   ingestionStats:       [],
@@ -50,6 +52,7 @@ export function DataProvider({ children }) {
       fetchIngestionByConnector(auth, dates),
     ])
 
+    // index 0 = fetchCases → returns { cases, lowCount, mediumTotal }
     const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector']
 
     setData(prev => {
@@ -57,7 +60,13 @@ export function DataProvider({ children }) {
       for (let i = 0; i < results.length; i++) {
         const result = results[i]
         if (result.status === 'fulfilled') {
-          next[keys[i]] = result.value
+          if (i === 0) {
+            next.cases       = result.value.cases
+            next.lowCount    = result.value.lowCount
+            next.mediumTotal = result.value.mediumTotal
+          } else {
+            next[keys[i]] = result.value
+          }
         } else {
           const err = result.reason
           if (err?.status === 401 || err?.message?.includes('(401)')) {

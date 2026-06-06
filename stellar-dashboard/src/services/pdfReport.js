@@ -215,6 +215,8 @@ const ALL_TACTICS = [
 export function generatePDFReport({
   auth,
   cases                = [],
+  lowCount             = 0,
+  mediumTotal          = 0,
   connectors           = [],
   assets               = [],
   recommendations      = [],
@@ -240,8 +242,10 @@ export function generatePDFReport({
   const openCases  = cases.filter(c => !['closed', 'resolved'].includes((c.status || '').toLowerCase()))
   const critCases  = cases.filter(c => c.severity?.toLowerCase() === 'critical')
   const highCases  = cases.filter(c => c.severity?.toLowerCase() === 'high')
-  const medCases   = cases.filter(c => c.severity?.toLowerCase() === 'medium')
-  const lowCases   = cases.filter(c => c.severity?.toLowerCase() === 'low')
+  // cases = critical + high + top-100 medium; lowCount/mediumTotal are separate params
+  const lowNum          = typeof lowCount === 'number' ? lowCount : 500
+  const totalCasesCount = critCases.length + highCases.length + mediumTotal + lowNum
+  const totalCasesStr   = typeof lowCount === 'string' ? `${totalCasesCount}+` : num(totalCasesCount)
   const activeConn = connectors.filter(c => c.active)
   const offlineConn = connectors.filter(c => !c.active)
 
@@ -457,7 +461,7 @@ export function generatePDFReport({
     [s.kpiPeriod || 'Evaluation Period', period],
     [s.kpiSources || 'Integrated Log Sources', num(connectors.length)],
     [s.kpiActiveConn || 'Active Sources', `${num(activeConn.length)} / ${num(connectors.length)}`],
-    [s.kpiCasesDetected || 'Detected Alerts / Cases', num(cases.length)],
+    [s.kpiCasesDetected || 'Detected Alerts / Cases', totalCasesStr],
     [s.kpiOpenCases || 'Open Cases', num(openCases.length)],
     [s.kpiCritCases || 'Critical Cases', num(critCases.length)],
   ]
@@ -501,7 +505,7 @@ export function generatePDFReport({
   y += 4
   y = bodyText(doc, i(
     s.body1_2 || 'During {period}, {connCount} data sources were integrated ({activeCount} active), resulting in {caseCount} detected cases with {mitrePct}% MITRE ATT&CK coverage.',
-    { period, connCount: connectors.length, activeCount: activeConn.length, caseCount: cases.length, mitrePct: mitreCovPct }
+    { period, connCount: connectors.length, activeCount: activeConn.length, caseCount: totalCasesStr, mitrePct: mitreCovPct }
   ), y)
   y += 10
 
@@ -601,8 +605,8 @@ export function generatePDFReport({
       [
         s.crit2 || 'Threat detection',
         s.crit2goal || '≥ 1 case',
-        i(s.crit2result || '{n} detected', { n: cases.length }),
-        cases.length >= 1 ? s.achieved || 'Achieved' : s.notAchieved || 'Not Achieved',
+        i(s.crit2result || '{n} detected', { n: totalCasesStr }),
+        totalCasesCount >= 1 ? s.achieved || 'Achieved' : s.notAchieved || 'Not Achieved',
       ],
       [
         s.crit3 || 'MITRE ATT&CK coverage',
@@ -809,60 +813,71 @@ export function generatePDFReport({
   y = sectionTitle(doc, 4, s.sec4 || 'Detection & Response Results', y)
   y = subTitle(doc, s.sec4_1 || '4.1 Detected Cases', y)
 
-  if (cases.length === 0) {
+  if (cases.length === 0 && totalCasesCount === 0) {
     y = infoNote(doc, s.noCases || 'No cases detected during the evaluation period.', y)
     y += 4
   } else {
     const sevOrd = { critical: 0, high: 1, medium: 2, low: 3 }
     const sortedCases = [...cases]
       .sort((a, b) => (sevOrd[a.severity?.toLowerCase()] ?? 4) - (sevOrd[b.severity?.toLowerCase()] ?? 4))
-      .slice(0, 50)
 
-    autoTable(doc, {
-      ...tableCompact({ styles: { fontSize: 8, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 } }),
-      startY: y,
-      head: [[s.caseCol || 'Case / Alert', s.sevCol || 'Severity', s.caseStatusCol || 'Status', s.assetsCol || 'Alerts', s.scoreCol || 'Score', s.dateCol || 'Date']],
-      body: sortedCases.map(c => [
-        trunc(c.name || c.id || '—', 52),
-        (c.severity || '—').toUpperCase(),
-        trunc(c.status || '—', 18),
-        c.assetsAffected != null ? num(c.assetsAffected) : '—',
-        c.score != null ? String(c.score) : '—',
-        c.createdAt ? fmt(c.createdAt) : '—',
-      ]),
-      columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 22, halign: 'center' },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 14, halign: 'center' },
-        4: { cellWidth: 14, halign: 'center' },
-        5: { cellWidth: CW - 150 },
-      },
-      didParseCell: (d) => {
-        if (d.section === 'body' && d.column.index === 1) {
-          d.cell.styles.textColor = sevColor(d.cell.raw)
-          d.cell.styles.fontStyle = 'bold'
-        }
-      },
-    })
-
-    y = (doc.lastAutoTable?.finalY ?? y) + 6
-    if (cases.length > 50) {
-      y = infoNote(doc, i(s.showingCases || 'Showing {shown} of {total} cases, sorted by severity.', { shown: 50, total: cases.length }), y)
-      y += 4
+    if (sortedCases.length > 0) {
+      autoTable(doc, {
+        ...tableCompact({ styles: { fontSize: 8, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 } }),
+        startY: y,
+        head: [[s.caseCol || 'Case / Alert', s.sevCol || 'Severity', s.caseStatusCol || 'Status', s.assetsCol || 'Alerts', s.scoreCol || 'Score', s.dateCol || 'Date']],
+        body: sortedCases.map(c => [
+          trunc(c.name || c.id || '—', 52),
+          (c.severity || '—').toUpperCase(),
+          trunc(c.status || '—', 18),
+          c.assetsAffected != null ? num(c.assetsAffected) : '—',
+          c.score != null ? String(c.score) : '—',
+          c.createdAt ? fmt(c.createdAt) : '—',
+        ]),
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { cellWidth: 22, halign: 'center' },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 14, halign: 'center' },
+          4: { cellWidth: 14, halign: 'center' },
+          5: { cellWidth: CW - 150 },
+        },
+        didParseCell: (d) => {
+          if (d.section === 'body' && d.column.index === 1) {
+            d.cell.styles.textColor = sevColor(d.cell.raw)
+            d.cell.styles.fontStyle = 'bold'
+          }
+        },
+      })
+      y = (doc.lastAutoTable?.finalY ?? y) + 6
     }
+
+    if (mediumTotal > 100) {
+      y = infoNote(doc,
+        i(s.mediumTruncNote || '{total} Medium cases detected in the period — showing top 100.',
+          { total: mediumTotal }),
+        y)
+      y += 3
+    }
+
+    const lowLabel = typeof lowCount === 'number' ? num(lowCount) : lowCount
+    y = infoNote(doc,
+      i(s.lowCasesNote || 'Low severity: {count} cases detected in the period (not listed individually).',
+        { count: lowLabel }),
+      y)
+    y += 4
   }
 
   if (needsPage(doc, y, 55)) { y = newPage(doc) } else { y += 4 }
   y = subTitle(doc, s.sec4_2 || '4.2 Detection Metrics', y)
 
   const metricsBody = [
-    [s.totalCasesLabel || 'Total Cases / Alerts',     num(cases.length)],
+    [s.totalCasesLabel || 'Total Cases / Alerts',     totalCasesStr],
     [s.openCasesLabel  || 'Open Cases',               num(openCases.length)],
     [s.critCasesLabel  || 'Critical Cases',           num(critCases.length)],
     [s.highCasesLabel  || 'High Severity Cases',      num(highCases.length)],
-    [s.medCasesLabel   || 'Medium Severity Cases',    num(medCases.length)],
-    [s.lowCasesLabel   || 'Low Severity Cases',       num(lowCases.length)],
+    [s.medCasesLabel   || 'Medium Severity Cases',    num(mediumTotal)],
+    [s.lowCasesLabel   || 'Low Severity Cases',       typeof lowCount === 'number' ? num(lowCount) : lowCount],
     [s.openRate        || 'Open Rate',                pct(openCases.length, cases.length)],
     [s.activeSensorsLabel || 'Active Sensors / Sources',
      i(s.sensorsOf || '{active} of {total}', { active: activeConn.length, total: connectors.length })],
@@ -999,7 +1014,7 @@ export function generatePDFReport({
   const realMetricsBody = [
     [s.rmConnCount   || 'Integrated connectors',     num(connectors.length)],
     [s.rmActiveConn  || 'Active connectors',          `${num(activeConn.length)} (${pct(activeConn.length, connectors.length)})`],
-    [s.rmCaseCount   || 'Cases detected',             num(cases.length)],
+    [s.rmCaseCount   || 'Cases detected',             totalCasesStr],
     [s.rmOpenCases   || 'Open cases',                 num(openCases.length)],
     [s.rmCritCases   || 'Critical cases',             num(critCases.length)],
     [s.rmMitreCov    || 'MITRE ATT&CK coverage',      `${mitreCovPct}% (${detectedTactics.size} / ${ALL_TACTICS.length} tactics)`],
@@ -1149,7 +1164,7 @@ export function generatePDFReport({
   const scoreItems = [
     {
       item: s.score1 || 'Detection Capability',
-      score: cases.length > 0
+      score: totalCasesCount > 0
         ? (critCases.length > 0 ? s.scoreExcellent || 'Excellent' : s.scoreGood || 'Good')
         : s.scoreFair || 'Fair',
     },
@@ -1171,7 +1186,7 @@ export function generatePDFReport({
     },
     {
       item: s.score6 || 'Visibility & Correlation',
-      score: cases.length > 0 && connectors.length > 0
+      score: totalCasesCount > 0 && connectors.length > 0
         ? s.scoreExcellent || 'Excellent'
         : s.scoreGood || 'Good',
     },
@@ -1233,7 +1248,7 @@ export function generatePDFReport({
 
   y = bodyText(doc, i(
     s.body10 || 'Based on the PoC results ({period}), the Stellar Cyber Open XDR platform demonstrated robust detection capabilities with {mitrePct}% MITRE ATT&CK coverage and {caseCount} cases detected for {client}.',
-    { period, mitrePct: mitreCovPct, caseCount: cases.length, client: clientDisplay }
+    { period, mitrePct: mitreCovPct, caseCount: totalCasesStr, client: clientDisplay }
   ), y)
   y += 10
 
