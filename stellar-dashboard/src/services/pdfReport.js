@@ -579,10 +579,6 @@ export function generatePDFReport({
     [s.envUser     || 'Evaluation User',        auth?.username || '—'],
   ]
 
-  if (auth?.tenant) {
-    envRows.push([s.envTenant || 'Tenant ID', trunc(auth.tenant, 60)])
-  }
-
   envRows.push(
     [s.envSensors   || 'Integrated Sources', i(s.connIntegrated || '{n} connectors', { n: connectors.length })],
     [s.envActiveConn || 'Active Connectors', `${num(activeConn.length)} / ${num(connectors.length)}`],
