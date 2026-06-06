@@ -11,13 +11,17 @@ function handleError(err, endpoint) {
   throw error
 }
 
+// Date-string "YYYY-MM-DD" → millisecond timestamp for start (00:00:01) and end (23:59:59) of that day
+function dayStart(dateStr) { return new Date(dateStr).getTime() + 1000 }      // 00:00:01.000
+function dayEnd(dateStr)   { return new Date(dateStr).getTime() + 86399000 }  // 23:59:59.000
+
 // ─── Cases ────────────────────────────────────────────────────────────────────
 
 export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
   try {
     const params = { limit: HTTP.DEFAULT_LIMIT, tenantid: auth.tenant }
-    if (pocStartDate) params.start_time = new Date(pocStartDate).getTime()
-    if (pocEndDate)   params.end_time   = new Date(pocEndDate).getTime()
+    if (pocStartDate) params.start_time = dayStart(pocStartDate)  // 00:00:01
+    if (pocEndDate)   params.end_time   = dayEnd(pocEndDate)       // 23:59:59
     debug('api', `GET ${ENDPOINTS.CASES}`, params)
 
     const res   = await createApiClient(auth).get(ENDPOINTS.CASES, { params })
@@ -25,8 +29,19 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
     // Real response: { data: { total: N, cases: [...] } }
     const total = raw?.data?.total ?? null
     const items = raw?.data?.cases ?? raw?.cases ?? (Array.isArray(raw) ? raw : [])
-    const result = normalizeCases(items)
-    info('api', `fetchCases ✅ ${result.length} / ${total ?? '?'} cases`)
+    let result  = normalizeCases(items)
+
+    // Client-side guard: ensure only cases within the configured period are shown
+    if (pocStartDate || pocEndDate) {
+      const startMs = pocStartDate ? dayStart(pocStartDate) : 0
+      const endMs   = pocEndDate   ? dayEnd(pocEndDate)     : Infinity
+      result = result.filter(c => {
+        if (c.rawDate == null) return false
+        return c.rawDate >= startMs && c.rawDate <= endMs
+      })
+    }
+
+    info('api', `fetchCases ✅ ${result.length} / ${total ?? '?'} cases (period filter applied)`)
     return result
   } catch (err) {
     handleError(err, ENDPOINTS.CASES)
@@ -110,8 +125,8 @@ export async function fetchIngestionTimeline(auth) {
 
 export async function fetchIngestionBySensor(auth, { pocStartDate, pocEndDate } = {}) {
   try {
-    const endTime   = pocEndDate   ? new Date(pocEndDate).getTime()   : Date.now()
-    const startTime = pocStartDate ? new Date(pocStartDate).getTime() : (endTime - 30 * 86400000)
+    const endTime   = pocEndDate   ? dayEnd(pocEndDate)     : Date.now()
+    const startTime = pocStartDate ? dayStart(pocStartDate) : (endTime - 30 * 86400000)
     const params    = { cust_id: auth.tenant, start_time: startTime, end_time: endTime }
     debug('api', `GET ${ENDPOINTS.INGESTION_BY_SENSOR}`, params)
 
@@ -131,8 +146,8 @@ export async function fetchIngestionBySensor(auth, { pocStartDate, pocEndDate } 
 
 export async function fetchIngestionByConnector(auth, { pocStartDate, pocEndDate } = {}) {
   try {
-    const endTime   = pocEndDate   ? new Date(pocEndDate).getTime()   : Date.now()
-    const startTime = pocStartDate ? new Date(pocStartDate).getTime() : (endTime - 30 * 86400000)
+    const endTime   = pocEndDate   ? dayEnd(pocEndDate)     : Date.now()
+    const startTime = pocStartDate ? dayStart(pocStartDate) : (endTime - 30 * 86400000)
     const params    = { cust_id: auth.tenant, start_time: startTime, end_time: endTime }
     debug('api', `GET ${ENDPOINTS.INGESTION_BY_CONNECTOR}`, params)
 
@@ -172,19 +187,24 @@ function normalizeIngestionByConnector(items) {
 }
 
 function normalizeCases(items) {
-  return items.map((c, i) => ({
-    id:             c._id || c.id || c.case_id || `CASE-${1000 + i}`,
-    name:           c.name || c.title || c.summary || `Security Case ${i + 1}`,
-    severity:       normalizeSeverity(c.severity || c.priority),
-    status:         c.status || 'New',
-    score:          typeof c.score === 'number' ? c.score : null,
-    assetsAffected: c.size || c.assets_affected || c.asset_count || 1,
-    tenantName:     c.tenant_name || c.cust_name || '',
-    custId:         c.cust_id || '',
-    createdAt:      c.created_at
-      ? (typeof c.created_at === 'number' ? new Date(c.created_at).toISOString() : c.created_at)
-      : new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(),
-  }))
+  return items.map((c, i) => {
+    // start_timestamp = when attack activity began; fall back to created_at
+    const rawDate = c.start_timestamp ?? c.created_at ?? null
+    return {
+      id:             c._id || c.id || c.case_id || `CASE-${1000 + i}`,
+      name:           c.name || c.title || c.summary || `Security Case ${i + 1}`,
+      severity:       normalizeSeverity(c.severity || c.priority),
+      status:         c.status || 'New',
+      score:          typeof c.score === 'number' ? c.score : null,
+      assetsAffected: c.size || c.assets_affected || c.asset_count || 1,
+      tenantName:     c.tenant_name || c.cust_name || '',
+      custId:         c.cust_id || '',
+      rawDate,
+      createdAt: rawDate != null
+        ? (typeof rawDate === 'number' ? new Date(rawDate).toISOString() : rawDate)
+        : null,
+    }
+  })
 }
 
 function normalizeSeverity(val) {

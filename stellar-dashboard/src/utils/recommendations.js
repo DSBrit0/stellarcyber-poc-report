@@ -73,6 +73,7 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
   // 4. Critical cases open > 24h
   const staleCritical = cases.filter(c => {
     if ((c.severity || '').toLowerCase() !== 'critical') return false
+    if (!c.createdAt) return false
     const hrs = (Date.now() - new Date(c.createdAt).getTime()) / 3600000
     return hrs > 24
   })
