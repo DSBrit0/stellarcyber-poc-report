@@ -530,15 +530,6 @@ export function generatePDFReport({
   ), y)
   y += 10
 
-  doc.setFillColor(...verdictColor)
-  doc.roundedRect(ML, y, CW, 16, 3, 3, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...C.white)
-  doc.text(`${s.verdictLabel || 'Verdict'}: ${verdict}`, PW / 2, y + 10, { align: 'center' })
-  doc.setFont('helvetica', 'normal')
-  y += 26
-
   // ─── 1.3 Comments ─────────────────────────────────────────────────────────
   if (needsPage(doc, y, 30)) { y = newPage(doc) }
   y = subTitle(doc, s.sec1_3 || '1.3 SE Comments & Notes', y)
