@@ -34,7 +34,7 @@ export function createApiClient(auth) {
 
       cfg._retries = cfg._retries ?? 0
 
-      if (cfg._retries < HTTP.MAX_RETRIES && (RETRYABLE_STATUS.has(status) || err.code === 'ECONNABORTED')) {
+      if (cfg._retries < HTTP.MAX_RETRIES && RETRYABLE_STATUS.has(status)) {
         cfg._retries++
         const delay = HTTP.RETRY_DELAY * cfg._retries
         warn('apiClient', `Retry ${cfg._retries}/${HTTP.MAX_RETRIES}`, { url: cfg.url, status, delay })
