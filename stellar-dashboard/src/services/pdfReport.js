@@ -469,7 +469,7 @@ export function generatePDFReport({
     kpiRows.push([s.kpiTotalEvents || 'Total Events Ingested', num(totalEventsIngested)])
   }
   if (avgEntities !== null) {
-    kpiRows.push([s.kpiAvgEntities || 'Monitored Entities (daily avg.)', num(avgEntities)])
+    kpiRows.push([s.kpiAvgEntities || 'Generated Alerts', num(avgEntities)])
   }
 
   kpiRows.push(
@@ -549,7 +549,7 @@ export function generatePDFReport({
     envRows.push([s.envIngestionVol || 'Ingestion Volume (30 days)', gb(totalGbIngested)])
   }
   if (avgEntities !== null) {
-    envRows.push([s.envEntities || 'Monitored Entities (avg)', num(avgEntities)])
+    envRows.push([s.envEntities || 'Generated Alerts', num(avgEntities)])
   }
 
   autoTable(doc, {
@@ -821,7 +821,7 @@ export function generatePDFReport({
     autoTable(doc, {
       ...tableCompact({ styles: { fontSize: 8, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 } }),
       startY: y,
-      head: [[s.caseCol || 'Case / Alert', s.sevCol || 'Severity', s.caseStatusCol || 'Status', s.assetsCol || 'Assets', s.scoreCol || 'Score', s.dateCol || 'Date']],
+      head: [[s.caseCol || 'Case / Alert', s.sevCol || 'Severity', s.caseStatusCol || 'Status', s.assetsCol || 'Alerts', s.scoreCol || 'Score', s.dateCol || 'Date']],
       body: sortedCases.map(c => [
         trunc(c.name || c.id || '—', 52),
         (c.severity || '—').toUpperCase(),
@@ -872,7 +872,7 @@ export function generatePDFReport({
     metricsBody.push([s.kpiTotalIngestion || 'Total Ingested (30 days)', gb(totalGbIngested)])
   }
   if (avgEntities !== null) {
-    metricsBody.push([s.kpiAvgEntities || 'Monitored Entities (avg)', num(avgEntities)])
+    metricsBody.push([s.kpiAvgEntities || 'Generated Alerts', num(avgEntities)])
   }
 
   autoTable(doc, {
@@ -1012,7 +1012,7 @@ export function generatePDFReport({
     realMetricsBody.push([s.rmEvents   || 'Total events ingested',     num(totalEventsIngested)])
   }
   if (avgEntities !== null) {
-    realMetricsBody.push([s.rmEntities || 'Monitored entities (avg.)', num(avgEntities)])
+    realMetricsBody.push([s.rmEntities || 'Generated Alerts', num(avgEntities)])
   }
 
   autoTable(doc, {
