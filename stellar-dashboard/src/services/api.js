@@ -35,8 +35,13 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
       return arr.filter(c => c.rawDate != null && c.rawDate >= startMs && c.rawDate <= endMs)
     }
 
-    function extract(settled) {
-      if (settled.status !== 'fulfilled') return []
+    const SEVS = ['Critical', 'High', 'Medium', 'Low']
+
+    function extract(settled, label) {
+      if (settled.status !== 'fulfilled') {
+        warn('api', `fetchCases ${label} failed`, { error: settled.reason?.message })
+        return []
+      }
       const raw = settled.value.data
       return normalizeCases(raw?.data?.cases ?? raw?.cases ?? (Array.isArray(raw) ? raw : []))
     }
@@ -45,21 +50,24 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
     const client = createApiClient(auth)
     debug('api', `GET ${ENDPOINTS.CASES} ×4 (by severity)`, base)
 
-    const [critRes, highRes, medRes, lowRes] = await Promise.allSettled([
-      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'Critical' } }),
-      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'High' } }),
-      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'Medium' } }),
-      client.get(ENDPOINTS.CASES, { params: { ...base, severity: 'Low' } }),
-    ])
+    const settled = await Promise.allSettled(
+      SEVS.map(sev => client.get(ENDPOINTS.CASES, { params: { ...base, severity: sev } }))
+    )
+    const [critRes, highRes, medRes, lowRes] = settled
 
-    const critCases = filterByDate(extract(critRes))
-    const highCases = filterByDate(extract(highRes))
+    // All 4 calls failed → propagate as a real error so DataContext records it
+    if (settled.every(r => r.status === 'rejected')) {
+      handleError(settled[0].reason, ENDPOINTS.CASES)
+    }
 
-    const medFiltered = filterByDate(extract(medRes))
+    const critCases = filterByDate(extract(critRes, 'Critical'))
+    const highCases = filterByDate(extract(highRes, 'High'))
+
+    const medFiltered = filterByDate(extract(medRes, 'Medium'))
     const mediumTotal = medFiltered.length
     const medTop100   = medFiltered.slice(0, 100)
 
-    const lowFiltered = filterByDate(extract(lowRes))
+    const lowFiltered = filterByDate(extract(lowRes, 'Low'))
     const lowCount    = lowFiltered.length >= 500 ? '500+' : lowFiltered.length
 
     const cases = [...critCases, ...highCases, ...medTop100]

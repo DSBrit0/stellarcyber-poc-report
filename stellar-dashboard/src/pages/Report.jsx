@@ -221,12 +221,12 @@ export default function Report() {
 
         <button
           onClick={handleDownload}
-          disabled={generating || loading}
+          disabled={generating || loading || !syncedAt}
           className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
           style={{
-            background: generating || loading ? 'rgba(0,102,255,0.4)' : 'linear-gradient(135deg, #0066ff, #00d4ff)',
+            background: (generating || loading || !syncedAt) ? 'rgba(0,102,255,0.4)' : 'linear-gradient(135deg, #0066ff, #00d4ff)',
             color: 'white',
-            boxShadow: generating || loading ? 'none' : '0 0 20px rgba(0,212,255,0.3)',
+            boxShadow: (generating || loading || !syncedAt) ? 'none' : '0 0 20px rgba(0,212,255,0.3)',
           }}
         >
           {generating ? (
