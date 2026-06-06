@@ -501,11 +501,32 @@ export function generatePDFReport({
 
   y = (doc.lastAutoTable?.finalY ?? y) + 10
   y = subTitle(doc, s.sec1_2 || '1.2 Context and Objectives', y)
-  y = bodyText(doc, i(s.body1_1 || 'This report presents the Stellar Cyber Open XDR PoC results for {client}.', { client: clientDisplay }), y)
-  y += 4
   y = bodyText(doc, i(
-    s.body1_2 || 'During {period}, {connCount} data sources were integrated ({activeCount} active), resulting in {caseCount} detected cases with {mitrePct}% MITRE ATT&CK coverage.',
-    { period, connCount: connectors.length, activeCount: activeConn.length, caseCount: totalCasesStr, mitrePct: mitreCovPct }
+    s.body1_1 || 'This report consolidates the strategic and operational results obtained during the Proof of Concept (PoC) of the Stellar Cyber Open XDR platform, executed in the environment of {client}. The primary objective was to validate the advanced capabilities of unified visibility, intelligent event correlation, and incident response automation in a real scenario, faithfully reproducing the client\'s technological ecosystem and focusing on simulating the use cases discussed in the alignment meeting, as follows:',
+    { client: clientDisplay }
+  ), y)
+  y += 4
+
+  // Use cases / success criteria (user-entered field)
+  const useCasesText = (successCriteria || '').trim()
+  if (useCasesText) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(9)
+    doc.setTextColor(...C.text)
+    const ucLines = doc.splitTextToSize(useCasesText, CW - 8)
+    doc.text(ucLines, ML + 8, y)
+    doc.setFont('helvetica', 'normal')
+    y += ucLines.length * 5 + 4
+  } else {
+    y = infoNote(doc, s.noUseCases || '—', y)
+    y += 4
+  }
+
+  const startFmt = pocStartDate ? fmt(pocStartDate) : '—'
+  const endFmt   = pocEndDate   ? fmt(pocEndDate)   : '—'
+  y = bodyText(doc, i(
+    s.body1_2 || 'The validation and monitoring activities spanned from {startDate} to {endDate}. Throughout this evaluation cycle, {connCount} strategic data sources were successfully integrated. The centralization of these logs allowed the platform to apply its AI engines, resulting in the identification and grouping of +{caseCount} complex security cases. This volume translated into a coverage of {mitrePct}% of the tactics mapped by the global MITRE ATT&CK® Enterprise framework, demonstrating the solution\'s efficiency in reducing alert noise and enabling early detection of potential attack vectors.',
+    { startDate: startFmt, endDate: endFmt, connCount: connectors.length, caseCount: totalCasesStr, mitrePct: mitreCovPct }
   ), y)
   y += 10
 
