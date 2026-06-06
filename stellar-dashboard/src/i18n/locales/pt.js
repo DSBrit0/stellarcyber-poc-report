@@ -93,6 +93,7 @@ export default {
     title:             'Relatório de PoC',
     subtitle:          'Configure os metadados e gere o PDF profissional de Prova de Conceito.',
     pocPeriod:         'Período da POC',
+    maxPeriodNote:     'O relatório abrange no máximo 30 dias. As datas são ajustadas automaticamente.',
     sync:              'Sincronizar',
     syncStatus: {
       waiting: 'Configure as datas e sincronize',

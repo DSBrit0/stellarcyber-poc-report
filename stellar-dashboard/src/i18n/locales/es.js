@@ -93,6 +93,7 @@ export default {
     title:             'Informe de PoC',
     subtitle:          'Configure los metadatos y genere el PDF profesional de Prueba de Concepto.',
     pocPeriod:         'Período del PoC',
+    maxPeriodNote:     'El informe cubre un máximo de 30 días. Las fechas se ajustan automáticamente.',
     sync:              'Sincronizar',
     syncStatus: {
       waiting: 'Configure las fechas y sincronice',

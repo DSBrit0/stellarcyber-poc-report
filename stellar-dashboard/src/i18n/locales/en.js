@@ -93,6 +93,7 @@ export default {
     title:             'PoC Report',
     subtitle:          'Configure metadata and generate the professional Proof of Concept PDF.',
     pocPeriod:         'POC Period',
+    maxPeriodNote:     'Reports cover a maximum of 30 days. Dates are adjusted automatically.',
     sync:              'Sync',
     syncStatus: {
       waiting: 'Set dates and sync',

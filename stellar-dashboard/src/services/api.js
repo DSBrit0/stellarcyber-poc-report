@@ -43,7 +43,7 @@ export async function fetchEntityUsage(auth, { pocStartDate, pocEndDate } = {}) 
     let days = 30
     if (pocStartDate && pocEndDate) {
       const diff = Math.ceil((new Date(pocEndDate) - new Date(pocStartDate)) / 86400000)
-      days = Math.max(1, Math.min(diff + 1, 365))
+      days = Math.max(1, Math.min(diff + 1, 30)) // API max is 30 days
     }
     const params = { days, cust_id: auth.tenant }
     debug('api', `GET ${ENDPOINTS.ENTITY_USAGE_DAILY}`, params)

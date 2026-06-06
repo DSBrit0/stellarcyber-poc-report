@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   FileText, Download, RefreshCw, CheckCircle2, AlertTriangle,
   XCircle, Shield, Layers, Radio, Lightbulb, Loader,
-  Clock, Settings2, User, Building2, CalendarDays,
+  Clock, Settings2, User, Building2, CalendarDays, Info,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -408,8 +408,40 @@ const INPUT_DATE = {
   minWidth: 0,
 }
 
+function addDays(dateStr, days) {
+  const d = new Date(dateStr)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+function dateDiffDays(startStr, endStr) {
+  return Math.ceil((new Date(endStr) - new Date(startStr)) / 86400000)
+}
+
 function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, onSync, t }) {
   const syncPending = hasDates && !isSynced
+
+  function handleStartChange(e) {
+    const start = e.target.value
+    if (!start) { setPocMeta({ pocStartDate: '' }); return }
+    const end = pocMeta.pocEndDate
+    if (!end || dateDiffDays(start, end) > 30) {
+      setPocMeta({ pocStartDate: start, pocEndDate: addDays(start, 30) })
+    } else {
+      setPocMeta({ pocStartDate: start })
+    }
+  }
+
+  function handleEndChange(e) {
+    const end = e.target.value
+    if (!end) { setPocMeta({ pocEndDate: '' }); return }
+    const start = pocMeta.pocStartDate
+    if (!start || dateDiffDays(start, end) > 30) {
+      setPocMeta({ pocStartDate: addDays(end, -30), pocEndDate: end })
+    } else {
+      setPocMeta({ pocEndDate: end })
+    }
+  }
 
   return (
     <div
@@ -432,14 +464,14 @@ function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, o
         <input
           type="date"
           value={pocMeta.pocStartDate}
-          onChange={e => setPocMeta({ pocStartDate: e.target.value })}
+          onChange={handleStartChange}
           style={{ ...INPUT_DATE, flex: 1 }}
         />
         <span style={{ color: '#475569', fontSize: '13px', flexShrink: 0 }}>→</span>
         <input
           type="date"
           value={pocMeta.pocEndDate}
-          onChange={e => setPocMeta({ pocEndDate: e.target.value })}
+          onChange={handleEndChange}
           style={{ ...INPUT_DATE, flex: 1 }}
         />
       </div>
@@ -467,6 +499,14 @@ function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, o
       </button>
 
       <SyncStatusPill syncedAt={syncedAt} isSynced={isSynced} loading={loading} hasDates={hasDates} t={t} />
+
+      {/* Disclaimer — max 30 days */}
+      <div className="w-full flex items-center gap-1.5" style={{ marginTop: '-2px' }}>
+        <Info size={11} style={{ color: '#475569', flexShrink: 0 }} />
+        <span style={{ fontSize: '11px', color: '#475569' }}>
+          {t('report.maxPeriodNote')}
+        </span>
+      </div>
     </div>
   )
 }
