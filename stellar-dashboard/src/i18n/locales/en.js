@@ -92,7 +92,14 @@ export default {
   report: {
     title:             'PoC Report',
     subtitle:          'Configure metadata and generate the professional Proof of Concept PDF.',
+    pocPeriod:         'POC Period',
     sync:              'Sync',
+    syncStatus: {
+      waiting: 'Set dates and sync',
+      syncing: 'Syncing…',
+      synced:  'Synced',
+      stale:   'Period changed — sync again',
+    },
     download:          'Download PDF',
     generating:        'Generating…',
     downloaded:        'Downloaded!',

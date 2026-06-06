@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   FileText, Download, RefreshCw, CheckCircle2, AlertTriangle,
   XCircle, Shield, Layers, Radio, Lightbulb, Loader,
-  Clock, Settings2, User, Building2,
+  Clock, Settings2, User, Building2, CalendarDays,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -139,13 +139,18 @@ function AnalystsList({ analysts, setPocMeta, t }) {
 }
 
 export default function Report() {
-  const { auth }                                              = useAuth()
-  const { data, loading, errors, lastRefresh, refresh }      = useData()
-  const { t, locale }                                         = useLocale()
-  const { pocMeta, setPocMeta }                               = usePocMeta()
-  const [generating, setGenerating]                          = useState(false)
-  const [downloaded, setDownloaded]                          = useState(false)
-  const [showVerdictGuide, setShowVerdictGuide]              = useState(false)
+  const { auth }                                         = useAuth()
+  const { data, loading, errors, syncedAt, syncConfig, sync } = useData()
+  const { t, locale }                                    = useLocale()
+  const { pocMeta, setPocMeta }                          = usePocMeta()
+  const [generating, setGenerating]                      = useState(false)
+  const [downloaded, setDownloaded]                      = useState(false)
+  const [showVerdictGuide, setShowVerdictGuide]          = useState(false)
+
+  const hasDates = !!(pocMeta.pocStartDate && pocMeta.pocEndDate)
+  const isSynced = hasDates && !!syncedAt &&
+    syncConfig.pocStartDate === pocMeta.pocStartDate &&
+    syncConfig.pocEndDate   === pocMeta.pocEndDate
 
   function setField(key) {
     return e => setPocMeta({ [key]: e.target.value })
@@ -207,48 +212,41 @@ export default function Report() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={refresh}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
-            style={{ background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.2)', color: '#00d4ff' }}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            {t('report.sync')}
-          </button>
-
-          <button
-            onClick={handleDownload}
-            disabled={generating || loading}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{
-              background: generating || loading ? 'rgba(0,102,255,0.4)' : 'linear-gradient(135deg, #0066ff, #00d4ff)',
-              color: 'white',
-              boxShadow: generating || loading ? 'none' : '0 0 20px rgba(0,212,255,0.3)',
-            }}
-          >
-            {generating ? (
-              <><Loader size={14} className="animate-spin" />{t('report.generating')}</>
-            ) : downloaded ? (
-              <><CheckCircle2 size={14} />{t('report.downloaded')}</>
-            ) : (
-              <><Download size={14} />{t('report.download')}</>
-            )}
-          </button>
-        </div>
+        <button
+          onClick={handleDownload}
+          disabled={generating || loading}
+          className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+          style={{
+            background: generating || loading ? 'rgba(0,102,255,0.4)' : 'linear-gradient(135deg, #0066ff, #00d4ff)',
+            color: 'white',
+            boxShadow: generating || loading ? 'none' : '0 0 20px rgba(0,212,255,0.3)',
+          }}
+        >
+          {generating ? (
+            <><Loader size={14} className="animate-spin" />{t('report.generating')}</>
+          ) : downloaded ? (
+            <><CheckCircle2 size={14} />{t('report.downloaded')}</>
+          ) : (
+            <><Download size={14} />{t('report.download')}</>
+          )}
+        </button>
       </div>
+
+      {/* Sync bar — POC period + sync button + status */}
+      <SyncBar
+        pocMeta={pocMeta}
+        setPocMeta={setPocMeta}
+        syncedAt={syncedAt}
+        isSynced={isSynced}
+        hasDates={hasDates}
+        loading={loading}
+        onSync={sync}
+        t={t}
+      />
 
       {/* Status pills */}
       <div className="flex flex-wrap gap-3">
         <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} loading={loading} />
-        {lastRefresh && (
-          <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b' }}>
-            <Clock size={12} />
-            {t('report.lastSync')} {formatRelative(lastRefresh.toISOString())}
-          </div>
-        )}
       </div>
 
       {/* API error banner */}
@@ -355,12 +353,6 @@ export default function Report() {
           <SubSection label={t('report.generalSection')} icon={FileText} />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label={t('report.pocStart')}>
-              <input style={INPUT} type="date" value={pocMeta.pocStartDate} onChange={setField('pocStartDate')} />
-            </Field>
-            <Field label={t('report.pocEnd')}>
-              <input style={INPUT} type="date" value={pocMeta.pocEndDate} onChange={setField('pocEndDate')} />
-            </Field>
             <Field label={t('report.version')}>
               <input style={INPUT} placeholder="1.0" value={pocMeta.version} onChange={setField('version')} />
             </Field>
@@ -403,6 +395,108 @@ export default function Report() {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+const INPUT_DATE = {
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(0,212,255,0.18)',
+  color: '#e2e8f0',
+  borderRadius: '8px',
+  padding: '7px 10px',
+  fontSize: '13px',
+  outline: 'none',
+  colorScheme: 'dark',
+  minWidth: 0,
+}
+
+function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, onSync, t }) {
+  const syncPending = hasDates && !isSynced
+
+  return (
+    <div
+      className="rounded-xl flex flex-wrap items-center gap-3 px-4 py-3"
+      style={{
+        background: syncPending ? 'rgba(245,158,11,0.05)' : 'rgba(15,22,40,0.7)',
+        border: syncPending
+          ? '1px solid rgba(245,158,11,0.25)'
+          : '1px solid rgba(0,212,255,0.12)',
+      }}
+    >
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <CalendarDays size={14} style={{ color: '#00d4ff' }} />
+        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+          {t('report.pocPeriod')}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 flex-1" style={{ minWidth: '260px' }}>
+        <input
+          type="date"
+          value={pocMeta.pocStartDate}
+          onChange={e => setPocMeta({ pocStartDate: e.target.value })}
+          style={{ ...INPUT_DATE, flex: 1 }}
+        />
+        <span style={{ color: '#475569', fontSize: '13px', flexShrink: 0 }}>→</span>
+        <input
+          type="date"
+          value={pocMeta.pocEndDate}
+          onChange={e => setPocMeta({ pocEndDate: e.target.value })}
+          style={{ ...INPUT_DATE, flex: 1 }}
+        />
+      </div>
+
+      <button
+        onClick={() => onSync({ pocStartDate: pocMeta.pocStartDate, pocEndDate: pocMeta.pocEndDate })}
+        disabled={!hasDates || loading}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all flex-shrink-0"
+        style={{
+          background: !hasDates ? 'rgba(255,255,255,0.04)'
+            : syncPending        ? 'rgba(245,158,11,0.15)'
+            : 'rgba(0,212,255,0.08)',
+          border: !hasDates ? '1px solid rgba(255,255,255,0.08)'
+            : syncPending    ? '1px solid rgba(245,158,11,0.35)'
+            : '1px solid rgba(0,212,255,0.2)',
+          color: !hasDates ? '#475569'
+            : syncPending   ? '#f59e0b'
+            : '#00d4ff',
+          cursor: (!hasDates || loading) ? 'default' : 'pointer',
+          opacity: (!hasDates || loading) ? 0.6 : 1,
+        }}
+      >
+        <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+        {t('report.sync')}
+      </button>
+
+      <SyncStatusPill syncedAt={syncedAt} isSynced={isSynced} loading={loading} hasDates={hasDates} t={t} />
+    </div>
+  )
+}
+
+function SyncStatusPill({ syncedAt, isSynced, loading, hasDates, t }) {
+  if (loading) return (
+    <div className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: '#64748b' }}>
+      <Loader size={11} className="animate-spin" />
+      {t('report.syncStatus.syncing')}
+    </div>
+  )
+  if (!syncedAt) return (
+    <div className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: '#475569' }}>
+      <Clock size={11} />
+      {t('report.syncStatus.waiting')}
+    </div>
+  )
+  if (!isSynced) return (
+    <div className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: '#f59e0b' }}>
+      <AlertTriangle size={11} />
+      {t('report.syncStatus.stale')}
+    </div>
+  )
+  return (
+    <div className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: '#4ade80' }}>
+      <CheckCircle2 size={11} />
+      {t('report.syncStatus.synced')} · {formatRelative(syncedAt.toISOString())}
+    </div>
+  )
+}
 
 function StatusPill({ ok, okLabel, errLabel, loading }) {
   if (loading) return (

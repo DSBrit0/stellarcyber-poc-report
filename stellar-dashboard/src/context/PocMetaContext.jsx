@@ -27,7 +27,10 @@ export function PocMetaProvider({ children }) {
   const [pocMeta, setPocMetaState] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
-      return saved ? { ...DEFAULTS, ...JSON.parse(saved) } : { ...DEFAULTS }
+      // dates are session-only — always start empty to force the user to set the period each session
+      const loaded = saved ? JSON.parse(saved) : {}
+      const { pocStartDate: _s, pocEndDate: _e, ...persisted } = loaded
+      return { ...DEFAULTS, ...persisted }
     } catch {
       return { ...DEFAULTS }
     }
@@ -36,7 +39,9 @@ export function PocMetaProvider({ children }) {
   function setPocMeta(updates) {
     setPocMetaState(prev => {
       const next = { ...prev, ...updates }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      // never persist dates to localStorage
+      const { pocStartDate: _s, pocEndDate: _e, ...toStore } = next
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore))
       return next
     })
   }

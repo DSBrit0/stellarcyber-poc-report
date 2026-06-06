@@ -92,7 +92,14 @@ export default {
   report: {
     title:             'Informe de PoC',
     subtitle:          'Configure los metadatos y genere el PDF profesional de Prueba de Concepto.',
+    pocPeriod:         'Período del PoC',
     sync:              'Sincronizar',
+    syncStatus: {
+      waiting: 'Configure las fechas y sincronice',
+      syncing: 'Sincronizando…',
+      synced:  'Sincronizado',
+      stale:   'Período modificado — sincronice nuevamente',
+    },
     download:          'Descargar PDF',
     generating:        'Generando…',
     downloaded:        '¡Descargado!',

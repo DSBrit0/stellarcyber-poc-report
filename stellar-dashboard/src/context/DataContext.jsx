@@ -9,37 +9,40 @@ import {
   fetchIngestionByConnector,
 } from '../services/api'
 import { useAuth } from './AuthContext'
-import { usePocMeta } from './PocMetaContext'
 
 const DataContext = createContext(null)
 
+const EMPTY_DATA = {
+  cases:                [],
+  assets:               [],
+  connectors:           [],
+  ingestionStats:       [],
+  ingestionTimeline:    [],
+  ingestionBySensor:    [],
+  ingestionByConnector: [],
+}
+
 export function DataProvider({ children }) {
   const { auth, disconnect } = useAuth()
-  const { pocMeta } = usePocMeta()
 
-  const [data, setData] = useState({
-    cases:                [],
-    assets:               [],
-    connectors:           [],
-    ingestionStats:       [],
-    ingestionTimeline:    [],
-    ingestionBySensor:    [],
-    ingestionByConnector: [],
-  })
-  const [loading, setLoading]         = useState(false)
-  const [errors, setErrors]           = useState({})
-  const [lastRefresh, setLastRefresh] = useState(null)
-  const intervalRef = useRef(null)
+  const [data, setData]             = useState(EMPTY_DATA)
+  const [loading, setLoading]       = useState(false)
+  const [errors, setErrors]         = useState({})
+  const [syncedAt, setSyncedAt]     = useState(null)
+  const [syncConfig, setSyncConfig] = useState({ pocStartDate: '', pocEndDate: '' })
+
+  const intervalRef  = useRef(null)
+  const syncDatesRef = useRef({ pocStartDate: '', pocEndDate: '' })
 
   const fetchAll = useCallback(async () => {
     if (!auth) return
     setLoading(true)
     const newErrors = {}
-    const dates = { pocStartDate: pocMeta.pocStartDate, pocEndDate: pocMeta.pocEndDate }
+    const dates = syncDatesRef.current
 
     const results = await Promise.allSettled([
-      fetchCases(auth),
-      fetchEntityUsage(auth),
+      fetchCases(auth, dates),
+      fetchEntityUsage(auth, dates),
       fetchConnectors(auth),
       fetchIngestionStats(auth),
       fetchIngestionTimeline(auth),
@@ -48,39 +51,72 @@ export function DataProvider({ children }) {
     ])
 
     const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector']
-    const newData = {}
 
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i]
-      if (result.status === 'fulfilled') {
-        newData[keys[i]] = result.value
-      } else {
-        const err = result.reason
-        if (err?.status === 401 || err?.message?.includes('(401)')) {
-          disconnect()
-          setLoading(false)
-          return
+    setData(prev => {
+      const next = { ...prev }
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i]
+        if (result.status === 'fulfilled') {
+          next[keys[i]] = result.value
+        } else {
+          const err = result.reason
+          if (err?.status === 401 || err?.message?.includes('(401)')) {
+            disconnect()
+            return prev
+          }
+          newErrors[keys[i]] = err?.message || 'Falha ao buscar dados'
+          // keep previous data on error
         }
-        newErrors[keys[i]] = err?.message || 'Falha ao buscar dados'
-        newData[keys[i]] = data[keys[i]]
       }
-    }
+      return next
+    })
 
-    setData(prev => ({ ...prev, ...newData }))
     setErrors(newErrors)
-    setLastRefresh(new Date())
+    setSyncedAt(new Date())
     setLoading(false)
-  }, [auth, disconnect, pocMeta.pocStartDate, pocMeta.pocEndDate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth, disconnect])
 
-  useEffect(() => {
-    if (!auth) return
+  // sync(dates) — manual trigger from UI; updates dates + fetches + restarts 5-min interval
+  const sync = useCallback((dates) => {
+    const normalized = {
+      pocStartDate: dates?.pocStartDate || '',
+      pocEndDate:   dates?.pocEndDate   || '',
+    }
+    syncDatesRef.current = normalized
+    setSyncConfig({ ...normalized })
+    clearInterval(intervalRef.current)
     fetchAll()
     intervalRef.current = setInterval(fetchAll, 5 * 60 * 1000)
-    return () => clearInterval(intervalRef.current)
-  }, [auth, fetchAll])
+  }, [fetchAll])
+
+  // Reset all state when user disconnects
+  useEffect(() => {
+    if (!auth) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+      setSyncedAt(null)
+      setSyncConfig({ pocStartDate: '', pocEndDate: '' })
+      syncDatesRef.current = { pocStartDate: '', pocEndDate: '' }
+      setData(EMPTY_DATA)
+      setErrors({})
+    }
+  }, [auth])
+
+  // Cleanup interval on unmount
+  useEffect(() => () => clearInterval(intervalRef.current), [])
 
   return (
-    <DataContext.Provider value={{ data, loading, errors, lastRefresh, refresh: fetchAll }}>
+    <DataContext.Provider value={{
+      data,
+      loading,
+      errors,
+      syncedAt,
+      syncConfig,
+      sync,
+      // backward compat aliases used by Header and Recommendations
+      lastRefresh: syncedAt,
+      refresh:     fetchAll,
+    }}>
       {children}
     </DataContext.Provider>
   )

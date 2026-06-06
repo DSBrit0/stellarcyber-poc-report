@@ -13,9 +13,11 @@ function handleError(err, endpoint) {
 
 // ─── Cases ────────────────────────────────────────────────────────────────────
 
-export async function fetchCases(auth) {
+export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
   try {
     const params = { limit: HTTP.DEFAULT_LIMIT, tenantid: auth.tenant }
+    if (pocStartDate) params.start_time = new Date(pocStartDate).getTime()
+    if (pocEndDate)   params.end_time   = new Date(pocEndDate).getTime()
     debug('api', `GET ${ENDPOINTS.CASES}`, params)
 
     const res   = await createApiClient(auth).get(ENDPOINTS.CASES, { params })
@@ -36,9 +38,14 @@ export async function fetchCases(auth) {
 // Response: { data: [ { date, entity_count }, ... ] }
 // Returns the raw daily array; consumers compute the average.
 
-export async function fetchEntityUsage(auth) {
+export async function fetchEntityUsage(auth, { pocStartDate, pocEndDate } = {}) {
   try {
-    const params = { days: 30, cust_id: auth.tenant }
+    let days = 30
+    if (pocStartDate && pocEndDate) {
+      const diff = Math.ceil((new Date(pocEndDate) - new Date(pocStartDate)) / 86400000)
+      days = Math.max(1, Math.min(diff + 1, 365))
+    }
+    const params = { days, cust_id: auth.tenant }
     debug('api', `GET ${ENDPOINTS.ENTITY_USAGE_DAILY}`, params)
 
     const res   = await createApiClient(auth).get(ENDPOINTS.ENTITY_USAGE_DAILY, { params })
