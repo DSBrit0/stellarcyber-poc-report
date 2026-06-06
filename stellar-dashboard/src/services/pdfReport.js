@@ -671,16 +671,6 @@ export function generatePDFReport({
     },
   })
 
-  // Additional success criteria (user-entered free text)
-  const successCriteriaText = (successCriteria || '').trim()
-  if (successCriteriaText) {
-    y = (doc.lastAutoTable?.finalY ?? y) + 6
-    if (needsPage(doc, y, 24)) { y = newPage(doc) }
-    y = subTitle(doc, s.successCriteriaAdditional || 'Critérios Adicionais', y)
-    y = bodyText(doc, successCriteriaText, y)
-    y += 4
-  }
-
   // ══════════════════════════════════════════════════════════════════════════════
   // SECTION 3 — PLATFORM OVERVIEW & INTEGRATIONS
   // ══════════════════════════════════════════════════════════════════════════════
