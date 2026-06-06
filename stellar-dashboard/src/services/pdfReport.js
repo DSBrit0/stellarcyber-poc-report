@@ -679,13 +679,8 @@ export function generatePDFReport({
   })
   y += statH + 8
 
-  // ─── 3.2 Deployment details ────────────────────────────────────────────────
-  y = subTitle(doc, s.sec3_2 || '3.2 Deployment Details', y)
-  y = bodyText(doc, i(s.body3_2 || 'Evaluated instance: {url}. SaaS/Cloud deployment, secure access via REST API with Bearer JWT authentication.', { url: auth?.url || '—' }), y)
-  y += 8
-
-  // ─── 3.3 Configured Connectors (all real data) ────────────────────────────
-  y = subTitle(doc, s.sec3_3 || '3.3 Configured Connectors', y)
+  // ─── 3.2 Configured Connectors (all real data) ────────────────────────────
+  y = subTitle(doc, s.sec3_3 || '3.2 Configured Connectors', y)
 
   if (connectors.length === 0) {
     y = infoNote(doc, s.noConnectors || 'No connectors/sensors identified via API.', y)
@@ -728,7 +723,7 @@ export function generatePDFReport({
 
   if (hasIngestion) {
     if (needsPage(doc, y, 70)) { y = newPage(doc) } else { y += 4 }
-    y = subTitle(doc, s.sec3_ingestion || '3.4 Data Ingestion (last 30 days)', y)
+    y = subTitle(doc, s.sec3_ingestion || '3.3 Data Ingestion (last 30 days)', y)
     y = infoNote(doc, i(s.ingestPeriodNote || 'Period: {period}. Data from /ingestion-stats API.', { period: ingestionPeriod }), y)
     y += 4
 
