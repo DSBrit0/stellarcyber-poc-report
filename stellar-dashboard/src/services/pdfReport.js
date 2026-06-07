@@ -596,10 +596,16 @@ function drawKpiCard(doc, x, y, w, h, value, label, color) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C.white)
-  doc.text(String(value), x + w / 2, y + h * 0.52, { align: 'center' })
+  doc.text(String(value), x + w / 2, y + h * 0.46, { align: 'center' })
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6)
-  doc.text(label, x + w / 2, y + h * 0.78, { align: 'center' })
+  doc.setFontSize(5.5)
+  const labelLines = doc.splitTextToSize(label, w - 2)
+  const lineH = 3.2
+  const totalH = labelLines.length * lineH
+  const startY = y + h * 0.62 + (h * 0.35 - totalH) / 2
+  labelLines.forEach((line, i) => {
+    doc.text(line, x + w / 2, startY + i * lineH, { align: 'center' })
+  })
 }
 
 // ─── Chart title helper ───────────────────────────────────────────────────────
@@ -635,6 +641,10 @@ export function generatePDFReport({
   const openCases  = cases.filter(c => {
     const st = (c.status || '').toLowerCase()
     return st === 'open' || st === 'new'
+  })
+  const resolvedCases = cases.filter(c => {
+    const st = (c.status || '').toLowerCase()
+    return st !== 'open' && st !== 'new'
   })
   const activeConn = connectors.filter(c =>
     c.status === 'active' || c.enabled === true || c.active === true
@@ -760,17 +770,18 @@ export function generatePDFReport({
   // ── 1.1 KPI Cards ──────────────────────────────────────────────────────────
   y = subTitle(doc, s.sub1_1 || '1.1 Key Performance Indicators', y)
 
-  const cardW   = (CW - 10) / 6
-  const cardH   = 20
   const cardGap = 2
+  const cardH   = 22
   const kpiCards = [
-    { label: s.kpiCasesDetected || 'Cases / Alerts',       value: totalCasesStr,                              color: C.blue    },
-    { label: s.kpiCritCases     || 'Critical',             value: String(critCases.length),                   color: C.red     },
-    { label: s.kpiOpenCases     || 'Open Cases',           value: String(openCases.length),                   color: C.orange  },
-    { label: s.kpiAvgEntities   || 'Avg. Entities / Day',  value: avgEntities || '—',                    color: C.navy    },
-    { label: s.kpiActiveConn    || 'Active Sources',       value: `${activeConn.length}/${connectors.length}`,color: C.green   },
-    { label: s.kpiMitreCov      || 'MITRE Coverage',       value: `${mitreCovPct}%`,                          color: C.midBlue },
+    { label: s.kpiCasesDetected  || 'Casos Detectados',      value: totalCasesStr,                               color: C.blue    },
+    { label: s.kpiCritCases      || 'Críticos',              value: String(critCases.length),                    color: C.red     },
+    { label: s.kpiOpenCases      || 'Casos Abertos',         value: String(openCases.length),                    color: C.orange  },
+    { label: s.kpiResolvedCases  || 'Casos Resolvidos',      value: String(resolvedCases.length),                color: C.green   },
+    { label: s.kpiAvgEntities    || 'Méd. Entidades / Dia',  value: avgEntities || '—',                     color: C.navy    },
+    { label: s.kpiActiveConn     || 'Conectores',            value: `${activeConn.length}/${connectors.length}`, color: C.midBlue },
+    { label: s.kpiMitreCov       || 'MITRE ATT&CK',          value: `${mitreCovPct}%`,                           color: C.blue    },
   ]
+  const cardW = (CW - cardGap * (kpiCards.length - 1)) / kpiCards.length
   for (let k = 0; k < kpiCards.length; k++) {
     const kx = ML + k * (cardW + cardGap)
     drawKpiCard(doc, kx, y, cardW, cardH, kpiCards[k].value, kpiCards[k].label, kpiCards[k].color)

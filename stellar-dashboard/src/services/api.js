@@ -86,24 +86,28 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
 
 export async function fetchEntityUsage(auth, { pocStartDate, pocEndDate } = {}) {
   try {
-    let days = 30
-    if (pocStartDate && pocEndDate) {
-      const diff = Math.ceil((new Date(pocEndDate) - new Date(pocStartDate)) / 86400000)
-      days = Math.max(1, Math.min(diff + 1, 30)) // API max is 30 days
-    }
-    const params = { days, cust_id: auth.tenant }
+    // API only supports 'days' (last N days from today, max 30) — no date range params.
+    // Always request 30 days to maximise coverage, then filter client-side by POC period.
+    const params = { days: 30, ...(auth.tenant ? { cust_id: auth.tenant } : {}) }
     debug('api', `GET ${ENDPOINTS.ENTITY_USAGE_DAILY}`, params)
 
     const res   = await createApiClient(auth).get(ENDPOINTS.ENTITY_USAGE_DAILY, { params })
     const items = res.data?.data ?? (Array.isArray(res.data) ? res.data : [])
-    const result = items.map(d => ({
+    let result = items.map(d => ({
       date:         d.date || '',
       entity_count: typeof d.entity_count === 'number' ? d.entity_count : 0,
     }))
-    const avg = result.length > 0
-      ? Math.round(result.reduce((s, d) => s + d.entity_count, 0) / result.length)
+
+    // Filter to POC period when both dates are provided
+    if (pocStartDate && pocEndDate) {
+      result = result.filter(d => d.date >= pocStartDate && d.date <= pocEndDate)
+    }
+
+    const valid = result.filter(d => d.entity_count > 0)
+    const avg = valid.length > 0
+      ? Math.round(valid.reduce((s, d) => s + d.entity_count, 0) / valid.length)
       : 0
-    info('api', `fetchEntityUsage ✅ ${result.length} days | avg ${avg} entities`)
+    info('api', `fetchEntityUsage ✅ ${result.length} days in POC window | avg ${avg} entities`)
     return result
   } catch (err) {
     handleError(err, ENDPOINTS.ENTITY_USAGE_DAILY)
