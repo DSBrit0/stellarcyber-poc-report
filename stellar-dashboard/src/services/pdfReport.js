@@ -489,18 +489,11 @@ function drawCover(doc, pocMeta, s) {
   doc.setTextColor(...C.blue)
   doc.text(pillLabel, pillX + 3, pillY + 4.2)
 
-  // 3. Title block starting y≈78mm (left margin 26mm)
-  // Eyebrow
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...C.blue)
-  doc.text(s.coverEyebrow || 'PROOF OF CONCEPT', 26, 82)
-
   // Hero lines
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(38)
   doc.setTextColor(...C.navy)
-  doc.text(s.coverTitle1 || 'Open XDR', 26, 98)
+  doc.text(s.coverTitle1 || 'Stellar Cyber XDR', 26, 98)
   doc.text(s.coverTitle2 || 'Platform', 26, 114)
 
   // Subtitle
@@ -536,7 +529,7 @@ function drawCover(doc, pocMeta, s) {
   ], C.blue)
 
   // ── Row 1 Right: STELLAR CYBER ANALYST ────────────────────────────────────
-  drawInfoBlock(doc, s.blockStellarCyber || 'STELLAR CYBER ANALYST', colR, blockY, [
+  drawInfoBlock(doc, s.blockStellarCyber || 'STELLAR CYBER SYSTEM ENGINEER', colR, blockY, [
     { val: pocMeta.seName,  bold: true,  size: 10 },
     { val: pocMeta.seEmail, bold: false, size: 8 },
     { val: pocMeta.sePhone, bold: false, size: 8 },
