@@ -72,6 +72,34 @@ export function DataProvider({ children }) {
       }
     }
 
+    // Enrich ingestionBySensor: /ingestion-stats/sensor returns only UUIDs (entry_identifier).
+    // Cross-reference with connectors' run_on field to derive human-readable sensor names.
+    let enrichedIngestionBySensor = null
+    const connResult    = results[2]  // fetchConnectors → array of connectors
+    const sensorResult  = results[5]  // fetchIngestionBySensor → array of sensors
+    if (
+      connResult?.status === 'fulfilled' &&
+      sensorResult?.status === 'fulfilled' &&
+      Array.isArray(sensorResult.value)
+    ) {
+      const connList = connResult.value || []
+      const sensorConnMap = {}
+      for (const c of connList) {
+        const ro = c.run_on || ''
+        if (ro.length === 32) {
+          if (!sensorConnMap[ro]) sensorConnMap[ro] = []
+          sensorConnMap[ro].push(c)
+        }
+      }
+      enrichedIngestionBySensor = sensorResult.value.map((s, idx) => {
+        const mapped = sensorConnMap[s.id]
+        if (mapped && mapped.length > 0) {
+          return { ...s, name: mapped.map(c => c.name).join(', ') }
+        }
+        return { ...s, name: `Sensor ${idx + 1}` }
+      })
+    }
+
     setData(prev => {
       const next = { ...prev }
       for (let i = 0; i < results.length; i++) {
@@ -95,6 +123,7 @@ export function DataProvider({ children }) {
         }
       }
       if (caseTactics !== null) next.caseTactics = caseTactics
+      if (enrichedIngestionBySensor !== null) next.ingestionBySensor = enrichedIngestionBySensor
       return next
     })
 

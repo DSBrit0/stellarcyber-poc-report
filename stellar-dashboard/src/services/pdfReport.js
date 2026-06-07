@@ -1092,11 +1092,10 @@ export function generatePDFReport({
     if (ingestionBySensor.length > 0) {
       const sensorRows = ingestionBySensor.map(r => [
         trunc(r.name || r.sensor || '—', 40),
-        r.type || '—',
         fmtGB(r.bytesIngested || r.bytes || r.size || 0),
       ])
       y = tableCompact(doc,
-        [s.sensorName || 'Sensor', s.sensorType || 'Type', s.sensorBytes || 'Volume'],
+        [s.sensorName || 'Sensor', s.sensorBytes || 'Volume'],
         sensorRows, y
       )
     }
