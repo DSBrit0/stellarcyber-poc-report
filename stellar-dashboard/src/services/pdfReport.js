@@ -1,5 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { Chart, registerables } from 'chart.js'
+Chart.register(...registerables)
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 const C = {
@@ -17,185 +19,351 @@ const C = {
   gray:    [242, 242, 242],
 }
 
-const PW = 210
-const PH = 297
-const ML = 14
-const MR = 14
-const CW = PW - ML - MR  // 182mm
+const PW = 210, PH = 297, ML = 14, MR = 14, CW = PW - ML - MR
 
-let _pageNum = 0
-let _meta    = {}
-let _s       = {}
+let _pageNum = 0, _meta = {}, _s = {}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function i(str, vars = {}) {
-  return String(str || '').replace(/\{(\w+)\}/g, (_, k) =>
-    vars[k] !== undefined ? String(vars[k]) : `{${k}}`
-  )
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function i(doc, arr) { doc.setFillColor(...arr) }
+function fmtDate(d) {
+  if (!d) return '—'
+  try {
+    const dt = typeof d === 'string' ? new Date(d) : d
+    if (isNaN(dt)) return String(d)
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  } catch { return String(d) }
 }
-
-function fmtDate(iso, locale) {
-  if (!iso) return '—'
-  const loc = locale === 'en' ? 'en-US' : locale === 'es' ? 'es-ES' : 'pt-BR'
-  try { return new Date(iso).toLocaleDateString(loc, { day: '2-digit', month: '2-digit', year: 'numeric' }) }
-  catch { return String(iso) }
+function fmtNum(n) {
+  if (n == null || n === '') return '—'
+  const num = Number(n)
+  if (isNaN(num)) return String(n)
+  return num.toLocaleString('pt-BR')
 }
-
-function fmtNum(n, locale) {
-  if (n == null || isNaN(n)) return '—'
-  const loc = locale === 'en' ? 'en-US' : locale === 'es' ? 'es-ES' : 'pt-BR'
-  return Number(n).toLocaleString(loc)
+function fmtGB(bytes) {
+  if (!bytes || bytes === 0) return '0 GB'
+  const gb = bytes / (1024 * 1024 * 1024)
+  if (gb >= 1) return gb.toFixed(2) + ' GB'
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 1) return mb.toFixed(2) + ' MB'
+  return (bytes / 1024).toFixed(2) + ' KB'
 }
-
-function fmtGB(n, locale) {
-  if (n == null || isNaN(n) || n === 0) return '—'
-  const loc = locale === 'en' ? 'en-US' : locale === 'es' ? 'es-ES' : 'pt-BR'
-  return `${Number(n).toLocaleString(loc, { maximumFractionDigits: 2 })} GB`
-}
-
-function trunc(str, n) {
+function trunc(str, max) {
+  const m = max || 45
   if (!str) return '—'
-  const s = String(str)
-  return s.length > n ? s.slice(0, n - 1) + '…' : s
+  return String(str).length > m ? String(str).slice(0, m - 1) + '…' : String(str)
 }
-
-function pct(n, total) {
-  return total > 0 ? `${((n / total) * 100).toFixed(0)}%` : '0%'
+function pct(a, b) {
+  if (!b || b === 0) return '0%'
+  return Math.round((a / b) * 100) + '%'
 }
-
 function sevColor(sev) {
-  const s = String(sev || '').toLowerCase()
-  if (s === 'critical') return C.red
-  if (s === 'high')     return C.orange
-  if (s === 'medium')   return C.yellow
+  const sv = (sev || '').toLowerCase()
+  if (sv === 'critical') return C.red
+  if (sv === 'high') return C.orange
+  if (sv === 'medium') return C.yellow
   return C.green
 }
-
-function statusColor(val, achieved, partial) {
-  if (val === achieved) return C.green
-  if (val === partial)  return C.orange
-  return C.red
+function statusColor(st) {
+  const sv = (st || '').toLowerCase()
+  if (sv === 'open' || sv === 'new') return C.orange
+  if (sv === 'closed' || sv === 'resolved' || sv === 'analyzed') return C.green
+  return C.muted
 }
 
-// ─── Page chrome ──────────────────────────────────────────────────────────────
-
+// ─── Chrome (header/footer) ───────────────────────────────────────────────────
 function addChrome(doc) {
-  const client  = _meta.clientName  || 'Client'
-  const partner = _meta.partnerName || 'Partner'
-  const year    = new Date().getFullYear()
-
-  doc.setFillColor(...C.blue)
+  const pg = _pageNum
+  // Header strip
+  i(doc, C.navy)
   doc.rect(0, 0, PW, 10, 'F')
-  doc.setFontSize(7)
   doc.setTextColor(...C.white)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('STELLAR CYBER', ML, 6.5)
   doc.setFont('helvetica', 'normal')
-  doc.text(
-    `Stellar Cyber Open XDR — ${_s.headerTitle} | ${client} — ${_s.confidential}`,
-    ML, 6.5
-  )
-  doc.text(`${_s.page} ${_pageNum}`, PW - MR, 6.5, { align: 'right' })
+  doc.text(_s.headerSub || ' | Open XDR Platform', ML + 26, 6.5)
+  doc.text(String(pg), PW - MR, 6.5, { align: 'right' })
 
-  doc.setFillColor(...C.navy)
-  doc.rect(0, PH - 10, PW, 10, 'F')
-  doc.setFontSize(6.5)
+  // Footer strip
+  i(doc, C.navy)
+  doc.rect(0, PH - 8, PW, 8, 'F')
   doc.setTextColor(...C.white)
+  doc.setFontSize(6.5)
+  doc.setFont('helvetica', 'normal')
+  const clientName = _meta.clientName || ''
   doc.text(
-    `© ${year} — ${_s.footerDoc} | Stellar Cyber + ${partner} | ${_s.page} ${_pageNum}`,
-    PW / 2, PH - 4, { align: 'center' }
+    clientName
+      ? `${_s.footerConfidential || 'CONFIDENTIAL'} — ${clientName}`
+      : (_s.footerConfidential || 'CONFIDENTIAL'),
+    ML, PH - 3
   )
+  doc.text(_s.footerCopy || '© Stellar Cyber, Inc.', PW - MR, PH - 3, { align: 'right' })
 }
 
 function newPage(doc) {
   doc.addPage()
-  _pageNum++
+  _pageNum += 1
   addChrome(doc)
   return 18
 }
 
-// ─── Layout helpers ───────────────────────────────────────────────────────────
-
-function sectionTitle(doc, num, text, y) {
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
-  doc.setTextColor(...C.blue)
-  doc.text(`${num}. ${text}`, ML, y)
-  doc.setDrawColor(...C.blue)
-  doc.setLineWidth(0.5)
-  doc.line(ML, y + 2.5, PW - MR, y + 2.5)
-  doc.setFont('helvetica', 'normal')
-  return y + 12
+function needsPage(doc, y, needed) {
+  const n = needed || 30
+  if (y + n > PH - 16) return newPage(doc)
+  return y
 }
 
-function appendixTitle(doc, label, y) {
+// ─── Text helpers ─────────────────────────────────────────────────────────────
+function sectionTitle(doc, text, y) {
+  y = needsPage(doc, y, 16)
+  i(doc, C.navy)
+  doc.rect(ML, y, CW, 7.5, 'F')
+  doc.setTextColor(...C.white)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
-  doc.setTextColor(...C.blue)
-  doc.text(label, ML, y)
-  doc.setDrawColor(...C.blue)
-  doc.setLineWidth(0.4)
-  doc.line(ML, y + 2.5, PW - MR, y + 2.5)
-  doc.setFont('helvetica', 'normal')
-  return y + 12
+  doc.setFontSize(9.5)
+  doc.text(text, ML + 3, y + 5.2)
+  return y + 7.5 + 3
+}
+
+function appendixTitle(doc, text, y) {
+  y = needsPage(doc, y, 16)
+  i(doc, C.midBlue)
+  doc.rect(ML, y, CW, 7.5, 'F')
+  doc.setTextColor(...C.white)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.text(text, ML + 3, y + 5.2)
+  return y + 7.5 + 3
 }
 
 function subTitle(doc, text, y) {
+  y = needsPage(doc, y, 12)
+  doc.setTextColor(...C.midBlue)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...C.navy)
+  doc.setFontSize(9)
   doc.text(text, ML, y)
-  doc.setFont('helvetica', 'normal')
+  doc.setDrawColor(...C.midBlue)
+  doc.setLineWidth(0.3)
+  doc.line(ML, y + 1.5, ML + CW, y + 1.5)
   return y + 7
 }
 
-function bodyText(doc, text, y, maxW = CW) {
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...C.text)
+function bodyText(doc, text, y, opts) {
+  const o = opts || {}
+  const lineH = o.lineH || 4.5
+  const fontSize = o.fontSize || 8.5
+  const color = o.color || C.text
+  const x = o.x || ML
+  const maxW = o.maxW || CW
+  doc.setTextColor(...color)
+  doc.setFont('helvetica', o.bold ? 'bold' : 'normal')
+  doc.setFontSize(fontSize)
   const lines = doc.splitTextToSize(text, maxW)
-  doc.text(lines, ML, y)
-  return y + lines.length * 5
+  for (const line of lines) {
+    y = needsPage(doc, y, lineH + 2)
+    doc.text(line, x, y)
+    y += lineH
+  }
+  return y
 }
 
 function infoNote(doc, text, y) {
+  y = needsPage(doc, y, 12)
+  i(doc, C.rowAlt)
+  doc.rect(ML, y, CW, 8, 'F')
+  doc.setTextColor(...C.muted)
   doc.setFont('helvetica', 'italic')
   doc.setFontSize(8)
-  doc.setTextColor(...C.muted)
-  const lines = doc.splitTextToSize(text, CW)
-  doc.text(lines, ML, y)
-  doc.setFont('helvetica', 'normal')
-  return y + lines.length * 4.5
+  doc.text(text, ML + 3, y + 5)
+  return y + 8
 }
 
-function tableBase(extra = {}) {
-  return {
-    styles:             { fontSize: 9, cellPadding: 3, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
-    headStyles:         { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 9 },
+// ─── Table helpers ────────────────────────────────────────────────────────────
+function tableBase(doc, head, body, y, opts) {
+  const o = opts || {}
+  autoTable(doc, Object.assign({
+    startY: y,
+    head: [head],
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 7.5, cellPadding: 2.5 },
+    bodyStyles: { fontSize: 7.5, cellPadding: 2, textColor: C.text },
     alternateRowStyles: { fillColor: C.rowAlt },
-    margin:             { left: ML, right: MR },
-    ...extra,
+    margin: { left: ML, right: MR },
+    tableWidth: CW,
+    didDrawPage: () => { _pageNum += 1; addChrome(doc) },
+  }, o))
+  return doc.lastAutoTable.finalY + 4
+}
+
+function tableCompact(doc, head, body, y, opts) {
+  const o = opts || {}
+  autoTable(doc, Object.assign({
+    startY: y,
+    head: [head],
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: C.midBlue, textColor: C.white, fontStyle: 'bold', fontSize: 7, cellPadding: 2 },
+    bodyStyles: { fontSize: 7, cellPadding: 1.8, textColor: C.text },
+    alternateRowStyles: { fillColor: C.rowAlt },
+    margin: { left: ML, right: MR },
+    tableWidth: CW,
+    didDrawPage: () => { _pageNum += 1; addChrome(doc) },
+  }, o))
+  return doc.lastAutoTable.finalY + 4
+}
+
+// ─── Chart rendering ──────────────────────────────────────────────────────────
+const PX_PER_MM = 8
+const pxpt = n => Math.round(n * PX_PER_MM * 0.353)
+
+function renderChartPNG(configFactory, wMm, hMm) {
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width  = Math.round(wMm * PX_PER_MM)
+    canvas.height = Math.round(hMm * PX_PER_MM)
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    const cfg = configFactory()
+    cfg.options = Object.assign({}, cfg.options || {}, { responsive: false, animation: false, devicePixelRatio: 1 })
+    const chart = new Chart(ctx, cfg)
+    chart.update('none')
+    const png = canvas.toDataURL('image/png')
+    chart.destroy()
+    return png
+  } catch (_e) { return null }
+}
+
+function rgb(arr) { return `rgb(${arr[0]},${arr[1]},${arr[2]})` }
+function rgba(arr, a) { return `rgba(${arr[0]},${arr[1]},${arr[2]},${a})` }
+
+function donutChart(labels, data, colors) {
+  return {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.map(rgb),
+        borderColor: colors.map(c => rgba(c, 0.85)),
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      cutout: '62%',
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            font: { size: pxpt(7), family: 'Arial' },
+            color: rgb(C.text),
+            padding: pxpt(5),
+            boxWidth: pxpt(8),
+            boxHeight: pxpt(7),
+          },
+        },
+        tooltip: { enabled: false },
+      },
+    },
   }
 }
 
-function tableCompact(extra = {}) {
+function gaugeChart(valuePct, color) {
   return {
-    styles:             { fontSize: 8.5, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 },
-    headStyles:         { fillColor: C.navy, textColor: C.white, fontStyle: 'bold', fontSize: 8.5 },
-    alternateRowStyles: { fillColor: C.rowAlt },
-    margin:             { left: ML, right: MR },
-    ...extra,
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [valuePct, 100 - valuePct],
+        backgroundColor: [rgb(color), rgb(C.gray)],
+        borderColor: [rgb(color), rgb(C.gray)],
+        borderWidth: 0,
+        circumference: 270,
+        rotation: -135,
+      }],
+    },
+    options: {
+      cutout: '65%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+      },
+    },
   }
 }
 
-function needsPage(doc, y, required = 60) {
-  return y + required > PH - 20
+function hBarChart(labels, data, colors) {
+  return {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.map(rgb),
+        borderColor: colors.map(c => rgba(c, 0.85)),
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+      },
+      scales: {
+        x: {
+          grid: { color: rgba(C.muted, 0.15) },
+          ticks: { font: { size: pxpt(6.5), family: 'Arial' }, color: rgb(C.muted) },
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: pxpt(7), family: 'Arial' }, color: rgb(C.text) },
+        },
+      },
+    },
+  }
 }
 
-// ─── 14 MITRE ATT&CK Enterprise tactics ──────────────────────────────────────
+function lineChart(labels, data, color) {
+  return {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: rgb(color),
+        backgroundColor: rgba(color, 0.15),
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointRadius: data.map(v => v > 0 ? pxpt(1.5) : 0),
+        pointBackgroundColor: rgb(color),
+      }],
+    },
+    options: {
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: pxpt(6), family: 'Arial' }, color: rgb(C.muted), maxTicksLimit: 12 },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: rgba(C.muted, 0.15) },
+          ticks: { font: { size: pxpt(6), family: 'Arial' }, color: rgb(C.muted), precision: 0 },
+        },
+      },
+    },
+  }
+}
 
+// ─── MITRE tactics ────────────────────────────────────────────────────────────
 const ALL_TACTICS = [
-  { id: 'TA0043', name: 'Reconnaissance' },
-  { id: 'TA0042', name: 'Resource Development' },
   { id: 'TA0001', name: 'Initial Access' },
   { id: 'TA0002', name: 'Execution' },
   { id: 'TA0003', name: 'Persistence' },
@@ -205,1189 +373,1195 @@ const ALL_TACTICS = [
   { id: 'TA0007', name: 'Discovery' },
   { id: 'TA0008', name: 'Lateral Movement' },
   { id: 'TA0009', name: 'Collection' },
-  { id: 'TA0011', name: 'Command and Control' },
   { id: 'TA0010', name: 'Exfiltration' },
+  { id: 'TA0011', name: 'Command and Control' },
   { id: 'TA0040', name: 'Impact' },
+  { id: 'TA0042', name: 'Resource Development' },
+  { id: 'TA0043', name: 'Reconnaissance' },
 ]
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── Timeline data builder ────────────────────────────────────────────────────
+function buildTimelineData(cases, pocStartDate, pocEndDate) {
+  if (!pocStartDate || !pocEndDate) return { labels: [], data: [] }
+  const start = new Date(pocStartDate)
+  const end   = new Date(pocEndDate)
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return { labels: [], data: [] }
+  const days = []
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    days.push(new Date(d))
+  }
+  // Only use cases with createdAt and severity critical or high
+  const relevant = cases.filter(c =>
+    c.createdAt && ['critical', 'high'].includes((c.severity || '').toLowerCase())
+  )
+  const data = days.map(day => {
+    const dayStr = day.toISOString().split('T')[0]
+    return relevant.filter(c => c.createdAt && c.createdAt.startsWith(dayStr)).length
+  })
+  const labels = days.map(d => {
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${dd}/${mm}`
+  })
+  return { labels, data }
+}
 
-export function generatePDFReport({
-  auth,
-  cases                = [],
-  lowCount             = 0,
-  mediumTotal          = 0,
-  connectors           = [],
-  assets               = [],
-  recommendations      = [],
-  ingestionBySensor    = [],
-  ingestionByConnector = [],
-  generatedAt          = new Date(),
-  pocMeta              = {},
-  locale               = 'pt',
-  s                    = {},
-}) {
+// ─── Detection types builder ──────────────────────────────────────────────────
+// Grouped by c.name (only stable type-identifying field; no alertType/xdrEventType
+// in normalizeCase). assetsAffected = c.size || assets_affected || 1 from API.
+function buildDetectionTypes(cases) {
+  const groups = {}
+  for (const c of cases) {
+    const key = (c.name || '—').replace(/ and \d+ other\(s\)$/i, '').trim()
+    if (!groups[key]) groups[key] = { total: 0, scores: [] }
+    groups[key].total += (c.assetsAffected || 1)
+    if (c.score != null) groups[key].scores.push(c.score)
+  }
+  return Object.entries(groups)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 8)
+    .map(([name, g]) => {
+      const avgScore = g.scores.length > 0
+        ? g.scores.reduce((sum, v) => sum + v, 0) / g.scores.length
+        : 50
+      const color = avgScore >= 80 ? C.red : avgScore <= 40 ? C.orange : C.blue
+      return { name, total: g.total, color }
+    })
+}
+
+// ─── Cover page ───────────────────────────────────────────────────────────────
+function drawCover(doc, pocMeta, s) {
   _pageNum = 1
-  _meta    = pocMeta
-  _s       = s
+  // No addChrome on cover page
 
-  const fmt    = (iso) => fmtDate(iso, locale)
-  const num    = (n)   => fmtNum(n, locale)
-  const gb     = (n)   => fmtGB(n, locale)
+  // 1. Left accent rail: navy→blue gradient using 60 thin horizontal strips
+  const stripH = PH / 60
+  for (let k = 0; k < 60; k++) {
+    const t = k / 59
+    const r = Math.round(C.navy[0] + t * (C.blue[0] - C.navy[0]))
+    const g2 = Math.round(C.navy[1] + t * (C.blue[1] - C.navy[1]))
+    const b2 = Math.round(C.navy[2] + t * (C.blue[2] - C.navy[2]))
+    doc.setFillColor(r, g2, b2)
+    doc.rect(0, k * stripH, 11, stripH + 0.5, 'F')
+  }
 
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-
-  // ── Pre-compute all metrics from real API data ─────────────────────────────
-
-  const openCases  = cases.filter(c => !['closed', 'resolved'].includes((c.status || '').toLowerCase()))
-  const critCases  = cases.filter(c => c.severity?.toLowerCase() === 'critical')
-  const highCases  = cases.filter(c => c.severity?.toLowerCase() === 'high')
-  // cases = critical + high + top-100 medium; lowCount/mediumTotal are separate params
-  const lowNum          = typeof lowCount === 'number' ? lowCount : 500
-  const totalCasesCount = critCases.length + highCases.length + mediumTotal + lowNum
-  const totalCasesStr   = typeof lowCount === 'string' ? `${totalCasesCount}+` : num(totalCasesCount)
-  const activeConn = connectors.filter(c => c.active)
-  const offlineConn = connectors.filter(c => !c.active)
-
-  // Connector categories — grouped from real API data
-  const connByCategory = connectors.reduce((acc, c) => {
-    const cat = c.category || c.type || 'unknown'
-    acc[cat] = (acc[cat] || 0) + 1
-    return acc
-  }, {})
-
-  // MITRE data — derived from real case analysis
-  const mitrRecs = recommendations.filter(r => r.category === 'MITRE ATT&CK')
-  const opRecs   = recommendations.filter(r => r.category !== 'MITRE ATT&CK')
-  const detectedTactics = new Set(mitrRecs.map(r => r.mitre?.tactic?.id).filter(Boolean))
-  const mitreCovPct = Math.round((detectedTactics.size / ALL_TACTICS.length) * 100)
-
-  // Entity data — from entity_usages API
-  const avgEntities = assets.length > 0
-    ? Math.round(assets.reduce((s, d) => s + (d.entity_count || 0), 0) / assets.length)
-    : null
-
-  // Ingestion totals — from ingestion-stats API
-  const ingestSource = ingestionBySensor.length > 0 ? ingestionBySensor : ingestionByConnector
-  const totalGbIngested = ingestSource.length > 0
-    ? +ingestSource.reduce((sum, d) => sum + (d.gbIngested || 0), 0).toFixed(2)
-    : null
-  const totalEventsIngested = ingestSource.length > 0
-    ? ingestSource.reduce((sum, d) => sum + (d.eventsCount || 0), 0)
-    : null
-
-  // pocMeta fields (user-entered)
-  const {
-    clientName       = '',
-    clientDept       = '',
-    clientEmail      = '',
-    analysts         = [],
-    successCriteria  = '',
-    seName           = '',
-    seEmail          = '',
-    sePhone          = '',
-    partnerName      = '',
-    partnerEmail     = '',
-    partnerSite      = '',
-    pocStartDate     = '',
-    pocEndDate       = '',
-    version          = '1.0',
-    verdict          = s.verdictApproved || 'Approved',
-  } = pocMeta
-
-  const clientDisplay  = clientName  || '—'
-  const seDisplay      = seName      || '—'
-  const partnerDisplay = partnerName || '—'
-
-  const period = pocStartDate && pocEndDate
-    ? `${fmt(pocStartDate)} ${s.periodTo || 'a'} ${fmt(pocEndDate)}`
-    : fmt(generatedAt.toISOString())
-
-  const ingestionPeriod = pocEndDate
-    ? `${fmt(new Date(new Date(pocEndDate).getTime() - 30 * 86400000).toISOString())} ${s.periodTo || 'a'} ${fmt(pocEndDate)}`
-    : s.last30days || 'últimos 30 dias'
-
-  const verdictColor = verdict === s.verdictApproved ? C.green
-    : verdict === s.verdictRejected ? C.red
-    : C.orange
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // COVER
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  doc.setFillColor(...C.blue)
-  doc.rect(0, 0, PW, 32, 'F')
+  // 2. Header at y≈18mm
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...C.white)
-  doc.text('STELLAR CYBER', ML, 14)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.text('Open XDR Platform', ML, 21)
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(255, 210, 210)
-  doc.text(s.confidential || 'CONFIDENTIAL', PW - MR, 14, { align: 'right' })
-  doc.setFont('helvetica', 'normal')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(24)
-  doc.setTextColor(...C.navy)
-  doc.text(s.reportTitle1 || 'PROOF OF', PW / 2, 72, { align: 'center' })
-  doc.text(s.reportTitle2 || 'CONCEPT REPORT', PW / 2, 88, { align: 'center' })
-  doc.setFont('helvetica', 'normal')
-
   doc.setFontSize(12)
+  doc.setTextColor(...C.navy)
+  doc.text('STELLAR CYBER', 26, 18)
+  doc.setFont('helvetica', 'normal')
   doc.setTextColor(...C.blue)
-  doc.text('Stellar Cyber Open XDR Platform', PW / 2, 101, { align: 'center' })
+  doc.text(' | Open XDR', 26 + doc.getTextWidth('STELLAR CYBER'), 18)
 
-  doc.setDrawColor(...C.blue)
-  doc.setLineWidth(0.7)
-  doc.line(ML + 15, 107, PW - MR - 15, 107)
-
-  // Prepared for box
-  doc.setFillColor(...C.rowAlt)
-  doc.roundedRect(ML, 114, 86, 72, 2, 2, 'F')
-  doc.setDrawColor(...C.midBlue)
-  doc.setLineWidth(0.4)
-  doc.roundedRect(ML, 114, 86, 72, 2, 2, 'S')
+  // CONFIDENTIAL pill right-aligned
+  const pillLabel = s.coverConfidential || 'CONFIDENTIAL'
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...C.navy)
-  doc.text(s.preparedFor || 'PREPARED FOR', ML + 4, 122)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.setTextColor(...C.text)
-  const clientNameLines = doc.splitTextToSize(clientDisplay, 78)
-  doc.text(clientNameLines, ML + 4, 130)
-  let pfY = 130 + clientNameLines.length * 5 + 4
-  doc.setFontSize(8.5)
-  doc.setTextColor(...C.muted)
-  doc.text(trunc(clientDept || '—', 36), ML + 4, pfY)
-  pfY += 7
-  if (clientEmail) {
-    doc.setFontSize(8)
-    doc.text(trunc(clientEmail, 38), ML + 4, pfY)
-    pfY += 7
-  }
-  const analystList = (analysts || []).filter(Boolean)
-  if (analystList.length > 0) {
-    doc.setFontSize(7)
-    doc.setTextColor(...C.navy)
-    doc.text(s.coverAnalysts || 'Stakeholders:', ML + 4, pfY)
-    pfY += 5
-    doc.setFontSize(7.5)
-    doc.setTextColor(...C.muted)
-    const shown = analystList.slice(0, 3)
-    const suffix = analystList.length > 3 ? ` +${analystList.length - 3}` : ''
-    doc.text(trunc(shown.join(', ') + suffix, 44), ML + 4, pfY)
-  }
-
-  // Prepared by box
-  const rx = PW - MR - 86
-  doc.setFillColor(...C.rowAlt)
-  doc.roundedRect(rx, 114, 86, 72, 2, 2, 'F')
-  doc.setDrawColor(...C.midBlue)
-  doc.roundedRect(rx, 114, 86, 72, 2, 2, 'S')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...C.navy)
-  doc.text(s.preparedBy || 'PREPARED BY', rx + 4, 122)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(12)
-  doc.setTextColor(...C.text)
-  doc.text(trunc(seDisplay, 26), rx + 4, 134)
-  doc.setFontSize(8.5)
-  doc.setTextColor(...C.muted)
-  doc.text(trunc(partnerDisplay, 32), rx + 4, 143)
-  let pbY = 152
-  if (seEmail) { doc.text(trunc(seEmail, 38), rx + 4, pbY); pbY += 8 }
-  if (sePhone) {
-    doc.setFontSize(8)
-    doc.text(trunc(sePhone, 38), rx + 4, pbY)
-    pbY += 8
-  }
-  if (partnerEmail) {
-    doc.setFontSize(8)
-    doc.text(trunc(partnerEmail, 38), rx + 4, pbY)
-    pbY += 7
-  }
-  if (partnerSite) {
-    doc.setFontSize(8)
-    doc.text(trunc(partnerSite, 38), rx + 4, pbY)
-  }
-
-  // Metadata table
-  autoTable(doc, {
-    startY: 196,
-    body: [
-      [s.metaVersion || 'Versão',  version],
-      [s.metaPeriod  || 'Período', period],
-      [s.metaDate    || 'Data',    fmt(generatedAt.toISOString())],
-    ],
-    styles:     { fontSize: 9.5, cellPadding: 4.5, textColor: C.text },
-    bodyStyles: { fillColor: C.rowAlt },
-    columnStyles: {
-      0: { fontStyle: 'bold', textColor: C.navy, cellWidth: 55 },
-      1: { cellWidth: CW - 55 },
-    },
-    margin:         { left: ML, right: MR },
-    tableLineColor: C.blue,
-    tableLineWidth: 0.3,
-  })
-
-  doc.setFillColor(...C.navy)
-  doc.rect(0, PH - 22, PW, 22, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...C.white)
-  doc.text(s.confidential || 'CONFIDENTIAL', PW / 2, PH - 13, { align: 'center' })
-  doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.setTextColor(200, 210, 230)
-  doc.text(s.coverDisclaimer || 'This document contains proprietary and confidential information.', PW / 2, PH - 6, { align: 'center' })
+  const pillW = doc.getTextWidth(pillLabel) + 6
+  const pillX = PW - MR - pillW
+  const pillY = 12.5
+  doc.setDrawColor(...C.blue)
+  doc.setFillColor(...C.white)
+  doc.setLineWidth(0.5)
+  doc.roundedRect(pillX, pillY, pillW, 6, 1.5, 1.5, 'D')
+  doc.setTextColor(...C.blue)
+  doc.text(pillLabel, pillX + 3, pillY + 4.2)
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 1 — EXECUTIVE SUMMARY
-  // ══════════════════════════════════════════════════════════════════════════════
+  // 3. Title block starting y≈78mm (left margin 26mm)
+  // Eyebrow
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...C.blue)
+  doc.text(s.coverEyebrow || 'PROOF OF CONCEPT', 26, 82)
 
-  let y = newPage(doc)
-  y = sectionTitle(doc, 1, s.sec1 || 'Executive Summary', y)
-  y = subTitle(doc, s.sec1_1 || '1.1 Key Indicators', y)
+  // Hero lines
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(38)
+  doc.setTextColor(...C.navy)
+  doc.text(s.coverTitle1 || 'Open XDR', 26, 98)
+  doc.text(s.coverTitle2 || 'Platform', 26, 114)
 
-  // Build KPI rows — only from real API data
-  const kpiRows = [
-    [s.kpiPeriod || 'Evaluation Period', period],
-    [s.kpiSources || 'Integrated Log Sources', num(connectors.length)],
-    [s.kpiActiveConn || 'Active Sources', `${num(activeConn.length)} / ${num(connectors.length)}`],
-    [s.kpiCasesDetected || 'Detected Alerts / Cases', totalCasesStr],
-    [s.kpiOpenCases || 'Open Cases', num(openCases.length)],
-    [s.kpiCritCases || 'Critical Cases', num(critCases.length)],
-  ]
+  // Subtitle
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(13)
+  doc.setTextColor(...C.muted)
+  doc.text(s.coverReportType || 'Proof of Concept Report', 26, 125)
 
-  if (totalGbIngested !== null) {
-    kpiRows.push([s.kpiTotalIngestion || 'Total Ingested (30 days)', gb(totalGbIngested)])
-  }
-  if (totalEventsIngested !== null) {
-    kpiRows.push([s.kpiTotalEvents || 'Total Events Ingested', num(totalEventsIngested)])
-  }
-  if (avgEntities !== null) {
-    kpiRows.push([s.kpiAvgEntities || 'Generated Alerts', num(avgEntities)])
-  }
+  // Thin gray rule
+  doc.setDrawColor(...C.gray)
+  doc.setLineWidth(0.5)
+  doc.line(26, 130, 96, 130)
 
-  kpiRows.push(
-    [s.kpiMitreCov || 'MITRE ATT&CK Coverage',
-     `${mitreCovPct}% (${i(s.kpiTacticsFmt || '{detected} of {total} tactics', { detected: detectedTactics.size, total: ALL_TACTICS.length })})`],
-    [s.kpiFinalVerdict || 'Final Verdict', verdict],
-  )
-
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.kpiIndicator || 'Indicator', s.kpiResult || 'Result']],
-    body: kpiRows,
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 95 },
-      1: { cellWidth: CW - 95 },
-    },
-    didParseCell: (d) => {
-      if (d.section === 'body' && d.row.index === kpiRows.length - 1) {
-        d.cell.styles.textColor = verdictColor
-        d.cell.styles.fontStyle = 'bold'
-      }
-    },
-  })
-
-  y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, s.sec1_2 || '1.2 Context and Objectives', y)
-  y = bodyText(doc, i(
-    s.body1_1 || 'This report consolidates the strategic and operational results obtained during the Proof of Concept (PoC) of the Stellar Cyber Open XDR platform, executed in the environment of {client}. The primary objective was to validate the advanced capabilities of unified visibility, intelligent event correlation, and incident response automation in a real scenario, faithfully reproducing the client\'s technological ecosystem and focusing on simulating the use cases discussed in the alignment meeting, as follows:',
-    { client: clientDisplay }
-  ), y)
-  y += 4
-
-  // Use cases / success criteria (user-entered field)
-  const useCasesText = (successCriteria || '').trim()
-  if (useCasesText) {
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(9)
-    doc.setTextColor(...C.text)
-    const ucLines = doc.splitTextToSize(useCasesText, CW - 8)
-    doc.text(ucLines, ML + 8, y)
+  // "Prepared for" line under rule
+  const clientName = pocMeta.clientName || ''
+  const clientDept = pocMeta.clientDept || ''
+  if (clientName) {
     doc.setFont('helvetica', 'normal')
-    y += ucLines.length * 5 + 4
-  } else {
-    y = infoNote(doc, s.noUseCases || '—', y)
-    y += 4
-  }
-
-  const startFmt = pocStartDate ? fmt(pocStartDate) : '—'
-  const endFmt   = pocEndDate   ? fmt(pocEndDate)   : '—'
-  y = bodyText(doc, i(
-    s.body1_2 || 'The validation and monitoring activities spanned from {startDate} to {endDate}. Throughout this evaluation cycle, {connCount} strategic data sources were successfully integrated. The centralization of these logs allowed the platform to apply its AI engines, resulting in the identification and grouping of +{caseCount} complex security cases. This volume translated into a coverage of {mitrePct}% of the tactics mapped by the global MITRE ATT&CK® Enterprise framework, demonstrating the solution\'s efficiency in reducing alert noise and enabling early detection of potential attack vectors.',
-    { startDate: startFmt, endDate: endFmt, connCount: connectors.length, caseCount: totalCasesStr, mitrePct: mitreCovPct }
-  ), y)
-  y += 10
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // ARCHITECTURE PAGE
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = appendixTitle(doc, s.secArch || 'Arquitetura Mínima Sugerida', y)
-
-  const archImg  = pocMeta.architectureImage || ''
-  const archDims = pocMeta.architectureImageDims || null
-
-  if (archImg) {
-    const imgFormat = archImg.startsWith('data:image/png') ? 'PNG'
-      : archImg.startsWith('data:image/gif') ? 'GIF'
-      : 'JPEG'
-
-    const maxW = CW
-    const maxH = PH - y - 25
-
-    let imgW = maxW
-    let imgH = maxH
-
-    if (archDims && archDims.w > 0) {
-      const aspect = archDims.h / archDims.w
-      imgH = imgW * aspect
-      if (imgH > maxH) {
-        imgH = maxH
-        imgW = imgH / aspect
-      }
-    }
-
-    const imgX = ML + (CW - imgW) / 2
-    doc.addImage(archImg, imgFormat, imgX, y, imgW, imgH, '', 'FAST')
-  } else {
-    y = infoNote(doc, s.noArchImage || 'Nenhuma imagem de arquitetura fornecida. Faça upload na tela de configuração do report.', y)
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 2 — SCOPE AND METHODOLOGY
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 2, s.sec2 || 'Scope and Methodology', y)
-  y = subTitle(doc, s.sec2_1 || '2.1 Evaluated Environment', y)
-
-  const envRows = [
-    [s.envInstance || 'Stellar Cyber Instance', trunc(auth?.url || '—', 60)],
-    [s.envUser     || 'Evaluation User',        auth?.username || '—'],
-  ]
-
-  envRows.push(
-    [s.envSensors   || 'Integrated Sources', i(s.connIntegrated || '{n} connectors', { n: connectors.length })],
-    [s.envActiveConn || 'Active Connectors', `${num(activeConn.length)} / ${num(connectors.length)}`],
-    [s.envPeriod    || 'Collection Period',  period],
-  )
-
-  if (totalGbIngested !== null) {
-    envRows.push([s.envIngestionVol || 'Ingestion Volume (30 days)', gb(totalGbIngested)])
-  }
-  if (avgEntities !== null) {
-    envRows.push([s.envEntities || 'Generated Alerts', num(avgEntities)])
-  }
-
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.envComponent || 'Component', s.envDetails || 'Details']],
-    body: envRows,
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 75 },
-      1: { cellWidth: CW - 75 },
-    },
-  })
-
-  y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, s.sec2_2 || '2.2 Methodology Phases', y)
-
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.phaseCol || 'Phase', s.activityCol || 'Activity', s.statusCol || 'Status']],
-    body: [
-      [s.phase1 || '1 — Integration',  s.phase1desc || 'Integration of log sources and sensors',     s.phaseCompleted || 'Completed'],
-      [s.phase2 || '2 — Baseline',     s.phase2desc || 'Behavioral baseline establishment',           s.phaseCompleted || 'Completed'],
-      [s.phase3 || '3 — Simulation',   s.phase3desc || 'Attack scenario execution and detection',     s.phaseCompleted || 'Completed'],
-      [s.phase4 || '4 — Analysis',     s.phase4desc || 'Event correlation and MITRE ATT&CK mapping',  s.phaseCompleted || 'Completed'],
-      [s.phase5 || '5 — Report',       s.phase5desc || 'Results documentation, gaps, recommendations', s.phaseCompleted || 'Completed'],
-    ],
-    columnStyles: {
-      0: { cellWidth: 42, fontStyle: 'bold' },
-      1: { cellWidth: 112 },
-      2: { cellWidth: CW - 154, halign: 'center', textColor: C.green, fontStyle: 'bold' },
-    },
-  })
-
-  y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, s.sec2_3 || '2.3 Success Criteria', y)
-
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.critCol || 'Criterion', s.goalCol || 'Target', s.resultCol || 'Result', s.successStatus || 'Status']],
-    body: [
-      [
-        s.crit1 || 'Source integration',
-        s.crit1goal || '≥ 5 sources',
-        i(s.crit1result || '{n} integrated', { n: connectors.length }),
-        connectors.length >= 5 ? s.achieved || 'Achieved' : connectors.length >= 2 ? s.partial || 'Partial' : s.notAchieved || 'Not Achieved',
-      ],
-      [
-        s.crit2 || 'Threat detection',
-        s.crit2goal || '≥ 1 case',
-        i(s.crit2result || '{n} detected', { n: totalCasesStr }),
-        totalCasesCount >= 1 ? s.achieved || 'Achieved' : s.notAchieved || 'Not Achieved',
-      ],
-      [
-        s.crit3 || 'MITRE ATT&CK coverage',
-        s.crit3goal || '≥ 20%',
-        `${mitreCovPct}%`,
-        mitreCovPct >= 20 ? s.achieved || 'Achieved' : mitreCovPct >= 10 ? s.partial || 'Partial' : s.notAchieved || 'Not Achieved',
-      ],
-      [
-        s.crit4 || 'Active sensors',
-        s.crit4goal_active || '≥ 50% active',
-        pct(activeConn.length, connectors.length),
-        (activeConn.length / Math.max(connectors.length, 1)) >= 0.5 ? s.achieved || 'Achieved' : s.partial || 'Partial',
-      ],
-    ],
-    columnStyles: {
-      0: { cellWidth: 68 },
-      1: { cellWidth: 28, halign: 'center' },
-      2: { cellWidth: 42, halign: 'center' },
-      3: { cellWidth: CW - 138, halign: 'center' },
-    },
-    didParseCell: (d) => {
-      if (d.section === 'body' && d.column.index === 3) {
-        d.cell.styles.textColor = statusColor(d.cell.raw, s.achieved || 'Achieved', s.partial || 'Partial')
-        d.cell.styles.fontStyle = 'bold'
-      }
-    },
-  })
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 3 — PLATFORM OVERVIEW & INTEGRATIONS
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 3, s.sec3 || 'Platform & Integrations Overview', y)
-
-  // ─── 3.1 Connector / Sensor Summary (real data from connectors API) ──────────
-  y = subTitle(doc, s.sec3_1_connSummary || '3.1 Sensor & Connector Summary', y)
-
-  // Summary stats bar
-  const statW = (CW - 6) / 4
-  const statH = 18
-  const stats = [
-    { label: s.connTotal || 'Total', value: num(connectors.length), color: C.midBlue, textColor: C.white },
-    { label: s.connActiveCount || 'Active', value: num(activeConn.length), color: C.green, textColor: C.white },
-    { label: s.connInactiveCount || 'Inactive', value: num(offlineConn.length), color: offlineConn.length > 0 ? C.orange : C.gray, textColor: offlineConn.length > 0 ? C.white : C.muted },
-    { label: s.connCategories || 'Categories', value: num(Object.keys(connByCategory).length), color: C.rowAlt, textColor: C.navy },
-  ]
-
-  stats.forEach((st, idx) => {
-    const sx = ML + idx * (statW + 2)
-    doc.setFillColor(...st.color)
-    doc.roundedRect(sx, y, statW, statH, 2, 2, 'F')
+    doc.setFontSize(10)
+    doc.setTextColor(...C.muted)
+    const prepLine = `${s.coverPreparedFor || 'Prepared for'} `
+    doc.text(prepLine, 26, 140)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(15)
-    doc.setTextColor(...st.textColor)
-    doc.text(st.value, sx + statW / 2, y + 11, { align: 'center' })
-    doc.setFontSize(7)
-    doc.text(st.label, sx + statW / 2, y + 16, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
-  })
-  y += statH + 8
-
-  // ─── 3.2 Configured Connectors (all real data) ────────────────────────────
-  y = subTitle(doc, s.sec3_3 || '3.2 Configured Connectors', y)
-
-  if (connectors.length === 0) {
-    y = infoNote(doc, s.noConnectors || 'No connectors/sensors identified via API.', y)
-    y += 4
-  } else {
-    autoTable(doc, {
-      ...tableCompact(),
-      startY: y,
-      head: [[s.connName || 'Connector', s.connType || 'Type', s.connCategory || 'Category', s.connStatus || 'Status', s.connLastActivity || 'Last Activity']],
-      body: connectors.slice(0, 40).map(c => [
-        trunc(c.name || '—', 36),
-        trunc(c.type || '—', 20),
-        trunc(c.category || '—', 20),
-        c.active ? (s.connOnline || 'Online') : (s.connOffline || 'Offline'),
-        c.lastDataReceived ? fmt(c.lastDataReceived) : c.lastActivity ? fmt(c.lastActivity) : '—',
-      ]),
-      columnStyles: {
-        0: { cellWidth: 62, fontStyle: 'bold' },
-        1: { cellWidth: 36 },
-        2: { cellWidth: 36 },
-        3: { cellWidth: 22, halign: 'center' },
-        4: { cellWidth: CW - 156, halign: 'center' },
-      },
-      didParseCell: (d) => {
-        if (d.section === 'body' && d.column.index === 3) {
-          d.cell.styles.textColor = d.cell.raw === (s.connOnline || 'Online') ? C.green : C.red
-          d.cell.styles.fontStyle = 'bold'
-        }
-      },
-    })
-    y = (doc.lastAutoTable?.finalY ?? y) + 4
-    if (connectors.length > 40) {
-      y = infoNote(doc, i(s.showingOf || 'Showing {shown} of {total} connectors.', { shown: 40, total: connectors.length }), y)
-    }
-    y += 4
+    doc.setTextColor(...C.navy)
+    doc.text(clientName + (clientDept ? ` — ${clientDept}` : ''), 26 + doc.getTextWidth(prepLine), 140)
   }
 
-  // ─── 3.4 Data Ingestion (from ingestion-stats API) ────────────────────────
-  const hasIngestion = ingestionBySensor.length > 0 || ingestionByConnector.length > 0
+  // 4. Two info blocks at y≈225mm
+  const blockY = 225
+  // Left col x=26: PREPARED FOR
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...C.blue)
+  doc.text(s.blockPreparedFor || 'PREPARED FOR', 26, blockY)
+  doc.setDrawColor(...C.blue)
+  doc.setLineWidth(0.3)
+  doc.line(26, blockY + 1.5, 26 + 70, blockY + 1.5)
 
-  if (hasIngestion) {
-    if (needsPage(doc, y, 70)) { y = newPage(doc) } else { y += 4 }
-    y = subTitle(doc, s.sec3_ingestion || '3.3 Data Ingestion (last 30 days)', y)
-    y = infoNote(doc, i(s.ingestPeriodNote || 'Period: {period}. Data from /ingestion-stats API.', { period: ingestionPeriod }), y)
-    y += 4
-
-    // Ingestion totals summary
-    if (totalGbIngested !== null) {
-      const tw = (CW - 4) / 3
-      const tItems = [
-        { label: s.ingestTotal || 'Total GB Ingested', value: gb(totalGbIngested) },
-        { label: s.ingestTotalEvents || 'Total Events', value: num(totalEventsIngested) },
-        { label: s.ingestSources || 'Sources with Data', value: num(ingestSource.length) },
-      ]
-      tItems.forEach((item, idx) => {
-        const tx = ML + idx * (tw + 2)
-        doc.setFillColor(...C.rowAlt)
-        doc.roundedRect(tx, y, tw, 16, 2, 2, 'F')
-        doc.setDrawColor(...C.midBlue)
-        doc.setLineWidth(0.3)
-        doc.roundedRect(tx, y, tw, 16, 2, 2, 'S')
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(11)
-        doc.setTextColor(...C.navy)
-        doc.text(item.value, tx + tw / 2, y + 9, { align: 'center' })
-        doc.setFontSize(6.5)
-        doc.setTextColor(...C.muted)
-        doc.text(item.label, tx + tw / 2, y + 14, { align: 'center' })
-        doc.setFont('helvetica', 'normal')
-      })
-      y += 22
-    }
-
-    if (ingestionBySensor.length > 0) {
-      y = subTitle(doc, s.sec3_ingestionSensor || 'Ingestion by Sensor', y)
-      autoTable(doc, {
-        ...tableCompact(),
-        startY: y,
-        head: [[s.ingestSensorName || 'Sensor', s.ingestType || 'Type', s.ingestGB || 'Volume (GB)', s.ingestEvents || 'Events']],
-        body: ingestionBySensor.map(d => [
-          trunc(d.name || '—', 50),
-          trunc(d.type || '—', 26),
-          d.gbIngested != null ? gb(d.gbIngested) : '—',
-          d.eventsCount != null ? num(d.eventsCount) : '—',
-        ]),
-        columnStyles: {
-          0: { cellWidth: 72, fontStyle: 'bold' },
-          1: { cellWidth: 44 },
-          2: { cellWidth: 34, halign: 'right' },
-          3: { cellWidth: CW - 150, halign: 'right' },
-        },
-      })
-      y = (doc.lastAutoTable?.finalY ?? y) + 6
-    }
-
-    if (ingestionByConnector.length > 0) {
-      if (needsPage(doc, y, 50)) { y = newPage(doc) }
-      y = subTitle(doc, s.sec3_ingestionConnector || 'Ingestion by Connector', y)
-      autoTable(doc, {
-        ...tableCompact(),
-        startY: y,
-        head: [[s.ingestConnName || 'Connector', s.ingestType || 'Type', s.ingestGB || 'Volume (GB)', s.ingestEvents || 'Events']],
-        body: ingestionByConnector.map(d => [
-          trunc(d.name || '—', 50),
-          trunc(d.type || '—', 26),
-          d.gbIngested != null ? gb(d.gbIngested) : '—',
-          d.eventsCount != null ? num(d.eventsCount) : '—',
-        ]),
-        columnStyles: {
-          0: { cellWidth: 72, fontStyle: 'bold' },
-          1: { cellWidth: 44 },
-          2: { cellWidth: 34, halign: 'right' },
-          3: { cellWidth: CW - 150, halign: 'right' },
-        },
-      })
-      y = (doc.lastAutoTable?.finalY ?? y) + 6
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 4 — DETECTION AND RESPONSE RESULTS
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 4, s.sec4 || 'Detection & Response Results', y)
-  y = subTitle(doc, s.sec4_1 || '4.1 Detected Cases', y)
-
-  if (cases.length === 0 && totalCasesCount === 0) {
-    y = infoNote(doc, s.noCases || 'No cases detected during the evaluation period.', y)
-    y += 4
-  } else {
-    const sevOrd = { critical: 0, high: 1, medium: 2, low: 3 }
-    const sortedCases = [...cases]
-      .sort((a, b) => (sevOrd[a.severity?.toLowerCase()] ?? 4) - (sevOrd[b.severity?.toLowerCase()] ?? 4))
-
-    if (sortedCases.length > 0) {
-      autoTable(doc, {
-        ...tableCompact({ styles: { fontSize: 8, cellPadding: 2.5, textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 } }),
-        startY: y,
-        head: [[s.caseCol || 'Case / Alert', s.sevCol || 'Severity', s.caseStatusCol || 'Status', s.assetsCol || 'Alerts', s.scoreCol || 'Score', s.dateCol || 'Date']],
-        body: sortedCases.map(c => [
-          trunc(c.name || c.id || '—', 52),
-          (c.severity || '—').toUpperCase(),
-          trunc(c.status || '—', 18),
-          c.assetsAffected != null ? num(c.assetsAffected) : '—',
-          c.score != null ? String(c.score) : '—',
-          c.createdAt ? fmt(c.createdAt) : '—',
-        ]),
-        columnStyles: {
-          0: { cellWidth: 70 },
-          1: { cellWidth: 22, halign: 'center' },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 14, halign: 'center' },
-          4: { cellWidth: 14, halign: 'center' },
-          5: { cellWidth: CW - 150 },
-        },
-        didParseCell: (d) => {
-          if (d.section === 'body' && d.column.index === 1) {
-            d.cell.styles.textColor = sevColor(d.cell.raw)
-            d.cell.styles.fontStyle = 'bold'
-          }
-        },
-      })
-      y = (doc.lastAutoTable?.finalY ?? y) + 6
-    }
-
-    if (mediumTotal > 100) {
-      y = infoNote(doc,
-        i(s.mediumTruncNote || '{total} Medium cases detected in the period — showing top 100.',
-          { total: mediumTotal }),
-        y)
-      y += 3
-    }
-
-    const lowLabel = typeof lowCount === 'number' ? num(lowCount) : lowCount
-    y = infoNote(doc,
-      i(s.lowCasesNote || 'Low severity: {count} cases detected in the period (not listed individually).',
-        { count: lowLabel }),
-      y)
-    y += 4
-  }
-
-  if (needsPage(doc, y, 55)) { y = newPage(doc) } else { y += 4 }
-  y = subTitle(doc, s.sec4_2 || '4.2 Detection Metrics', y)
-
-  const metricsBody = [
-    [s.totalCasesLabel || 'Total Cases / Alerts',     totalCasesStr],
-    [s.openCasesLabel  || 'Open Cases',               num(openCases.length)],
-    [s.critCasesLabel  || 'Critical Cases',           num(critCases.length)],
-    [s.highCasesLabel  || 'High Severity Cases',      num(highCases.length)],
-    [s.medCasesLabel   || 'Medium Severity Cases',    num(mediumTotal)],
-    [s.lowCasesLabel   || 'Low Severity Cases',       typeof lowCount === 'number' ? num(lowCount) : lowCount],
-    [s.openRate        || 'Open Rate',                pct(openCases.length, cases.length)],
-    [s.activeSensorsLabel || 'Active Sensors / Sources',
-     i(s.sensorsOf || '{active} of {total}', { active: activeConn.length, total: connectors.length })],
+  let byY = blockY + 7
+  const leftFields = [
+    { val: pocMeta.clientName,  bold: true,  size: 11 },
+    { val: pocMeta.clientDept,  bold: false, size: 8.5 },
+    { val: pocMeta.clientEmail, bold: false, size: 8 },
   ]
-
-  if (totalGbIngested !== null) {
-    metricsBody.push([s.kpiTotalIngestion || 'Total Ingested (30 days)', gb(totalGbIngested)])
-  }
-  if (avgEntities !== null) {
-    metricsBody.push([s.kpiAvgEntities || 'Generated Alerts', num(avgEntities)])
-  }
-
-  autoTable(doc, {
-    ...tableBase({ tableWidth: 140 }),
-    startY: y,
-    head: [[s.metricCol || 'Metric', s.valueCol || 'Value']],
-    body: metricsBody,
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 100 },
-      1: { cellWidth: 40, halign: 'center' },
-    },
-    didParseCell: (d) => {
-      if (d.section === 'body' && d.column.index === 1) {
-        const row = d.row.index
-        if (row === 2 && critCases.length > 0) d.cell.styles.textColor = C.red
-        if (row === 3 && highCases.length > 0) d.cell.styles.textColor = C.orange
-      }
-    },
-  })
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 5 — MITRE ATT&CK COVERAGE
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 5, s.sec5 || 'MITRE ATT&CK Coverage Analysis', y)
-  y = subTitle(doc, s.sec5_1 || '5.1 Detected Tactic Mapping', y)
-
-  if (mitrRecs.length === 0) {
-    y = infoNote(doc, s.noMitre || 'No MITRE ATT&CK correlations derived from the current case set.', y)
-    y += 4
-  } else {
-    autoTable(doc, {
-      ...tableBase(),
-      startY: y,
-      head: [[s.mitreId || 'ID', s.mitreTactic || 'Tactic', s.mitreTechs || 'Detected Techniques', s.mitreCoverage || 'Coverage']],
-      body: ALL_TACTICS.map(tactic => {
-        const hits     = mitrRecs.filter(r => r.mitre?.tactic?.id === tactic.id)
-        const techList = hits.map(r => r.mitre?.technique?.id).filter(Boolean).join(', ') || '—'
-        return [tactic.id, tactic.name, techList, hits.length > 0 ? s.detected || 'Detected' : s.notDetected || 'Not Detected']
-      }),
-      columnStyles: {
-        0: { cellWidth: 22, fontStyle: 'bold' },
-        1: { cellWidth: 55 },
-        2: { cellWidth: 75 },
-        3: { cellWidth: CW - 152, halign: 'center' },
-      },
-      didParseCell: (d) => {
-        if (d.section === 'body' && d.column.index === 3) {
-          d.cell.styles.textColor = d.cell.raw === (s.detected || 'Detected') ? C.green : C.muted
-          d.cell.styles.fontStyle = d.cell.raw === (s.detected || 'Detected') ? 'bold' : 'normal'
-        }
-      },
-    })
+  for (const f of leftFields) {
+    if (f.val) {
+      doc.setFont('helvetica', f.bold ? 'bold' : 'normal')
+      doc.setFontSize(f.size)
+      doc.setTextColor(...(f.bold ? C.navy : C.muted))
+      doc.text(f.val, 26, byY)
+      byY += f.size * 0.5 + 2
+    }
   }
 
-  y = (doc.lastAutoTable?.finalY ?? y) + 10
-  if (needsPage(doc, y, 40)) { y = newPage(doc) }
-  y = subTitle(doc, s.sec5_2 || '5.2 Coverage Summary', y)
+  // Right col x=114: PREPARED BY
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...C.navy)
+  doc.text(s.blockPreparedBy || 'PREPARED BY', 114, blockY)
+  doc.setDrawColor(...C.navy)
+  doc.setLineWidth(0.3)
+  doc.line(114, blockY + 1.5, 114 + 70, blockY + 1.5)
 
-  const bw = (CW - 8) / 3
-  const bh = 22
+  let rbY = blockY + 7
+  const rightFields = [
+    { val: pocMeta.seName,      bold: true,  size: 11 },
+    { val: pocMeta.partnerName, bold: false, size: 8.5 },
+    { val: pocMeta.seEmail,     bold: false, size: 8 },
+    { val: pocMeta.sePhone,     bold: false, size: 8 },
+  ]
+  for (const f of rightFields) {
+    if (f.val) {
+      doc.setFont('helvetica', f.bold ? 'bold' : 'normal')
+      doc.setFontSize(f.size)
+      doc.setTextColor(...(f.bold ? C.navy : C.muted))
+      doc.text(f.val, 114, rbY)
+      rbY += f.size * 0.5 + 2
+    }
+  }
 
-  ;[
-    { value: `${mitreCovPct}%`, label: s.totalCoverage || 'Total Coverage', bg: C.midBlue, fg: C.white },
-    { value: String(detectedTactics.size), label: s.tacticsDetected || 'Tactics Detected', bg: C.rowAlt, fg: C.navy },
-    { value: String(mitrRecs.length), label: s.techniquesMapped || 'Techniques Mapped', bg: C.rowAlt, fg: C.navy },
-  ].forEach(({ value, label, bg, fg }, idx) => {
-    const bx = ML + idx * (bw + 4)
-    doc.setFillColor(...bg)
-    doc.roundedRect(bx, y, bw, bh, 2, 2, 'F')
+  // 5. Metadata footer at y≈283mm
+  const version  = pocMeta.version || '1.0'
+  const pocStart = fmtDate(pocMeta.pocStartDate)
+  const pocEnd   = fmtDate(pocMeta.pocEndDate)
+  const reportDt = fmtDate(new Date())
+
+  doc.setFontSize(7.5)
+  let fX = 26
+  const footY = 283
+  const footParts = [
+    { label: s.footerVersion    || 'Version',    value: version },
+    { label: s.footerPocPeriod  || 'PoC Period', value: `${pocStart}–${pocEnd}` },
+    { label: s.footerReportDate || 'Report Date', value: reportDt },
+  ]
+  for (let idx = 0; idx < footParts.length; idx++) {
+    if (idx > 0) {
+      doc.setTextColor(...C.muted)
+      doc.setFont('helvetica', 'normal')
+      doc.text('  |  ', fX, footY)
+      fX += doc.getTextWidth('  |  ')
+    }
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(17)
-    doc.setTextColor(...fg)
-    doc.text(value, bx + bw / 2, y + 13, { align: 'center' })
-    doc.setFontSize(7.5)
-    doc.text(label, bx + bw / 2, y + 19, { align: 'center' })
+    doc.setTextColor(...C.navy)
+    doc.text(footParts[idx].label + ' ', fX, footY)
+    fX += doc.getTextWidth(footParts[idx].label + ' ')
     doc.setFont('helvetica', 'normal')
-  })
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 6 — OPERATIONAL ASSESSMENT
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 6, s.sec6 || 'Operational Assessment', y)
-  y = subTitle(doc, s.sec6_1 || '6.1 Incident Response Flow', y)
-  y = infoNote(doc, s.sec6_note || 'Standard incident response methodology validated during the PoC.', y)
-  y += 4
-
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.stepCol || 'Step', s.actionCol || 'Action', s.toolCol || 'Tool']],
-    body: [
-      [s.step1 || '1 — Detection',     s.step1action || 'Alert generated automatically by the platform',        s.step1tool || 'Stellar Cyber AI Engine'],
-      [s.step2 || '2 — Triage',        s.step2action || 'Analyst reviews alert and correlated context',          s.step2tool || 'Stellar Cyber Console'],
-      [s.step3 || '3 — Investigation', s.step3action || 'Timeline analysis and data pivots',                     s.step3tool || 'Security Data Lake'],
-      [s.step4 || '4 — Containment',   s.step4action || 'Host isolation or IP block via integration',            s.step4tool || 'SOAR / EDR / Firewall'],
-      [s.step5 || '5 — Remediation',   s.step5action || 'Cleanup, patch and service restoration',                s.step5tool || 'IT Team'],
-      [s.step6 || '6 — Documentation', s.step6action || 'Case closed with timeline and RCA recorded',            s.step6tool || 'Stellar Cyber Cases'],
-    ],
-    columnStyles: {
-      0: { cellWidth: 42, fontStyle: 'bold' },
-      1: { cellWidth: 95 },
-      2: { cellWidth: CW - 137 },
-    },
-  })
-
-  y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, s.sec6_3 || '6.2 Automation & Playbooks', y)
-  y = bodyText(doc, s.body6_3 || 'The platform supports response automation via configurable playbooks (native SOAR), enabling automatic actions such as: alert enrichment with threat intelligence, team notifications, endpoint isolation, and malicious IP blocking.', y)
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 7 — MEASURED RESULTS
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 7, s.sec7 || 'Measured Results & ROI', y)
-  y = subTitle(doc, s.sec7_1_realMetrics || '7.1 Real PoC Metrics', y)
-  y = infoNote(doc, s.sec7_note || 'All values below are real data obtained from the Stellar Cyber API during the evaluation period.', y)
-  y += 6
-
-  const realMetricsBody = [
-    [s.rmConnCount   || 'Integrated connectors',     num(connectors.length)],
-    [s.rmActiveConn  || 'Active connectors',          `${num(activeConn.length)} (${pct(activeConn.length, connectors.length)})`],
-    [s.rmCaseCount   || 'Cases detected',             totalCasesStr],
-    [s.rmOpenCases   || 'Open cases',                 num(openCases.length)],
-    [s.rmCritCases   || 'Critical cases',             num(critCases.length)],
-    [s.rmMitreCov    || 'MITRE ATT&CK coverage',      `${mitreCovPct}% (${detectedTactics.size} / ${ALL_TACTICS.length} tactics)`],
-  ]
-
-  if (totalGbIngested !== null) {
-    realMetricsBody.push([s.rmIngestion || 'Total ingested (30 days)', gb(totalGbIngested)])
+    doc.setTextColor(...C.muted)
+    doc.text(footParts[idx].value, fX, footY)
+    fX += doc.getTextWidth(footParts[idx].value)
   }
-  if (totalEventsIngested !== null) {
-    realMetricsBody.push([s.rmEvents   || 'Total events ingested',     num(totalEventsIngested)])
-  }
-  if (avgEntities !== null) {
-    realMetricsBody.push([s.rmEntities || 'Generated Alerts', num(avgEntities)])
-  }
+}
 
-  autoTable(doc, {
-    ...tableBase({ tableWidth: 148 }),
-    startY: y,
-    head: [[s.realMetricLabel || 'Metric', s.realMetricValue || 'Measured Value']],
-    body: realMetricsBody,
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 100 },
-      1: { cellWidth: 48, halign: 'center', textColor: C.blue, fontStyle: 'bold' },
-    },
-  })
-
-  y = (doc.lastAutoTable?.finalY ?? y) + 10
-  y = subTitle(doc, s.sec7_2 || '7.2 Expected Qualitative Benefits', y)
-
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.benefitCol || 'Benefit', s.impactCol || 'Impact']],
-    body: [
-      [s.ben1 || 'Unified Visibility',       s.ben1impact || 'Correlates data across the entire attack surface in a single platform'],
-      [s.ben2 || 'Alert Fatigue Reduction',  s.ben2impact || 'AI/ML prioritizes and groups alerts, reducing SOC operational noise'],
-      [s.ben3 || 'Compliance & Audit',       s.ben3impact || 'Centralized logs facilitate audits and regulatory requirements'],
-      [s.ben4 || 'Scalability',              s.ben4impact || 'Cloud-native architecture scales automatically with environment growth'],
-      [s.ben5 || 'Team Consolidation',       s.ben5impact || 'One platform replaces multiple tools and specialized teams'],
-    ],
-    columnStyles: {
-      0: { cellWidth: 68, fontStyle: 'bold' },
-      1: { cellWidth: CW - 68 },
-    },
-  })
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 8 — RISKS, GAPS AND RECOMMENDATIONS
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 8, s.sec8 || 'Risks, Gaps & Recommendations', y)
-  y = subTitle(doc, s.sec8_1 || '8.1 Identified Risks & Operational Gaps', y)
-
-  if (opRecs.length === 0) {
-    y = infoNote(doc, s.noRisks || 'No risks identified during the evaluation period.', y)
-    y += 6
-  } else {
-    autoTable(doc, {
-      ...tableCompact(),
-      startY: y,
-      head: [[s.priorityCol || 'Priority', s.riskCol || 'Risk / Gap', s.descCol || 'Description']],
-      body: opRecs.slice(0, 18).map(r => [
-        (r.priority || '—').toUpperCase(),
-        trunc(r.title || '—', 50),
-        trunc(r.description || '—', 65),
-      ]),
-      columnStyles: {
-        0: { cellWidth: 24, halign: 'center' },
-        1: { cellWidth: 65 },
-        2: { cellWidth: CW - 89 },
-      },
-      didParseCell: (d) => {
-        if (d.section === 'body' && d.column.index === 0) {
-          const p = String(d.cell.raw).toLowerCase()
-          d.cell.styles.textColor = p === 'critical' ? C.red : p === 'warning' ? C.orange : C.green
-          d.cell.styles.fontStyle = 'bold'
-        }
-      },
-    })
-    y = (doc.lastAutoTable?.finalY ?? y) + 10
-  }
-
-  if (mitrRecs.length > 0) {
-    if (needsPage(doc, y, 60)) { y = newPage(doc) }
-    y = subTitle(doc, s.sec8_2 || '8.2 MITRE ATT&CK Technical Recommendations', y)
-
-    autoTable(doc, {
-      ...tableCompact({ styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak', textColor: C.text, lineColor: [210, 210, 210], lineWidth: 0.1 } }),
-      startY: y,
-      head: [[s.techCol || 'Technique', s.tacticCol || 'Tactic', s.casesCol || 'Cases', s.mitigationCol || 'Recommended Mitigation']],
-      body: mitrRecs.slice(0, 15).map(r => [
-        trunc(`${r.mitre?.technique?.id || ''} — ${r.mitre?.technique?.name || '—'}`, 50),
-        r.mitre?.tactic?.name || '—',
-        r.mitre?.affectedCases != null ? num(r.mitre.affectedCases) : '—',
-        trunc(r.mitre?.mitigation || r.description || '—', 80),
-      ]),
-      columnStyles: {
-        0: { cellWidth: 55, fontStyle: 'bold' },
-        1: { cellWidth: 38 },
-        2: { cellWidth: 14, halign: 'center' },
-        3: { cellWidth: CW - 107 },
-      },
-    })
-    y = (doc.lastAutoTable?.finalY ?? y) + 10
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 9 — NEXT STEPS
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  if (needsPage(doc, y, 80)) { y = newPage(doc) } else { y += 6 }
-  y = sectionTitle(doc, 9, s.sec9 || 'Next Steps', y)
-
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.nextNum || '#', s.nextAction || 'Action', s.nextOwner || 'Owner', s.nextDeadline || 'Deadline']],
-    body: [
-      ['1', s.next1 || 'Formal PoC approval by technical leadership',            clientDisplay,                      s.days30 || '30 days'],
-      ['2', s.next2 || 'Define scope and architecture for production deployment', `${seDisplay} / ${clientDisplay}`, s.days30 || '30 days'],
-      ['3', s.next3 || 'Integrate all production log sources',                   clientDisplay,                      s.days60 || '60 days'],
-      ['4', s.next4 || 'Configure response playbooks and automations',           seDisplay,                          s.days60 || '60 days'],
-      ['5', s.next5 || 'SOC team training on Stellar Cyber platform',            seDisplay,                          s.days60 || '60 days'],
-      ['6', s.next6 || 'Review MITRE coverage and tune detection rules',         seDisplay,                          s.days90 || '90 days'],
-      ['7', s.next7 || 'Present consolidated results to executive board',        clientDisplay,                      s.days90 || '90 days'],
-    ],
-    columnStyles: {
-      0: { cellWidth: 8, halign: 'center' },
-      1: { cellWidth: 98 },
-      2: { cellWidth: 50 },
-      3: { cellWidth: CW - 156, halign: 'center' },
-    },
-  })
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 10 — CONCLUSION
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  y = newPage(doc)
-  y = sectionTitle(doc, 10, s.sec10 || 'Conclusion', y)
-  y = subTitle(doc, s.sec10_1 || '10.1 Final Scorecard', y)
-  y = infoNote(doc, s.scoreNote || 'Scores based on real API data only. N/A = no data available.', y)
-  y += 4
-
-  // Build scorecard from real data only
-  const scoreItems = [
-    {
-      item: s.score1 || 'Detection Capability',
-      score: totalCasesCount > 0
-        ? (critCases.length > 0 ? s.scoreExcellent || 'Excellent' : s.scoreGood || 'Good')
-        : s.scoreFair || 'Fair',
-    },
-    {
-      item: s.score2 || 'Source Integration',
-      score: connectors.length >= 5
-        ? s.scoreExcellent || 'Excellent'
-        : connectors.length >= 2
-          ? s.scoreGood || 'Good'
-          : s.scoreFair || 'Fair',
-    },
-    {
-      item: s.score3 || 'MITRE ATT&CK Coverage',
-      score: mitreCovPct >= 40
-        ? s.scoreExcellent || 'Excellent'
-        : mitreCovPct >= 20
-          ? s.scoreGood || 'Good'
-          : s.scoreFair || 'Fair',
-    },
-    {
-      item: s.score6 || 'Visibility & Correlation',
-      score: totalCasesCount > 0 && connectors.length > 0
-        ? s.scoreExcellent || 'Excellent'
-        : s.scoreGood || 'Good',
-    },
-  ]
-
-  if (totalGbIngested !== null) {
-    scoreItems.push({
-      item:  s.scoreIngestion || 'Data Ingestion',
-      score: totalGbIngested > 100
-        ? s.scoreExcellent || 'Excellent'
-        : totalGbIngested > 10
-          ? s.scoreGood || 'Good'
-          : s.scoreFair || 'Fair',
-    })
-  }
-
-  if (activeConn.length > 0) {
-    const activePct = activeConn.length / Math.max(connectors.length, 1)
-    scoreItems.push({
-      item:  s.scoreActiveSensors || 'Active Sensor Rate',
-      score: activePct >= 0.8
-        ? s.scoreExcellent || 'Excellent'
-        : activePct >= 0.5
-          ? s.scoreGood || 'Good'
-          : s.scoreFair || 'Fair',
-    })
-  }
-
-  autoTable(doc, {
-    ...tableBase({ tableWidth: 140 }),
-    startY: y,
-    head: [[s.scoreCriterion || 'Evaluation Criterion', s.scoreRating || 'Rating']],
-    body: scoreItems.map(si => [si.item, si.score]),
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 100 },
-      1: { cellWidth: 40, halign: 'center' },
-    },
-    didParseCell: (d) => {
-      if (d.section === 'body' && d.column.index === 1) {
-        const v = d.cell.raw
-        const excellent = s.scoreExcellent || 'Excellent'
-        const good      = s.scoreGood      || 'Good'
-        d.cell.styles.textColor = v === excellent ? C.green : v === good ? C.blue : C.orange
-        d.cell.styles.fontStyle = 'bold'
-      }
-    },
-  })
-
-  y = (doc.lastAutoTable?.finalY ?? y) + 12
-
-  doc.setFillColor(...verdictColor)
-  doc.roundedRect(ML, y, CW, 18, 3, 3, 'F')
+// ─── KPI card helper ──────────────────────────────────────────────────────────
+function drawKpiCard(doc, x, y, w, h, value, label, color) {
+  doc.setFillColor(...color)
+  doc.roundedRect(x, y, w, h, 2, 2, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...C.white)
-  doc.text(`${s.finalVerdictLabel || 'Final Verdict'}: ${verdict}`, PW / 2, y + 11, { align: 'center' })
+  doc.text(String(value), x + w / 2, y + h * 0.52, { align: 'center' })
   doc.setFont('helvetica', 'normal')
-  y += 26
+  doc.setFontSize(6)
+  doc.text(label, x + w / 2, y + h * 0.78, { align: 'center' })
+}
 
-  y = bodyText(doc, i(
-    s.body10 || 'Based on the PoC results ({period}), the Stellar Cyber Open XDR platform demonstrated robust detection capabilities with {mitrePct}% MITRE ATT&CK coverage and {caseCount} cases detected for {client}.',
-    { period, mitrePct: mitreCovPct, caseCount: totalCasesStr, client: clientDisplay }
-  ), y)
-  y += 8
+// ─── Chart title helper ───────────────────────────────────────────────────────
+function drawChartTitle(doc, text, x, y, w) {
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...C.navy)
+  doc.text(text, x + w / 2, y, { align: 'center' })
+}
 
-  // ─── 1.3 SE Comments (moved here to compose the final verdict page) ────────
-  const commentsText = (pocMeta.comments || '').trim()
-  if (commentsText) {
-    if (needsPage(doc, y, 30)) { y = newPage(doc) }
-    y = subTitle(doc, s.sec1_3 || '1.3 SE Comments & Notes', y)
-    y = bodyText(doc, commentsText, y)
-    y += 8
+// ─── Main export ──────────────────────────────────────────────────────────────
+export function generatePDFReport({
+  auth,
+  cases = [],
+  lowCount = 0,
+  mediumTotal = 0,
+  connectors = [],
+  assets = [],
+  recommendations = [],
+  ingestionBySensor = [],
+  ingestionByConnector = [],
+  generatedAt = new Date(),
+  pocMeta = {},
+  locale = 'pt',
+  s = {},
+}) {
+  _meta = pocMeta
+  _s    = s
+
+  // ── Derived counts ──────────────────────────────────────────────────────────
+  const critCases  = cases.filter(c => (c.severity || '').toLowerCase() === 'critical')
+  const highCases  = cases.filter(c => (c.severity || '').toLowerCase() === 'high')
+  const openCases  = cases.filter(c => {
+    const st = (c.status || '').toLowerCase()
+    return st === 'open' || st === 'new'
+  })
+  const activeConn = connectors.filter(c =>
+    c.status === 'active' || c.enabled === true || c.active === true
+  )
+
+  // Avg entities/day from assets[] shape: [{ date, entity_count }]
+  // entity_count = daily active entities (hosts/users/devices), NOT alerts
+  const avgEntities = (() => {
+    if (!assets || assets.length === 0) return null
+    const valid = assets.filter(a => a.entity_count != null && a.entity_count > 0)
+    if (!valid.length) return null
+    const avg = valid.reduce((sum, a) => sum + Number(a.entity_count), 0) / valid.length
+    return Math.round(avg).toLocaleString('pt-BR')
+  })()
+
+  // Total displayed (crit + high + mediumTotal + lowCount)
+  const totalCasesCount = critCases.length + highCases.length + mediumTotal + lowCount
+  const totalCasesStr   = fmtNum(totalCasesCount)
+
+  // MITRE coverage
+  const detectedTactics = new Set()
+  for (const rec of recommendations) {
+    if (rec.mitre && rec.mitre.tactic) detectedTactics.add(rec.mitre.tactic)
+  }
+  for (const c of cases) {
+    if (c.mitreTactic) detectedTactics.add(c.mitreTactic)
+    if (c.tactic)      detectedTactics.add(c.tactic)
+  }
+  const mitreCovPct = Math.round((detectedTactics.size / ALL_TACTICS.length) * 100)
+
+  // Connectors by category
+  const connByCategory = {}
+  for (const conn of connectors) {
+    const cat = conn.category || conn.type || s.connectorCatOther || 'Other'
+    connByCategory[cat] = (connByCategory[cat] || 0) + 1
   }
 
-  // Signatures
-  if (needsPage(doc, y, 70)) { y = newPage(doc) }
-  y = subTitle(doc, s.sec10_2 || '10.2 Signatures', y)
+  // Recommendations split
+  const opRecs   = recommendations.filter(r => r.category !== 'MITRE ATT&CK')
+  const mitrRecs = recommendations.filter(r => r.category === 'MITRE ATT&CK')
 
-  doc.setDrawColor(...C.muted)
-  doc.setLineWidth(0.3)
+  // Verdict
+  const verdict = pocMeta.verdict || ''
+  const verdictColor = (() => {
+    const v = verdict.toLowerCase()
+    if (v === 'approved' || v === 'aprovado' || v === 'go') return C.green
+    if (v === 'conditional' || v === 'condicional') return C.orange
+    return C.red
+  })()
 
-  // ── SE / Partner signature (left column) ──
-  doc.line(ML, y + 20, ML + 82, y + 20)
+  // Ingestion total
+  const totalIngest = ingestionBySensor.reduce((sum, r) => sum + (r.bytes || r.size || 0), 0)
+
+  // ── Create PDF ──────────────────────────────────────────────────────────────
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...C.text)
-  doc.text(seDisplay, ML, y + 25)
-  doc.setFontSize(7.5)
-  doc.setTextColor(...C.muted)
-  doc.text(`${s.seRole || 'Systems Engineer'} — ${partnerDisplay}`, ML, y + 31)
-  let seY = y + 37
-  if (seEmail)      { doc.text(trunc(seEmail, 44), ML, seY);       seY += 6 }
-  if (sePhone)      { doc.text(trunc(sePhone, 44), ML, seY);       seY += 6 }
-  if (partnerEmail) { doc.text(trunc(partnerEmail, 44), ML, seY);  seY += 6 }
-  if (partnerSite)  { doc.text(trunc(partnerSite, 44), ML, seY); }
 
-  // ── Client signature (right column) ──
-  doc.line(PW - MR - 82, y + 20, PW - MR, y + 20)
-  doc.setFontSize(8.5)
-  doc.setTextColor(...C.text)
-  doc.text(clientDisplay, PW - MR - 82, y + 25)
-  doc.setFontSize(7.5)
-  doc.setTextColor(...C.muted)
-  let cliY = y + 31
-  doc.text(clientDept || '—', PW - MR - 82, cliY)
-  cliY += 6
-  if (clientEmail) { doc.text(trunc(clientEmail, 44), PW - MR - 82, cliY); cliY += 6 }
+  // ════════════════════════════════════════════════════════════════════════════
+  // COVER PAGE
+  // ════════════════════════════════════════════════════════════════════════════
+  drawCover(doc, pocMeta, s)
 
-  // ── Analysts / Stakeholders ──
-  const analystSigList = (analysts || []).filter(Boolean)
-  if (analystSigList.length > 0) {
-    const afterSigs = Math.max(seY, cliY) + 12
-    if (needsPage(doc, afterSigs, 18)) { y = newPage(doc) } else { y = afterSigs }
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 1 — Executive Summary
+  // ════════════════════════════════════════════════════════════════════════════
+  let y = newPage(doc)
+  y = sectionTitle(doc, s.sec1 || '1. Executive Summary', y)
+
+  // ── 1.1 KPI Cards ──────────────────────────────────────────────────────────
+  y = subTitle(doc, s.sub1_1 || '1.1 Key Performance Indicators', y)
+
+  const cardW   = (CW - 10) / 6
+  const cardH   = 20
+  const cardGap = 2
+  const kpiCards = [
+    { label: s.kpiCasesDetected || 'Cases / Alerts',       value: totalCasesStr,                              color: C.blue    },
+    { label: s.kpiCritCases     || 'Critical',             value: String(critCases.length),                   color: C.red     },
+    { label: s.kpiOpenCases     || 'Open Cases',           value: String(openCases.length),                   color: C.orange  },
+    { label: s.kpiAvgEntities   || 'Avg. Entities / Day',  value: avgEntities || '—',                    color: C.navy    },
+    { label: s.kpiActiveConn    || 'Active Sources',       value: `${activeConn.length}/${connectors.length}`,color: C.green   },
+    { label: s.kpiMitreCov      || 'MITRE Coverage',       value: `${mitreCovPct}%`,                          color: C.midBlue },
+  ]
+  for (let k = 0; k < kpiCards.length; k++) {
+    const kx = ML + k * (cardW + cardGap)
+    drawKpiCard(doc, kx, y, cardW, cardH, kpiCards[k].value, kpiCards[k].label, kpiCards[k].color)
+  }
+  y += cardH + 5
+
+  // ── 2×2 Chart dashboard ────────────────────────────────────────────────────
+  const chartW = (CW - 6) / 2
+  const chartH = 62
+
+  // Row 1: Severity donut (left) | Status donut (right)
+  const sevData  = [critCases.length, highCases.length, mediumTotal, lowCount]
+  const sevTotal = sevData.reduce((a, b) => a + b, 0)
+
+  const c1x = ML
+  const c1y = y + 5
+  drawChartTitle(doc, s.chartSeverity || 'Case Severity', c1x, c1y - 1, chartW)
+  if (sevTotal > 0) {
+    const sevPng = renderChartPNG(
+      () => donutChart(
+        [
+          s.sevCritical || 'Critical',
+          s.sevHigh     || 'High',
+          s.sevMedium   || 'Medium',
+          s.sevLow      || 'Low',
+        ],
+        sevData,
+        [C.red, C.orange, C.yellow, C.green]
+      ),
+      chartW, chartH
+    )
+    if (sevPng) {
+      doc.addImage(sevPng, 'PNG', c1x, c1y, chartW, chartH)
+      const cx1 = c1x + chartW / 2
+      const cy1 = c1y + chartH * 0.37
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.setTextColor(...C.navy)
+      doc.text(fmtNum(sevTotal), cx1, cy1, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C.muted)
+      doc.text(s.totalLabel || 'total', cx1, cy1 + 4, { align: 'center' })
+    }
+  }
+
+  // Status donut — uses cases.length (crit+high+top100med displayed), NOT totalCasesCount
+  const c2x = ML + chartW + 6
+  const c2y = y + 5
+  drawChartTitle(doc, s.chartStatus || 'Case Status', c2x, c2y - 1, chartW)
+  if (cases.length > 0) {
+    const closedCount = cases.length - openCases.length
+    const statusPng = renderChartPNG(
+      () => donutChart(
+        [s.statusOpen || 'Open', s.statusClosed || 'Analyzed'],
+        [openCases.length, closedCount],
+        [C.orange, C.midBlue]
+      ),
+      chartW, chartH
+    )
+    if (statusPng) {
+      doc.addImage(statusPng, 'PNG', c2x, c2y, chartW, chartH)
+      const cx2 = c2x + chartW / 2
+      const cy2 = c2y + chartH * 0.37
+      const openPct2 = cases.length > 0 ? Math.round((openCases.length / cases.length) * 100) : 0
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(...C.orange)
+      doc.text(fmtNum(openCases.length), cx2, cy2, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C.muted)
+      doc.text(`open · ${openPct2}%`, cx2, cy2 + 4, { align: 'center' })
+    }
+  }
+  y += chartH + 8
+
+  // Row 2: MITRE gauge (left) | Sources by category donut (right)
+  const c3x = ML
+  const c3y = y + 5
+  drawChartTitle(doc, s.chartMitre || 'MITRE Coverage', c3x, c3y - 1, chartW)
+  const gaugePng = renderChartPNG(
+    () => gaugeChart(mitreCovPct, C.blue),
+    chartW, chartH
+  )
+  if (gaugePng) {
+    doc.addImage(gaugePng, 'PNG', c3x, c3y, chartW, chartH)
+    const cx3 = c3x + chartW / 2
+    const cy3 = c3y + chartH * 0.45
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...C.navy)
-    doc.text(s.stakeholders || 'Stakeholders', ML, y)
+    doc.setFontSize(14)
+    doc.setTextColor(...C.blue)
+    doc.text(`${mitreCovPct}%`, cx3, cy3, { align: 'center' })
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(...C.text)
-    doc.text(analystSigList.join('   ·   '), ML, y + 7)
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C.muted)
+    doc.text(s.chartMitreLabel || 'tactic coverage', cx3, cy3 + 5, { align: 'center' })
   }
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // APPENDIX A — GLOSSARY
-  // ══════════════════════════════════════════════════════════════════════════════
+  const c4x = ML + chartW + 6
+  const c4y = y + 5
+  drawChartTitle(doc, s.chartSources || 'Sources by Category', c4x, c4y - 1, chartW)
+  if (connectors.length > 0) {
+    const catLabels  = Object.keys(connByCategory)
+    const catData    = Object.values(connByCategory)
+    const catPalette = [C.blue, C.midBlue, C.navy, C.green, C.orange, C.yellow, C.red]
+    const srcPng = renderChartPNG(
+      () => donutChart(catLabels, catData, catPalette.slice(0, catLabels.length)),
+      chartW, chartH
+    )
+    if (srcPng) {
+      doc.addImage(srcPng, 'PNG', c4x, c4y, chartW, chartH)
+      const cx4 = c4x + chartW / 2
+      const cy4 = c4y + chartH * 0.37
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.setTextColor(...C.navy)
+      doc.text(fmtNum(connectors.length), cx4, cy4, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C.muted)
+      doc.text(s.sourcesLabel || 'sources', cx4, cy4 + 4, { align: 'center' })
+    }
+  }
+  y += chartH + 8
 
+  // ── KPI Summary Table ───────────────────────────────────────────────────────
+  y = needsPage(doc, y, 30)
+  const kpiRows = [
+    [
+      s.kpiCasesDetected || 'Cases / Alerts',
+      totalCasesStr,
+      `${critCases.length} ${s.critLabel || 'critical'}, ${highCases.length} ${s.highLabel || 'high'}`,
+    ],
+    [
+      s.kpiAvgEntities || 'Avg. Entities / Day',
+      avgEntities || '—',
+      s.kpiEntitiesNote || 'Daily active entities (hosts / users / devices) — entity_count field',
+    ],
+    [
+      s.kpiActiveConn || 'Active Sources',
+      `${activeConn.length} / ${connectors.length}`,
+      s.kpiConnNote || 'Active data sources connected',
+    ],
+    [
+      s.kpiMitreCov || 'MITRE Coverage',
+      `${mitreCovPct}% (${detectedTactics.size}/${ALL_TACTICS.length})`,
+      s.kpiMitreNote || 'Tactics detected out of 14',
+    ],
+    [
+      s.kpiOpenCases || 'Open Cases',
+      String(openCases.length),
+      pct(openCases.length, totalCasesCount) + ` ${s.ofTotal || 'of total'}`,
+    ],
+  ]
+  y = tableBase(doc,
+    [s.kpiMetric || 'Metric', s.kpiValue || 'Value', s.kpiNotes || 'Notes'],
+    kpiRows, y
+  )
+
+  // ── 1.2 Context and Objectives ──────────────────────────────────────────────
+  y = needsPage(doc, y, 20)
+  y = subTitle(doc, s.sub1_2 || '1.2 Context and Objectives', y)
+  const body1_1 = (
+    s.body1_1 ||
+    'This Proof of Concept evaluated Stellar Cyber’s Open XDR platform against the security environment of {clientName}. The assessment covered {pocStartDate} to {pocEndDate}.'
+  )
+    .replace('{clientName}',   pocMeta.clientName || s.clientNamePlaceholder || 'the client')
+    .replace('{pocStartDate}', fmtDate(pocMeta.pocStartDate))
+    .replace('{pocEndDate}',   fmtDate(pocMeta.pocEndDate))
+  y = bodyText(doc, body1_1, y)
+  y += 2
+
+  if (pocMeta.successCriteria && pocMeta.successCriteria.length > 0) {
+    y = needsPage(doc, y, 12)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(...C.navy)
+    doc.text(s.successCriteriaTitle || 'Success Criteria:', ML, y)
+    y += 5
+    for (const crit of pocMeta.successCriteria) {
+      y = needsPage(doc, y, 6)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(...C.text)
+      doc.text(`• ${crit}`, ML + 3, y)
+      y += 4.5
+    }
+    y += 2
+  }
+
+  const body1_2 = s.body1_2 ||
+    'The primary objective was to validate detection capabilities, response workflows, and integration breadth across the customer’s existing security stack.'
+  y = bodyText(doc, body1_2, y)
+  y += 4
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ARCHITECTURE PAGE
+  // ════════════════════════════════════════════════════════════════════════════
   y = newPage(doc)
-  y = appendixTitle(doc, s.appA || 'Appendix A — Glossary', y)
+  y = appendixTitle(doc, s.secArch || 'Arquitetura Mínima Sugerida', y)
+  if (pocMeta.architectureImage) {
+    try {
+      const imgData = pocMeta.architectureImage
+      const maxW = CW
+      const maxH = 160
+      const imgW = pocMeta.architectureImageWidth  || maxW
+      const imgH = pocMeta.architectureImageHeight || maxH
+      const ratio = Math.min(maxW / imgW, maxH / imgH)
+      const drawW = imgW * ratio
+      const drawH = imgH * ratio
+      const drawX = ML + (CW - drawW) / 2
+      doc.addImage(imgData, 'PNG', drawX, y, drawW, drawH)
+      y += drawH + 6
+    } catch (_e) {
+      y = infoNote(doc, s.archImageError || 'Architecture image could not be rendered.', y)
+      y += 4
+    }
+  } else {
+    y = infoNote(
+      doc,
+      s.noArchImage || 'No architecture diagram provided. Add an image to pocMeta.architectureImage.',
+      y
+    )
+    y += 4
+  }
 
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.glossTerm || 'Term', s.glossDef || 'Definition']],
-    body: [
-      ['Open XDR',          s.gOpenXDR || 'Extended Detection and Response integrating multiple security data sources'],
-      ['SIEM',              s.gSIEM    || 'Security Information and Event Management — centralized log correlation'],
-      ['MITRE ATT\u0026CK', s.gMITRE  || 'Knowledge framework of adversarial tactics and techniques based on real observations'],
-      ['SOC',               s.gSOC    || 'Security Operations Center'],
-      ['MTTD',              s.gMTTD   || 'Mean Time to Detect — average time between occurrence and detection'],
-      ['MTTR',              s.gMTTR   || 'Mean Time to Respond — average time between detection and containment'],
-      ['PoC',               s.gPoC    || 'Proof of Concept — technology validation exercise'],
-      ['TCO',               s.gTCO    || 'Total Cost of Ownership'],
-      ['SOAR',              s.gSOAR   || 'Security Orchestration, Automation and Response'],
-      ['IoC',               s.gIoC    || 'Indicator of Compromise — artifact indicating system compromise'],
-      ['TTP',               s.gTTP    || 'Tactics, Techniques and Procedures — adversarial behavior set'],
-    ],
-    columnStyles: {
-      0: { cellWidth: 38, fontStyle: 'bold' },
-      1: { cellWidth: CW - 38 },
-    },
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 2 — Environment & Methodology
+  // ════════════════════════════════════════════════════════════════════════════
+  y = newPage(doc)
+  y = sectionTitle(doc, s.sec2 || '2. Evaluated Environment & Methodology', y)
+
+  // 2.1 Environment table (WITHOUT tenant ID)
+  y = subTitle(doc, s.sub2_1 || '2.1 Evaluated Environment', y)
+  const env2Rows = [
+    [s.envClient   || 'Client',           pocMeta.clientName      || '—'],
+    [s.envDept     || 'Department',       pocMeta.clientDept      || '—'],
+    [s.envSE       || 'SE / Analyst',     pocMeta.seName          || '—'],
+    [s.envPartner  || 'Partner',          pocMeta.partnerName     || '—'],
+    [s.envStart    || 'PoC Start',        fmtDate(pocMeta.pocStartDate)],
+    [s.envEnd      || 'PoC End',          fmtDate(pocMeta.pocEndDate)],
+    [s.envVersion  || 'Platform Version', pocMeta.platformVersion || '—'],
+    [s.envRegion   || 'Region',           pocMeta.region          || '—'],
+  ]
+  y = tableBase(doc,
+    [s.envParam || 'Parameter', s.envValue || 'Value'],
+    env2Rows, y,
+    { columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: CW - 55 } } }
+  )
+
+  // 2.2 Methodology Phases
+  y = needsPage(doc, y, 20)
+  y = subTitle(doc, s.sub2_2 || '2.2 Methodology Phases', y)
+  const methRows = s.methodologyPhases || [
+    ['1', s.phase1 || 'Kickoff & Scoping',     s.phase1desc || 'Define success criteria, environments and integrations.'],
+    ['2', s.phase2 || 'Deployment',             s.phase2desc || 'Install sensors, configure connectors, validate data flow.'],
+    ['3', s.phase3 || 'Detection Validation',   s.phase3desc || 'Execute attack simulations and verify detections.'],
+    ['4', s.phase4 || 'Response & Automation',  s.phase4desc || 'Validate playbooks, SOAR workflows and response times.'],
+    ['5', s.phase5 || 'Reporting & Debrief',    s.phase5desc || 'Analyze results, identify gaps and present findings.'],
+  ]
+  y = tableBase(doc,
+    [s.phaseNum || '#', s.phaseName || 'Phase', s.phaseDesc || 'Description'],
+    methRows, y,
+    { columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 45 }, 2: { cellWidth: CW - 55 } } }
+  )
+
+  // 2.3 Success Criteria
+  y = needsPage(doc, y, 20)
+  y = subTitle(doc, s.sub2_3 || '2.3 Success Criteria', y)
+  const scBase = s.successCriteriaRows || [
+    [s.sc1 || 'Detection Rate',         s.sc1target || '≥ 85% of simulated attacks detected'],
+    [s.sc2 || 'Time to Detect (MTTD)',  s.sc2target || '< 5 minutes average'],
+    [s.sc3 || 'Integration Coverage',   s.sc3target || '≥ 80% of existing tools integrated'],
+    [s.sc4 || 'False Positive Rate',    s.sc4target || '< 10% of total alerts'],
+  ]
+  y = tableBase(doc,
+    [s.scCriteria || 'Criterion', s.scTarget || 'Target'],
+    scBase, y,
+    { columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: CW - 60 } } }
+  )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 3 — Data Sources
+  // ════════════════════════════════════════════════════════════════════════════
+  y = needsPage(doc, y, 20)
+  y = sectionTitle(doc, s.sec3 || '3. Data Sources & Ingestion', y)
+
+  // 3.1 Stat cards (4 boxes)
+  y = subTitle(doc, s.sub3_1 || '3.1 Ingestion Overview', y)
+  const statCardW = (CW - 9) / 4
+  const statCardH = 18
+  const statCards = [
+    { label: s.statTotalSources  || 'Total Sources',  value: fmtNum(connectors.length),       color: C.navy    },
+    { label: s.statActiveSources || 'Active Sources', value: fmtNum(activeConn.length),       color: C.green   },
+    { label: s.statTotalIngested || 'Total Ingested', value: fmtGB(totalIngest),              color: C.blue    },
+    { label: s.statSensorTypes   || 'Sensor Types',   value: fmtNum(ingestionBySensor.length),color: C.midBlue },
+  ]
+  for (let k = 0; k < statCards.length; k++) {
+    const sx = ML + k * (statCardW + 3)
+    drawKpiCard(doc, sx, y, statCardW, statCardH, statCards[k].value, statCards[k].label, statCards[k].color)
+  }
+  y += statCardH + 5
+
+  // 3.2 Connectors table
+  y = needsPage(doc, y, 20)
+  y = subTitle(doc, s.sub3_2 || '3.2 Connected Sources', y)
+  if (connectors.length === 0) {
+    y = infoNote(doc, s.noConnectors || 'No connectors data available.', y)
+    y += 4
+  } else {
+    const connRows = connectors.map(c => [
+      trunc(c.name || c.id || '—', 35),
+      c.type || c.category || '—',
+      c.status || (c.enabled ? 'active' : 'inactive'),
+      fmtDate(c.lastSeen || c.last_seen),
+      fmtGB(c.bytesIngested || c.bytes_ingested || c.totalBytes || 0),
+    ])
+    y = tableCompact(doc,
+      [s.connName || 'Name', s.connType || 'Type', s.connStatus || 'Status', s.connLastSeen || 'Last Seen', s.connIngested || 'Ingested'],
+      connRows, y
+    )
+  }
+
+  // 3.3 Data ingestion detail (conditional)
+  if (ingestionBySensor.length > 0 || ingestionByConnector.length > 0) {
+    y = needsPage(doc, y, 20)
+    y = subTitle(doc, s.sub3_3 || '3.3 Data Ingestion Detail', y)
+    if (ingestionBySensor.length > 0) {
+      const sensorRows = ingestionBySensor.map(r => [
+        trunc(r.name || r.sensor || '—', 40),
+        r.type || '—',
+        fmtGB(r.bytes || r.size || 0),
+        fmtNum(r.events || r.eventCount || 0),
+      ])
+      y = tableCompact(doc,
+        [s.sensorName || 'Sensor', s.sensorType || 'Type', s.sensorBytes || 'Volume', s.sensorEvents || 'Events'],
+        sensorRows, y
+      )
+    }
+    if (ingestionByConnector.length > 0) {
+      y = needsPage(doc, y, 20)
+      const connIngRows = ingestionByConnector.map(r => [
+        trunc(r.name || r.connector || '—', 40),
+        fmtGB(r.bytes || r.size || 0),
+        fmtNum(r.events || r.eventCount || 0),
+      ])
+      y = tableCompact(doc,
+        [s.connIngName || 'Connector', s.connIngBytes || 'Volume', s.connIngEvents || 'Events'],
+        connIngRows, y
+      )
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 4 — Detection & Response
+  // ════════════════════════════════════════════════════════════════════════════
+  y = newPage(doc)
+  y = sectionTitle(doc, s.sec4 || '4. Detection & Response', y)
+
+  if (cases.length === 0) {
+    y = infoNote(doc, s.noCases || 'No cases data available for this PoC period.', y)
+    y += 4
+  } else {
+    // ── Timeline chart (full width CW × 45mm) ──────────────────────────────
+    const tlData = buildTimelineData(cases, pocMeta.pocStartDate, pocMeta.pocEndDate)
+    if (tlData.labels.length > 0) {
+      y = needsPage(doc, y, 55)
+      drawChartTitle(doc, s.chartTimeline || 'Daily Critical & High Cases', ML, y + 3, CW)
+      const tlPng = renderChartPNG(
+        () => lineChart(tlData.labels, tlData.data, C.red),
+        CW, 45
+      )
+      if (tlPng) {
+        doc.addImage(tlPng, 'PNG', ML, y + 5, CW, 45)
+        y += 52
+      }
+    }
+
+    // ── Detection types bar chart (CW × 50mm) ──────────────────────────────
+    const detTypes = buildDetectionTypes(cases)
+    if (detTypes.length > 0) {
+      y = needsPage(doc, y, 60)
+      drawChartTitle(doc, s.chartDetectionTypes || 'Top Detection Types (by analyzed cases)', ML, y + 3, CW)
+      const dtPng = renderChartPNG(
+        () => hBarChart(
+          detTypes.map(d => trunc(d.name, 40)),
+          detTypes.map(d => d.total),
+          detTypes.map(d => d.color)
+        ),
+        CW, 50
+      )
+      if (dtPng) {
+        doc.addImage(dtPng, 'PNG', ML, y + 5, CW, 50)
+        y += 57
+      }
+    }
+
+    // ── 4.1 Detected Cases table ─────────────────────────────────────────────
+    y = needsPage(doc, y, 20)
+    y = subTitle(doc, s.sub4_1 || '4.1 Detected Cases', y)
+
+    // crit + high + top 100 medium
+    const displayCases = [
+      ...critCases,
+      ...highCases,
+      ...cases.filter(c => (c.severity || '').toLowerCase() === 'medium').slice(0, 100),
+    ]
+    const caseRows = displayCases.map(c => [
+      trunc(c.name || c.id || '—', 35),
+      c.severity || '—',
+      c.status   || '—',
+      c.score    != null ? String(c.score) : '—',
+      c.assetsAffected != null ? String(c.assetsAffected) : '—',
+      fmtDate(c.rawDate || c.createdAt),
+    ])
+    y = tableCompact(doc,
+      [
+        s.caseName   || 'Case',
+        s.caseSev    || 'Severity',
+        s.caseStatus || 'Status',
+        s.caseScore  || 'Score',
+        s.caseAssets || 'Assets',
+        s.caseDate   || 'Date',
+      ],
+      caseRows, y, {
+        didParseCell: data => {
+          if (data.section === 'body' && data.column.index === 1) {
+            data.cell.styles.textColor = sevColor(data.cell.text[0])
+            data.cell.styles.fontStyle = 'bold'
+          }
+          if (data.section === 'body' && data.column.index === 2) {
+            data.cell.styles.textColor = statusColor(data.cell.text[0])
+          }
+        },
+      }
+    )
+
+    if (mediumTotal > 100) {
+      y = infoNote(
+        doc,
+        (s.mediumTruncated || 'Showing top 100 medium cases. Total medium cases: {n}')
+          .replace('{n}', fmtNum(mediumTotal)),
+        y
+      )
+      y += 4
+    }
+    if (lowCount > 0) {
+      y = infoNote(
+        doc,
+        (s.lowOmitted || '{n} low-severity cases omitted from table for brevity.')
+          .replace('{n}', fmtNum(lowCount)),
+        y
+      )
+      y += 4
+    }
+
+    // ── 4.2 Detection Metrics ────────────────────────────────────────────────
+    y = needsPage(doc, y, 20)
+    y = subTitle(doc, s.sub4_2 || '4.2 Detection Metrics', y)
+    const avgScore = cases.length > 0
+      ? Math.round(cases.reduce((sum, c) => sum + (c.score || 0), 0) / cases.length)
+      : 0
+    const detMetRows = [
+      [s.metCritical  || 'Critical Cases', fmtNum(critCases.length),                    pct(critCases.length, totalCasesCount)],
+      [s.metHigh      || 'High Cases',     fmtNum(highCases.length),                    pct(highCases.length, totalCasesCount)],
+      [s.metMedium    || 'Medium Cases',   fmtNum(mediumTotal),                         pct(mediumTotal, totalCasesCount)],
+      [s.metLow       || 'Low Cases',      fmtNum(lowCount),                            pct(lowCount, totalCasesCount)],
+      [s.metOpen      || 'Open Cases',     fmtNum(openCases.length),                    pct(openCases.length, totalCasesCount)],
+      [s.metAvgScore  || 'Average Score',  String(avgScore),                            ''],
+    ]
+    y = tableBase(doc,
+      [s.metMetric || 'Metric', s.metValue || 'Value', s.metPct || 'Of Total'],
+      detMetRows, y,
+      { columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 35 }, 2: { cellWidth: CW - 105 } } }
+    )
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 5 — MITRE ATT&CK
+  // ════════════════════════════════════════════════════════════════════════════
+  y = newPage(doc)
+  y = sectionTitle(doc, s.sec5 || '5. MITRE ATT&CK Coverage', y)
+  y = subTitle(doc, s.sub5_1 || '5.1 Tactic Coverage', y)
+
+  // 5.1 Table
+  const tacticRows = ALL_TACTICS.map(t => {
+    const detected = detectedTactics.has(t.id) || detectedTactics.has(t.name)
+    return [t.id, t.name, detected ? (s.detected || 'Detected') : (s.notDetected || 'Not Detected')]
   })
+  y = tableBase(doc,
+    [s.tacticId || 'Tactic ID', s.tacticName || 'Tactic', s.tacticStatus || 'Status'],
+    tacticRows, y, {
+      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 80 }, 2: { cellWidth: CW - 105 } },
+      didParseCell: data => {
+        if (data.section === 'body' && data.column.index === 2) {
+          const isDetected = data.cell.text[0] === (s.detected || 'Detected')
+          data.cell.styles.textColor = isDetected ? C.green : C.muted
+          data.cell.styles.fontStyle = isDetected ? 'bold' : 'normal'
+        }
+      },
+    }
+  )
 
-  // APPENDIX B — VERSION CONTROL
-  y = (doc.lastAutoTable?.finalY ?? y) + 14
-  if (needsPage(doc, y, 40)) { y = newPage(doc) }
-  y = appendixTitle(doc, s.appB || 'Appendix B — Version Control', y)
+  // ── MITRE tactic grid (14 cells, jsPDF primitives) ──────────────────────────
+  y = needsPage(doc, y, 45)
+  const gridCols = 7
+  const gridGap  = 1
+  const cellW = (CW - gridGap * (gridCols - 1)) / gridCols
+  const cellH = 14
+  for (let ti = 0; ti < ALL_TACTICS.length; ti++) {
+    const tactic = ALL_TACTICS[ti]
+    const col = ti % gridCols
+    const row = Math.floor(ti / gridCols)
+    const tx = ML + col * (cellW + gridGap)
+    const ty = y + row * (cellH + gridGap)
+    const isDetected = detectedTactics.has(tactic.id) || detectedTactics.has(tactic.name)
+    doc.setFillColor(...(isDetected ? C.navy : C.gray))
+    doc.roundedRect(tx, ty, cellW, cellH, 1.5, 1.5, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6)
+    doc.setTextColor(...(isDetected ? C.white : C.muted))
+    doc.text(tactic.id, tx + cellW / 2, ty + 4.2, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(5.5)
+    const nameLines = doc.splitTextToSize(tactic.name, cellW - 2)
+    const nameY = ty + 8
+    for (let nl = 0; nl < Math.min(nameLines.length, 2); nl++) {
+      doc.text(nameLines[nl], tx + cellW / 2, nameY + nl * 4, { align: 'center' })
+    }
+  }
+  const gridRowCount = Math.ceil(ALL_TACTICS.length / gridCols)
+  y += gridRowCount * (cellH + gridGap) + 6
 
-  autoTable(doc, {
-    ...tableBase(),
-    startY: y,
-    head: [[s.versionCol || 'Version', s.dateCol2 || 'Date', s.authorCol || 'Author', s.changeDescCol || 'Description']],
-    body: [
-      [version, fmt(generatedAt.toISOString()), seDisplay, s.initialVersion || 'Initial Proof of Concept Report version'],
+  // ── MITRE techniques bar chart ──────────────────────────────────────────────
+  if (mitrRecs.length > 0) {
+    const topTech = mitrRecs
+      .filter(r => r.mitre && r.mitre.affectedCases != null)
+      .sort((a, b) => b.mitre.affectedCases - a.mitre.affectedCases)
+      .slice(0, 10)
+    if (topTech.length > 0) {
+      y = needsPage(doc, y, 65)
+      drawChartTitle(doc, s.chartTechniques || 'Top Techniques by Affected Cases', ML, y + 3, CW)
+      const techPng = renderChartPNG(
+        () => hBarChart(
+          topTech.map(r => trunc(
+            `${(r.mitre.technique && r.mitre.technique.id) || ''} — ${(r.mitre.technique && r.mitre.technique.name) || r.title || ''}`,
+            45
+          )),
+          topTech.map(r => r.mitre.affectedCases),
+          topTech.map(() => C.blue)
+        ),
+        CW, 55
+      )
+      if (techPng) {
+        doc.addImage(techPng, 'PNG', ML, y + 5, CW, 55)
+        y += 62
+      }
+    }
+  }
+
+  // ── 5.2 Coverage Summary ─────────────────────────────────────────────────────
+  y = needsPage(doc, y, 20)
+  y = subTitle(doc, s.sub5_2 || '5.2 Coverage Summary', y)
+  const covCardW = (CW - 6) / 3
+  const covCardH = 16
+  const covCards = [
+    { label: s.covDetected    || 'Detected Tactics',    value: String(detectedTactics.size),                    color: C.blue  },
+    { label: s.covNotDetected || 'Not Detected',        value: String(ALL_TACTICS.length - detectedTactics.size),color: C.muted },
+    { label: s.covTotal       || 'Total MITRE Tactics', value: String(ALL_TACTICS.length),                      color: C.navy  },
+  ]
+  for (let k = 0; k < covCards.length; k++) {
+    const cx = ML + k * (covCardW + 3)
+    drawKpiCard(doc, cx, y, covCardW, covCardH, covCards[k].value, covCards[k].label, covCards[k].color)
+  }
+  y += covCardH + 6
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 6 — Operational Assessment
+  // ════════════════════════════════════════════════════════════════════════════
+  y = needsPage(doc, y, 20)
+  y = sectionTitle(doc, s.sec6 || '6. Operational Assessment', y)
+  y = subTitle(doc, s.sub6_1 || '6.1 Incident Response Workflow', y)
+
+  const irRows = s.irFlowRows || [
+    [s.irStep1 || '1. Alert Triage',  s.irStep1desc || 'AI-ranked alerts surfaced in unified inbox; analyst reviews and prioritizes.'],
+    [s.irStep2 || '2. Investigation', s.irStep2desc || 'One-click drill-down with correlated evidence, asset timeline and threat intel.'],
+    [s.irStep3 || '3. Containment',   s.irStep3desc || 'Automated or manual response actions (isolate, block, quarantine).'],
+    [s.irStep4 || '4. Eradication',   s.irStep4desc || 'Remove artifacts, patch vulnerability, revoke compromised credentials.'],
+    [s.irStep5 || '5. Recovery',      s.irStep5desc || 'Restore services and monitor for re-compromise.'],
+    [s.irStep6 || '6. Post-Incident', s.irStep6desc || 'Lessons learned, rule tuning and playbook updates.'],
+  ]
+  y = tableBase(doc,
+    [s.irStep || 'Step', s.irDesc || 'Description'],
+    irRows, y,
+    { columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: CW - 45 } } }
+  )
+
+  y = needsPage(doc, y, 16)
+  y = subTitle(doc, s.sub6_2 || '6.2 Automation & Playbooks', y)
+  y = bodyText(doc,
+    s.body6_2 ||
+    'Stellar Cyber’s built-in SOAR capabilities enable automated triage, enrichment and response playbooks that reduce analyst fatigue and accelerate containment.',
+    y
+  )
+  y += 4
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 7 — Measured Results / ROI
+  // ════════════════════════════════════════════════════════════════════════════
+  y = needsPage(doc, y, 20)
+  y = sectionTitle(doc, s.sec7 || '7. Measured Results & ROI', y)
+  y = subTitle(doc, s.sub7_1 || '7.1 Real Metrics', y)
+
+  const realMetRows = [
+    [s.metTotalCases     || 'Total Cases',           fmtNum(totalCasesCount),                     ''],
+    [s.metCritHigh       || 'Critical + High',       fmtNum(critCases.length + highCases.length), pct(critCases.length + highCases.length, totalCasesCount)],
+    [s.metMitreCov       || 'MITRE Tactic Coverage', `${mitreCovPct}%`,                           `${detectedTactics.size} / ${ALL_TACTICS.length}`],
+    [
+      s.metAvgEntitiesDay || 'Avg. Entities / Day',
+      avgEntities || '—',
+      s.entitiesNote || 'from entity_count (entity_usages API)',
     ],
-    columnStyles: {
-      0: { cellWidth: 20, halign: 'center' },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 55 },
-      3: { cellWidth: CW - 110 },
-    },
-  })
+    [s.metActiveSources  || 'Active Sources',        fmtNum(activeConn.length),                   `${s.of || 'of'} ${fmtNum(connectors.length)}`],
+    [s.metTotalIngested  || 'Total Data Ingested',   fmtGB(totalIngest),                          ''],
+  ]
+  y = tableBase(doc,
+    [s.roiMetric || 'Metric', s.roiValue || 'Value', s.roiContext || 'Context'],
+    realMetRows, y
+  )
+
+  y = needsPage(doc, y, 16)
+  y = subTitle(doc, s.sub7_2 || '7.2 Qualitative Benefits', y)
+  const qualBenefits = s.qualBenefits || [
+    s.qb1 || '• Unified visibility across network, endpoint, cloud and email.',
+    s.qb2 || '• Dramatically reduced alert fatigue through AI-powered correlation.',
+    s.qb3 || '• Accelerated investigation with automated evidence correlation.',
+    s.qb4 || '• Reduced tool sprawl and operational complexity.',
+    s.qb5 || '• Scalable architecture supporting hybrid and multi-cloud environments.',
+  ]
+  for (const benefit of qualBenefits) {
+    y = bodyText(doc, benefit, y)
+  }
+  y += 4
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 8 — Risks, Gaps & Recommendations
+  // ════════════════════════════════════════════════════════════════════════════
+  y = needsPage(doc, y, 20)
+  y = sectionTitle(doc, s.sec8 || '8. Risks, Gaps & Recommendations', y)
+
+  // 8.1 Operational Recommendations
+  y = subTitle(doc, s.sub8_1 || '8.1 Operational Recommendations', y)
+  if (opRecs.length === 0) {
+    y = infoNote(doc, s.noOpRecs || 'No operational recommendations recorded.', y)
+    y += 4
+  } else {
+    const opRecRows = opRecs.map(r => [
+      trunc(r.title || r.name || '—', 40),
+      r.priority || r.severity || '—',
+      trunc(r.description || r.details || '—', 80),
+    ])
+    y = tableCompact(doc,
+      [s.recTitle || 'Recommendation', s.recPriority || 'Priority', s.recDesc || 'Description'],
+      opRecRows, y
+    )
+  }
+
+  // 8.2 MITRE-based Recommendations
+  y = needsPage(doc, y, 20)
+  y = subTitle(doc, s.sub8_2 || '8.2 MITRE ATT&CK Recommendations', y)
+  if (mitrRecs.length === 0) {
+    y = infoNote(doc, s.noMitreRecs || 'No MITRE-based recommendations recorded.', y)
+    y += 4
+  } else {
+    const mitreRecRows = mitrRecs.map(r => [
+      (r.mitre && r.mitre.technique && r.mitre.technique.id) || '—',
+      (r.mitre && r.mitre.technique && r.mitre.technique.name) || trunc(r.title || '—', 35),
+      (r.mitre && r.mitre.tactic) || '—',
+      r.priority || '—',
+      trunc(r.description || r.details || '—', 60),
+    ])
+    y = tableCompact(doc,
+      [
+        s.mitreId     || 'Technique ID',
+        s.mitreName   || 'Technique',
+        s.mitreTactic || 'Tactic',
+        s.mitrePrio   || 'Priority',
+        s.mitreDesc   || 'Description',
+      ],
+      mitreRecRows, y
+    )
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 9 — Next Steps
+  // ════════════════════════════════════════════════════════════════════════════
+  y = needsPage(doc, y, 20)
+  y = sectionTitle(doc, s.sec9 || '9. Next Steps', y)
+  y = subTitle(doc, s.sub9_1 || '9.1 Recommended Actions', y)
+
+  const nextRows = s.nextStepsRows || [
+    ['1', s.ns1 || 'Finalize commercial proposal',        s.ns1owner || 'Account Team',  s.ns1due || '2 weeks'],
+    ['2', s.ns2 || 'Address identified coverage gaps',    s.ns2owner || 'SE / Customer', s.ns2due || '1 month'],
+    ['3', s.ns3 || 'Plan full deployment architecture',   s.ns3owner || 'SE',            s.ns3due || '1 month'],
+    ['4', s.ns4 || 'Complete integrations inventory',     s.ns4owner || 'Customer IT',   s.ns4due || '2 months'],
+    ['5', s.ns5 || 'Sign off production deployment plan', s.ns5owner || 'Both parties',  s.ns5due || 'TBD'],
+  ]
+  y = tableBase(doc,
+    [s.nsStep || '#', s.nsAction || 'Action', s.nsOwner || 'Owner', s.nsDue || 'Target Date'],
+    nextRows, y,
+    { columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: CW - 70 }, 2: { cellWidth: 35 }, 3: { cellWidth: 25 } } }
+  )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SECTION 10 — Conclusion
+  // ════════════════════════════════════════════════════════════════════════════
+  y = newPage(doc)
+  y = sectionTitle(doc, s.sec10 || '10. Conclusion', y)
+  y = subTitle(doc, s.sub10_1 || '10.1 PoC Scorecard', y)
+
+  const scorecardRows = s.scorecardRows || [
+    [s.sc10_1 || 'Detection Capability',     pocMeta.scoreDetection     || '—', pocMeta.noteDetection     || ''],
+    [s.sc10_2 || 'Investigation Efficiency', pocMeta.scoreInvestigation || '—', pocMeta.noteInvestigation || ''],
+    [s.sc10_3 || 'Response Automation',      pocMeta.scoreAutomation    || '—', pocMeta.noteAutomation    || ''],
+    [s.sc10_4 || 'Integration Coverage',     pocMeta.scoreIntegration   || '—', pocMeta.noteIntegration   || ''],
+    [s.sc10_5 || 'Ease of Use',              pocMeta.scoreEase          || '—', pocMeta.noteEase          || ''],
+    [s.sc10_6 || 'MITRE Coverage',           `${mitreCovPct}%`,                      `${detectedTactics.size} of ${ALL_TACTICS.length} tactics`],
+  ]
+  y = tableBase(doc,
+    [s.scArea || 'Area', s.scScore || 'Score', s.scNotes || 'Notes'],
+    scorecardRows, y,
+    { columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 25 }, 2: { cellWidth: CW - 85 } } }
+  )
+
+  // Verdict banner
+  y = needsPage(doc, y, 22)
+  doc.setFillColor(...verdictColor)
+  doc.roundedRect(ML, y, CW, 16, 3, 3, 'F')
+  doc.setTextColor(...C.white)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.text(s.verdictLabel || 'PoC Verdict:', ML + CW / 2, y + 6.5, { align: 'center' })
+  doc.setFontSize(14)
+  doc.text(verdict || (s.verdictPending || 'Pending'), ML + CW / 2, y + 13, { align: 'center' })
+  y += 22
+
+  // Conclusion body
+  const body10 = (
+    s.body10 ||
+    'Based on the results of this Proof of Concept, Stellar Cyber’s Open XDR platform demonstrated {verdict} alignment with {clientName}’s security objectives.'
+  )
+    .replace('{verdict}',    verdict || (s.verdictPending || 'pending'))
+    .replace('{clientName}', pocMeta.clientName || s.clientNamePlaceholder || 'the client')
+  y = bodyText(doc, body10, y)
+  y += 4
+
+  // SE Comments block
+  if (pocMeta.comments) {
+    y = needsPage(doc, y, 20)
+    y = subTitle(doc, s.seCommentsTitle || 'SE Comments', y)
+    y = bodyText(doc, pocMeta.comments, y)
+    y += 4
+  }
+
+  // Signatures section
+  y = needsPage(doc, y, 40)
+  y = subTitle(doc, s.signaturesTitle || 'Signatures', y)
+  const sigW = (CW - 10) / 2
+  const sigDefs = [
+    { role: s.sigSE     || 'SE / Analyst',          name: pocMeta.seName    || '' },
+    { role: s.sigClient || 'Client Representative', name: pocMeta.clientName || '' },
+  ]
+  for (let k = 0; k < 2; k++) {
+    const sx = ML + k * (sigW + 10)
+    doc.setDrawColor(...C.muted)
+    doc.setLineWidth(0.4)
+    doc.line(sx, y + 14, sx + sigW, y + 14)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C.navy)
+    doc.text(sigDefs[k].role, sx, y + 18)
+    if (sigDefs[k].name) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(...C.muted)
+      doc.text(sigDefs[k].name, sx, y + 22)
+    }
+  }
+  y += 30
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // APPENDIX A — Glossary
+  // ════════════════════════════════════════════════════════════════════════════
+  y = newPage(doc)
+  y = appendixTitle(doc, s.appendixA || 'Appendix A — Glossary', y)
+
+  const glossaryRows = s.glossaryRows || [
+    ['XDR',   s.gXDR   || 'Extended Detection and Response — unified security platform correlating data across vectors.'],
+    ['SIEM',  s.gSIEM  || 'Security Information and Event Management.'],
+    ['SOAR',  s.gSOAR  || 'Security Orchestration, Automation and Response.'],
+    ['MITRE', s.gMITRE || 'MITRE ATT&CK® — knowledge base of adversary tactics and techniques.'],
+    ['MTTD',  s.gMTTD  || 'Mean Time to Detect — average time from compromise to detection.'],
+    ['MTTR',  s.gMTTR  || 'Mean Time to Respond — average time from detection to containment.'],
+    ['PoC',   s.gPoC   || 'Proof of Concept — time-limited evaluation of platform capabilities.'],
+    ['SE',    s.gSE    || 'Sales Engineer / Solutions Engineer.'],
+    ['IOC',   s.gIOC   || 'Indicator of Compromise.'],
+    ['TTP',   s.gTTP   || 'Tactics, Techniques and Procedures.'],
+    ['EDR',   s.gEDR   || 'Endpoint Detection and Response.'],
+    ['NDR',   s.gNDR   || 'Network Detection and Response.'],
+  ]
+  y = tableBase(doc,
+    [s.glossTerm || 'Term', s.glossDef || 'Definition'],
+    glossaryRows, y,
+    { columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: CW - 30 } } }
+  )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // APPENDIX B — Version Control
+  // ════════════════════════════════════════════════════════════════════════════
+  y = needsPage(doc, y, 20)
+  y = appendixTitle(doc, s.appendixB || 'Appendix B — Version Control', y)
+
+  const versionRows = s.versionRows || [
+    [pocMeta.version || '1.0', fmtDate(generatedAt), pocMeta.seName || '—', s.verInitial || 'Initial release'],
+  ]
+  y = tableBase(doc,
+    [s.verVersion || 'Version', s.verDate || 'Date', s.verAuthor || 'Author', s.verChanges || 'Changes'],
+    versionRows, y,
+    { columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 35 }, 2: { cellWidth: 50 }, 3: { cellWidth: CW - 105 } } }
+  )
+
+  // Suppress unused variable warning for 'y' at end
+  void y
 
   return doc
 }
 
+// ─── Download wrapper ─────────────────────────────────────────────────────────
 export function downloadPDFReport(params) {
-  const doc    = generatePDFReport(params)
-  const meta   = params.pocMeta || {}
-  const client = (meta.clientName || 'client').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
-  const date   = new Date().toISOString().split('T')[0]
-  doc.save(`poc-report-stellarcyber-${client}-${date}.pdf`)
+  const doc = generatePDFReport(params)
+  const clientName = ((params.pocMeta && params.pocMeta.clientName) || 'report').replace(/\s+/g, '_')
+  const dateStr = new Date().toISOString().split('T')[0]
+  doc.save(`StellarCyber_PoC_${clientName}_${dateStr}.pdf`)
 }
