@@ -795,7 +795,7 @@ export function generatePDFReport({
 
   // ── 2×2 Chart dashboard ────────────────────────────────────────────────────
   const chartW = (CW - 6) / 2
-  const chartH = 62
+  const chartH = 70
 
   // Row 1: Severity donut (left) | Status donut (right)
   const sevData  = [critCases.length, highCases.length, mediumTotal, lowCount]
@@ -1006,7 +1006,7 @@ export function generatePDFReport({
   )
 
   // 2.2 Methodology Phases
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub2_2 || '2.2 Methodology Phases', y)
   const methRows = s.methodologyPhases || [
     ['1', s.phase1 || 'Kickoff & Scoping',     s.phase1desc || 'Define success criteria, environments and integrations.'],
@@ -1022,7 +1022,7 @@ export function generatePDFReport({
   )
 
   // 2.3 Success Criteria
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub2_3 || '2.3 Success Criteria', y)
 
   // MTTD: median of (created_at − start_timestamp) in minutes across cases in scope
@@ -1092,7 +1092,7 @@ export function generatePDFReport({
   }
 
   // 3.2 Connectors table
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub3_2 || '3.2 Connected Sources', y)
   if (connectors.length === 0) {
     y = infoNote(doc, s.noConnectors || 'No connectors data available.', y)
@@ -1114,7 +1114,7 @@ export function generatePDFReport({
   // 3.3 Data ingestion detail (conditional)
   // Note: ingestion endpoints return total_ingestion (bytes) only — no event count available.
   if (ingestionBySensor.length > 0 || ingestionByConnector.length > 0) {
-    y = needsPage(doc, y, 20)
+    y = needsPage(doc, y, 40)
     y = subTitle(doc, s.sub3_3 || '3.3 Data Ingestion Detail', y)
     if (ingestionBySensor.length > 0) {
       const sensorRows = ingestionBySensor.map(r => [
@@ -1192,7 +1192,7 @@ export function generatePDFReport({
     }
 
     // ── 4.1 Detected Cases table ─────────────────────────────────────────────
-    y = needsPage(doc, y, 20)
+    y = needsPage(doc, y, 40)
     y = subTitle(doc, s.sub4_1 || '4.1 Detected Cases', y)
 
     // crit + high + top 100 medium
@@ -1251,7 +1251,7 @@ export function generatePDFReport({
     }
 
     // ── 4.2 Detection Metrics ────────────────────────────────────────────────
-    y = needsPage(doc, y, 20)
+    y = needsPage(doc, y, 40)
     y = subTitle(doc, s.sub4_2 || '4.2 Detection Metrics', y)
     const avgScore = cases.length > 0
       ? Math.round(cases.reduce((sum, c) => sum + (c.score || 0), 0) / cases.length)
@@ -1347,7 +1347,7 @@ export function generatePDFReport({
   }
 
   // ── 5.2 Coverage Summary ─────────────────────────────────────────────────────
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub5_2 || '5.2 Coverage Summary', y)
   const covCardW = (CW - 6) / 3
   const covCardH = 16
@@ -1364,7 +1364,7 @@ export function generatePDFReport({
 
   // ── 5.3 Stellar Cyber XDR Proprietary Detections ────────────────────────────
   if (stellarTacticData.length > 0) {
-    y = needsPage(doc, y, 20)
+    y = needsPage(doc, y, 40)
     y = subTitle(doc, s.sub5_3 || '5.3 Detecções Proprietárias Stellar Cyber XDR', y)
     y = bodyText(doc,
       s.body5_3 ||
@@ -1401,7 +1401,7 @@ export function generatePDFReport({
 
     // XDR Techniques table (top 20)
     if (stellarTechData.length > 0) {
-      y = needsPage(doc, y, 20)
+      y = needsPage(doc, y, 40)
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(...C.navy)
@@ -1456,7 +1456,7 @@ export function generatePDFReport({
     { columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: CW - 45 } } }
   )
 
-  y = needsPage(doc, y, 16)
+  y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub6_2 || '6.2 Automation & Playbooks', y)
   y = bodyText(doc,
     s.body6_2 ||
@@ -1468,7 +1468,7 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   // SECTION 7 — Measured Results / ROI
   // ════════════════════════════════════════════════════════════════════════════
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = sectionTitle(doc, s.sec7 || '7. Measured Results & ROI', y)
   y = subTitle(doc, s.sub7_1 || '7.1 Real Metrics', y)
 
@@ -1489,7 +1489,7 @@ export function generatePDFReport({
     realMetRows, y
   )
 
-  y = needsPage(doc, y, 16)
+  y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub7_2 || '7.2 Qualitative Benefits', y)
   const qualBenefits = s.qualBenefits || [
     s.qb1 || '• Unified visibility across network, endpoint, cloud and email.',
@@ -1506,7 +1506,7 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   // SECTION 8 — Risks, Gaps & Recommendations
   // ════════════════════════════════════════════════════════════════════════════
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = sectionTitle(doc, s.sec8 || '8. Risks, Gaps & Recommendations', y)
 
   // 8.1 Operational Recommendations
@@ -1527,7 +1527,7 @@ export function generatePDFReport({
   }
 
   // 8.2 MITRE-based Recommendations
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub8_2 || '8.2 MITRE ATT&CK Recommendations', y)
   if (mitrRecs.length === 0) {
     y = infoNote(doc, s.noMitreRecs || 'No MITRE-based recommendations recorded.', y)
@@ -1555,7 +1555,7 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   // SECTION 9 — Next Steps
   // ════════════════════════════════════════════════════════════════════════════
-  y = needsPage(doc, y, 20)
+  y = needsPage(doc, y, 40)
   y = sectionTitle(doc, s.sec9 || '9. Next Steps', y)
   y = subTitle(doc, s.sub9_1 || '9.1 Recommended Actions', y)
 
