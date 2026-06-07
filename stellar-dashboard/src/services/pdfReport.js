@@ -1507,8 +1507,11 @@ export function generatePDFReport({
     s.body10 ||
     "Based on the results of this Proof of Concept, Stellar Cyber's Open XDR platform demonstrated {verdict} alignment with {clientName}'s security objectives."
   )
-    .replace('{verdict}',    verdict || (s.verdictPending || 'pending'))
-    .replace('{clientName}', pocMeta.clientName || s.clientNamePlaceholder || 'the client')
+    .replace('{pocStartDate}', fmtDate(pocMeta.pocStartDate))
+    .replace('{pocEndDate}',   fmtDate(pocMeta.pocEndDate))
+    .replace('{clientName}',   pocMeta.clientName || s.clientNamePlaceholder || 'the client')
+    .replace('{caseCount}',    totalCasesStr)
+    .replace('{mitrePct}',     String(mitreCovPct))
   y = bodyText(doc, body10, y)
   y += 4
 

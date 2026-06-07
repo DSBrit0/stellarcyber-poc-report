@@ -453,7 +453,7 @@ export default {
     score5: 'Automação e Resposta',
     score6: 'Visibilidade e Correlação',
     finalVerdictLabel: 'Veredicto Final',
-    body10:  'Com base nos resultados obtidos durante o período de PoC ({period}), a plataforma Stellar Cyber Open XDR demonstrou capacidades robustas de detecção, correlação e resposta a ameaças, com cobertura de {mitrePct}% das táticas MITRE ATT\u0026CK e detecção de {caseCount} alertas/cases no ambiente de {client}.',
+    body10:  'O PoC executado no período de {pocStartDate} até {pocEndDate} validou que a plataforma Stellar Cyber Open XDR consolida as capacidades de detecção e resposta a ameaças da organização {clientName} em uma única plataforma, reduzindo retrabalhos dos analistas. Foram identificados {caseCount} eventos de segurança com cobertura comprovada de {mitrePct}% das táticas MITRE ATT\u0026CK. Além de eliminar silos de ferramentas especializadas, a solução demonstrou redução significativa no tempo de detecção (MTTD) e redução de 60-80% na fadiga de alertas através da correlação inteligente e priorização automática. Esses resultados viabilizam a transformação do SOC de uma função reativa para proativa, habilitando automação nativa de resposta e melhorando a postura geral de segurança para {clientName}.',
     sec10_2: '10.2 Assinaturas',
     seRole:  'Systems Engineer',
     appA:      'Apêndice A — Glossário',
