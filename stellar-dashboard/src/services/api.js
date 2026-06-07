@@ -314,19 +314,23 @@ export async function fetchCaseTactics(auth, cases) {
 // ─── Normalizers ─────────────────────────────────────────────────────────────
 
 function normalizeDataSensors(items) {
-  const FEATURE_LABELS = {
-    ds:      'Data Sensor',
-    wds:     'Windows Agent',
-    modular: 'Modular Sensor',
-    sds:     'Security Data Sensor',
+  // Classification priority:
+  //   1. feature === 'modular' → Stellar proprietary appliance
+  //   2. os contains 'windows'  → Windows Server agent
+  //   3. default                → Linux Server agent
+  function sensorTypeLabel(feature, os) {
+    if (feature === 'modular') return 'Modular Sensor'
+    if ((os || '').toLowerCase().includes('windows')) return 'Windows Server Sensor'
+    return 'Linux Server Sensor'
   }
+
   return items.map(d => {
-    const raw = d.sw_version || ''
+    const raw   = d.sw_version || ''
     const match = raw.match(/(\d+\.\d+\.\d+)/)
     return {
       id:               d.sensor_id || d.internal_sensor_id || '',
       hostname:         d.hostname || '',
-      type:             FEATURE_LABELS[d.feature] || d.feature || d.mode || '',
+      type:             sensorTypeLabel(d.feature, d.os),
       version:          match ? match[1] : raw,
       connectionStatus: d.connection_status || '',
       profile:          (d.sensor_profile_name || '').trim(),
