@@ -477,7 +477,7 @@ function drawCover(doc, pocMeta, s) {
   doc.text('STELLAR CYBER', 26, 18)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...C.blue)
-  doc.text(' | Open XDR', 26 + doc.getTextWidth('STELLAR CYBER'), 18)
+  doc.text('  |  Open XDR', 26 + doc.getTextWidth('STELLAR CYBER'), 18)
 
   // CONFIDENTIAL pill right-aligned
   const pillLabel = s.coverConfidential || 'CONFIDENTIAL'
