@@ -1368,7 +1368,7 @@ export function generatePDFReport({
     [s.metCritHigh       || 'Critical + High',       fmtNum(critCases.length + highCases.length), pct(critCases.length + highCases.length, totalCasesCount)],
     [s.metMitreCov       || 'MITRE Tactic Coverage', `${mitreCovPct}%`,                           `${detectedTactics.size} / ${ALL_TACTICS.length}`],
     [
-      s.metAvgEntitiesDay || 'Avg. Entities / Day',
+      s.metAvgEntitiesDay || 'Média Assets/Dia',
       avgEntities || '—',
       s.entitiesNote || 'from entity_count (entity_usages API)',
     ],
