@@ -1527,27 +1527,27 @@ export function generatePDFReport({
     )
   }
 
-  // 8.2 MITRE-based Recommendations
+  // 8.2 MITRE-based Recommendations — real API data from caseTactics.mitre.techniques
   y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub8_2 || '8.2 MITRE ATT&CK Recommendations', y)
-  if (mitrRecs.length === 0) {
-    y = infoNote(doc, s.noMitreRecs || 'No MITRE-based recommendations recorded.', y)
+  if (mitreTechniqueData.length === 0) {
+    y = infoNote(doc, s.noMitreRecs || 'No MITRE techniques detected during the POC period.', y)
     y += 4
   } else {
-    const mitreRecRows = mitrRecs.map(r => [
-      (r.mitre && r.mitre.technique && r.mitre.technique.id) || '—',
-      (r.mitre && r.mitre.technique && r.mitre.technique.name) || trunc(r.title || '—', 35),
-      (r.mitre && r.mitre.tactic) || '—',
-      r.priority || '—',
-      trunc(r.description || r.details || '—', 60),
+    const mitreRecRows = mitreTechniqueData.map(tech => [
+      tech.id   || '—',
+      trunc(tech.name || '—', 35),
+      tech.tacticName || tech.tacticId || '—',
+      String(tech.caseCount  || 0),
+      String(tech.alertCount || 0),
     ])
     y = tableCompact(doc,
       [
         s.mitreId     || 'Technique ID',
         s.mitreName   || 'Technique',
         s.mitreTactic || 'Tactic',
-        s.mitrePrio   || 'Priority',
-        s.mitreDesc   || 'Description',
+        s.mitreCases  || 'Cases',
+        s.mitreAlerts || 'Alerts',
       ],
       mitreRecRows, y
     )

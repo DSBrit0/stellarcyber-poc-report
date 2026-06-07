@@ -716,6 +716,8 @@ export default {
     mitreName:   'Técnica',
     mitrePrio:   'Prioridade',
     mitreDesc:   'Descrição',
+    mitreCases:  'Casos',
+    mitreAlerts: 'Alertas',
     // ── Seção 9 — Próximos Passos ─────────────────────────────────────────────
     nsStep:   '#',
     nsAction: 'Ação',
