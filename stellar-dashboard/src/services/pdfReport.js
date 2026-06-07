@@ -429,6 +429,27 @@ function buildDetectionTypes(cases) {
     })
 }
 
+// ─── Cover info-block helper ──────────────────────────────────────────────────
+function drawInfoBlock(doc, heading, x, y, fields, headingColor) {
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...headingColor)
+  doc.text(heading, x, y)
+  doc.setDrawColor(...headingColor)
+  doc.setLineWidth(0.3)
+  doc.line(x, y + 1.5, x + 80, y + 1.5)
+  let fy = y + 7
+  for (const f of fields) {
+    if (f.val) {
+      doc.setFont('helvetica', f.bold ? 'bold' : 'normal')
+      doc.setFontSize(f.size)
+      doc.setTextColor(...(f.bold ? C.navy : C.muted))
+      doc.text(String(f.val), x, fy)
+      fy += f.size * 0.5 + 1.8
+    }
+  }
+}
+
 // ─── Cover page ───────────────────────────────────────────────────────────────
 function drawCover(doc, pocMeta, s) {
   _pageNum = 1
@@ -493,72 +514,44 @@ function drawCover(doc, pocMeta, s) {
   doc.setLineWidth(0.5)
   doc.line(26, 130, 96, 130)
 
-  // "Prepared for" line under rule
-  const clientName = pocMeta.clientName || ''
-  const clientDept = pocMeta.clientDept || ''
-  if (clientName) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.setTextColor(...C.muted)
-    const prepLine = `${s.coverPreparedFor || 'Prepared for'} `
-    doc.text(prepLine, 26, 140)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...C.navy)
-    doc.text(clientName + (clientDept ? ` — ${clientDept}` : ''), 26 + doc.getTextWidth(prepLine), 140)
-  }
+  // 4. Info grid — 2×2 table layout starting y≈210mm
+  const blockY  = 210
+  const colL    = 26          // left column x
+  const colR    = 113         // right column x
+  const rowH    = 46          // height of each row block
+  const divX    = 108         // vertical divider
+  const row2Y   = blockY + rowH + 5
 
-  // 4. Two info blocks at y≈225mm
-  const blockY = 225
-  // Left col x=26: PREPARED FOR
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...C.blue)
-  doc.text(s.blockPreparedFor || 'PREPARED FOR', 26, blockY)
-  doc.setDrawColor(...C.blue)
-  doc.setLineWidth(0.3)
-  doc.line(26, blockY + 1.5, 26 + 70, blockY + 1.5)
+  // Light grid separators
+  doc.setDrawColor(...C.lightGray)
+  doc.setLineWidth(0.25)
+  doc.line(divX, blockY - 3, divX, row2Y + rowH)   // vertical
+  doc.line(colL, row2Y - 3, PW - MR, row2Y - 3)    // horizontal between rows
 
-  let byY = blockY + 7
-  const leftFields = [
-    { val: pocMeta.clientName,  bold: true,  size: 11 },
-    { val: pocMeta.clientDept,  bold: false, size: 8.5 },
+  // ── Row 1 Left: PREPARED FOR (client) ──────────────────────────────────────
+  drawInfoBlock(doc, s.blockPreparedFor || 'PREPARED FOR', colL, blockY, [
+    { val: pocMeta.clientName,  bold: true,  size: 10 },
+    { val: pocMeta.clientDept,  bold: false, size: 8 },
     { val: pocMeta.clientEmail, bold: false, size: 8 },
-  ]
-  for (const f of leftFields) {
-    if (f.val) {
-      doc.setFont('helvetica', f.bold ? 'bold' : 'normal')
-      doc.setFontSize(f.size)
-      doc.setTextColor(...(f.bold ? C.navy : C.muted))
-      doc.text(f.val, 26, byY)
-      byY += f.size * 0.5 + 2
-    }
-  }
+  ], C.blue)
 
-  // Right col x=114: PREPARED BY
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...C.navy)
-  doc.text(s.blockPreparedBy || 'PREPARED BY', 114, blockY)
-  doc.setDrawColor(...C.navy)
-  doc.setLineWidth(0.3)
-  doc.line(114, blockY + 1.5, 114 + 70, blockY + 1.5)
+  // ── Row 1 Right: STELLAR CYBER ANALYST ────────────────────────────────────
+  drawInfoBlock(doc, s.blockStellarCyber || 'STELLAR CYBER ANALYST', colR, blockY, [
+    { val: pocMeta.seName,  bold: true,  size: 10 },
+    { val: pocMeta.seEmail, bold: false, size: 8 },
+    { val: pocMeta.sePhone, bold: false, size: 8 },
+  ], C.navy)
 
-  let rbY = blockY + 7
-  const rightFields = [
-    { val: pocMeta.seName,      bold: true,  size: 11 },
-    { val: pocMeta.partnerName, bold: false, size: 8.5 },
-    { val: pocMeta.seEmail,     bold: false, size: 8 },
-    { val: pocMeta.sePhone,     bold: false, size: 8 },
-  ]
-  for (const f of rightFields) {
-    if (f.val) {
-      doc.setFont('helvetica', f.bold ? 'bold' : 'normal')
-      doc.setFontSize(f.size)
-      doc.setTextColor(...(f.bold ? C.navy : C.muted))
-      doc.text(f.val, 114, rbY)
-      rbY += f.size * 0.5 + 2
-    }
-  }
+  // ── Row 2 Left: STAKEHOLDERS (analysts list) ───────────────────────────────
+  const analystRows = (pocMeta.analysts || []).map(a => ({ val: a, bold: false, size: 8 }))
+  drawInfoBlock(doc, s.blockStakeholders || 'STAKEHOLDERS', colL, row2Y, analystRows, C.blue)
+
+  // ── Row 2 Right: PARTNER ──────────────────────────────────────────────────
+  drawInfoBlock(doc, s.blockPartner || 'PARTNER', colR, row2Y, [
+    { val: pocMeta.partnerName,  bold: true,  size: 10 },
+    { val: pocMeta.partnerEmail, bold: false, size: 8 },
+    { val: pocMeta.partnerSite,  bold: false, size: 8 },
+  ], C.navy)
 
   // 5. Metadata footer at y≈283mm
   const version  = pocMeta.version || '1.0'
