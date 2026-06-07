@@ -200,25 +200,33 @@ export async function fetchIngestionByConnector(auth, { pocStartDate, pocEndDate
 // ─── Normalizers ─────────────────────────────────────────────────────────────
 
 function normalizeIngestionBySensor(items) {
-  return items.map((d, i) => ({
-    id:            d._id || d.id || d.sensor_id || `sensor-${i}`,
-    name:          d.sensor_name || d.name || `Sensor ${i + 1}`,
-    type:          d.sensor_type || d.type || 'unknown',
-    bytesIngested: d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0,
-    eventsCount:   d.total_events ?? d.event_count ?? d.events ?? 0,
-    gbIngested:    +(((d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0) / 1073741824) || (d.gb ?? 0)).toFixed(2),
-  }))
+  return items.map((d, i) => {
+    // API returns entry_identifier (sensor UUID) + total_ingestion (bytes)
+    const bytes = d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? d.total_ingestion ?? 0
+    return {
+      id:            d._id || d.id || d.sensor_id || d.entry_identifier || `sensor-${i}`,
+      name:          d.sensor_name || d.name || d.entry_identifier || `Sensor ${i + 1}`,
+      type:          d.sensor_type || d.type || 'unknown',
+      bytesIngested: bytes,
+      eventsCount:   d.total_events ?? d.event_count ?? d.events ?? 0,
+      gbIngested:    +((bytes / 1073741824) || (d.gb ?? 0)).toFixed(2),
+    }
+  })
 }
 
 function normalizeIngestionByConnector(items) {
-  return items.map((d, i) => ({
-    id:            d._id || d.id || d.connector_id || `conn-${i}`,
-    name:          d.connector_name || d.name || `Connector ${i + 1}`,
-    type:          d.connector_type || d.type || 'unknown',
-    bytesIngested: d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0,
-    eventsCount:   d.total_events ?? d.event_count ?? d.events ?? 0,
-    gbIngested:    +(((d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? 0) / 1073741824) || (d.gb ?? 0)).toFixed(2),
-  }))
+  return items.map((d, i) => {
+    // API returns entry_identifier (connector name) + total_ingestion (bytes)
+    const bytes = d.total_bytes ?? d.bytes_ingested ?? d.bytes ?? d.total_ingestion ?? 0
+    return {
+      id:            d._id || d.id || d.connector_id || d.entry_identifier || `conn-${i}`,
+      name:          d.connector_name || d.name || d.entry_identifier || `Connector ${i + 1}`,
+      type:          d.connector_type || d.type || 'unknown',
+      bytesIngested: bytes,
+      eventsCount:   d.total_events ?? d.event_count ?? d.events ?? 0,
+      gbIngested:    +((bytes / 1073741824) || (d.gb ?? 0)).toFixed(2),
+    }
+  })
 }
 
 function normalizeCases(items) {

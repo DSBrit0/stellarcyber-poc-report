@@ -696,8 +696,8 @@ export function generatePDFReport({
     return C.red
   })()
 
-  // Ingestion total
-  const totalIngest = ingestionBySensor.reduce((sum, r) => sum + (r.bytes || r.size || 0), 0)
+  // Ingestion total — uses bytesIngested (mapped from API total_ingestion)
+  const totalIngest = ingestionBySensor.reduce((sum, r) => sum + (r.bytesIngested || r.bytes || r.size || 0), 0)
 
   // ── Create PDF ──────────────────────────────────────────────────────────────
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -1054,6 +1054,12 @@ export function generatePDFReport({
   }
   y += statCardH + 5
 
+  // Bytes lookup for 3.2 table: connector name → bytesIngested (from /ingestion-stats/connector)
+  const connIngestionLookup = {}
+  for (const r of ingestionByConnector) {
+    if (r.name) connIngestionLookup[r.name] = r.bytesIngested || 0
+  }
+
   // 3.2 Connectors table
   y = needsPage(doc, y, 20)
   y = subTitle(doc, s.sub3_2 || '3.2 Connected Sources', y)
@@ -1064,9 +1070,9 @@ export function generatePDFReport({
     const connRows = connectors.map(c => [
       trunc(c.name || c.id || '—', 35),
       c.type || c.category || '—',
-      c.status || (c.enabled ? 'active' : 'inactive'),
-      fmtDate(c.lastSeen || c.last_seen),
-      fmtGB(c.bytesIngested || c.bytes_ingested || c.totalBytes || 0),
+      c.status || (c.active ? 'active' : 'inactive'),
+      fmtDate(c.lastDataReceived || c.lastActivity),
+      fmtGB(connIngestionLookup[c.name] || 0),
     ])
     y = tableCompact(doc,
       [s.connName || 'Name', s.connType || 'Type', s.connStatus || 'Status', s.connLastSeen || 'Last Seen', s.connIngested || 'Ingested'],
@@ -1075,6 +1081,7 @@ export function generatePDFReport({
   }
 
   // 3.3 Data ingestion detail (conditional)
+  // Note: ingestion endpoints return total_ingestion (bytes) only — no event count available.
   if (ingestionBySensor.length > 0 || ingestionByConnector.length > 0) {
     y = needsPage(doc, y, 20)
     y = subTitle(doc, s.sub3_3 || '3.3 Data Ingestion Detail', y)
@@ -1082,11 +1089,10 @@ export function generatePDFReport({
       const sensorRows = ingestionBySensor.map(r => [
         trunc(r.name || r.sensor || '—', 40),
         r.type || '—',
-        fmtGB(r.bytes || r.size || 0),
-        fmtNum(r.events || r.eventCount || 0),
+        fmtGB(r.bytesIngested || r.bytes || r.size || 0),
       ])
       y = tableCompact(doc,
-        [s.sensorName || 'Sensor', s.sensorType || 'Type', s.sensorBytes || 'Volume', s.sensorEvents || 'Events'],
+        [s.sensorName || 'Sensor', s.sensorType || 'Type', s.sensorBytes || 'Volume'],
         sensorRows, y
       )
     }
@@ -1094,11 +1100,10 @@ export function generatePDFReport({
       y = needsPage(doc, y, 20)
       const connIngRows = ingestionByConnector.map(r => [
         trunc(r.name || r.connector || '—', 40),
-        fmtGB(r.bytes || r.size || 0),
-        fmtNum(r.events || r.eventCount || 0),
+        fmtGB(r.bytesIngested || r.bytes || r.size || 0),
       ])
       y = tableCompact(doc,
-        [s.connIngName || 'Connector', s.connIngBytes || 'Volume', s.connIngEvents || 'Events'],
+        [s.connIngName || 'Connector', s.connIngBytes || 'Volume'],
         connIngRows, y
       )
     }
