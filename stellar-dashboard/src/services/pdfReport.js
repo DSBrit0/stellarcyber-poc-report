@@ -713,6 +713,7 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   let y = newPage(doc)
   y = sectionTitle(doc, s.sec1 || '1. Executive Summary', y, 12)
+  y += 4
 
   // ── 1.2 Context and Objectives ──────────────────────────────────────────────
   y = subTitle(doc, s.sub1_2 || '1.2 Context and Objectives', y, 11)
