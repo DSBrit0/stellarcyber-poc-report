@@ -45,6 +45,8 @@ app.use(
     router: req => req.headers['x-proxy-target'],
     changeOrigin: true,
     pathRewrite: { '^/proxy': '' },
+    proxyTimeout: 85_000,
+    timeout:      85_000,
     on: {
       proxyReq(proxyReq) {
         proxyReq.removeHeader('x-proxy-target')

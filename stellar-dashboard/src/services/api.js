@@ -51,7 +51,7 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
     debug('api', `GET ${ENDPOINTS.CASES} ×4 (by severity)`, base)
 
     const settled = await Promise.allSettled(
-      SEVS.map(sev => client.get(ENDPOINTS.CASES, { params: { ...base, severity: sev }, timeout: 45_000 }))
+      SEVS.map(sev => client.get(ENDPOINTS.CASES, { params: { ...base, severity: sev }, timeout: 90_000 }))
     )
     const [critRes, highRes, medRes, lowRes] = settled
 
