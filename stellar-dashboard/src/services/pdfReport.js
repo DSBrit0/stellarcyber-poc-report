@@ -81,7 +81,7 @@ function addChrome(doc) {
   doc.setFontSize(8)
   doc.text('STELLAR CYBER', ML, 6.5)
   doc.setFont('helvetica', 'normal')
-  doc.text(_s.headerSub || ' | Open XDR Platform', ML + 26, 6.5)
+  doc.text(_s.headerSub || ' | Stellar Cyber XDR Platform', ML + 26, 6.5)
   doc.text(String(pg), PW - MR, 6.5, { align: 'right' })
 
   // Footer strip
