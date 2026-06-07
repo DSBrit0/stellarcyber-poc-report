@@ -556,6 +556,18 @@ export default {
     sub4_1:  '4.1 Cases Detectados',
     sub4_2:  '4.2 Métricas de Detecção',
     sub5_1:  '5.1 Cobertura de Táticas',
+
+    // ── Seção 5.3 — Detecções Proprietárias Stellar Cyber XDR ─────────────────
+    sub5_3:         '5.3 Detecções Proprietárias Stellar Cyber XDR',
+    sub5_3_tech:    '5.3.1 Técnicas XDR Detectadas',
+    body5_3:        'Além do framework MITRE ATT\u0026CK, a plataforma Stellar Cyber conta com um motor de análise comportamental proprietário (XDR) que detecta ameaças com táticas e técnicas exclusivas, ampliando a cobertura além dos 14 táticas padrão.',
+    xtaTacticId:    'Tática (ID)',
+    xtaTacticName:  'Tática XDR',
+    xtaCases:       'Cases',
+    xtaAlerts:      'Alertas',
+    xtaTechId:      'Técnica (ID)',
+    xtaTechName:    'Técnica XDR',
+    xtaTactic:      'Tática',
     sub5_2:  '5.2 Resumo de Cobertura',
     sub6_1:  '6.1 Fluxo de Resposta a Incidentes',
     sub6_2:  '6.2 Automação e Playbooks',

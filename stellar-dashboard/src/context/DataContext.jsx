@@ -7,8 +7,11 @@ import {
   fetchIngestionTimeline,
   fetchIngestionBySensor,
   fetchIngestionByConnector,
+  fetchCaseTactics,
+  emptyTactics,
 } from '../services/api'
 import { useAuth } from './AuthContext'
+import { warn } from '../utils/logger'
 
 const DataContext = createContext(null)
 
@@ -22,6 +25,7 @@ const EMPTY_DATA = {
   ingestionTimeline:    [],
   ingestionBySensor:    [],
   ingestionByConnector: [],
+  caseTactics:          null,
 }
 
 export function DataProvider({ children }) {
@@ -55,6 +59,19 @@ export function DataProvider({ children }) {
     // index 0 = fetchCases → returns { cases, lowCount, mediumTotal }
     const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector']
 
+    // Fetch MITRE + Stellar XDR tactic data for cases in the POC period.
+    // Runs after cases are available; each case triggers one /cases/{id}/alerts call.
+    let caseTactics = null
+    const casesResult = results[0]
+    if (casesResult.status === 'fulfilled' && casesResult.value?.cases?.length > 0) {
+      try {
+        caseTactics = await fetchCaseTactics(auth, casesResult.value.cases)
+      } catch (err) {
+        warn('DataContext', 'fetchCaseTactics fallback', { error: err.message })
+        caseTactics = emptyTactics()
+      }
+    }
+
     setData(prev => {
       const next = { ...prev }
       for (let i = 0; i < results.length; i++) {
@@ -77,6 +94,7 @@ export function DataProvider({ children }) {
           // keep previous data on error
         }
       }
+      if (caseTactics !== null) next.caseTactics = caseTactics
       return next
     })
 

@@ -627,6 +627,7 @@ export function generatePDFReport({
   recommendations = [],
   ingestionBySensor = [],
   ingestionByConnector = [],
+  caseTactics = null,
   generatedAt = new Date(),
   pocMeta = {},
   locale = 'pt',
@@ -665,15 +666,18 @@ export function generatePDFReport({
   const totalCasesCount = critCases.length + highCases.length + mediumTotal + lowCount
   const totalCasesStr   = fmtNum(totalCasesCount)
 
-  // MITRE coverage
-  const detectedTactics = new Set()
-  for (const rec of recommendations) {
-    if (rec.mitre && rec.mitre.tactic) detectedTactics.add(rec.mitre.tactic)
-  }
-  for (const c of cases) {
-    if (c.mitreTactic) detectedTactics.add(c.mitreTactic)
-    if (c.tactic)      detectedTactics.add(c.tactic)
-  }
+  // MITRE coverage — real data from API (caseTactics populated by DataContext.fetchCaseTactics)
+  // Falls back to recommendations-based detection when caseTactics is unavailable.
+  const detectedTactics = caseTactics?.mitre?.detectedTacticIds || (() => {
+    const fb = new Set()
+    for (const rec of recommendations) {
+      if (rec.mitre && rec.mitre.tactic) fb.add(rec.mitre.tactic)
+    }
+    return fb
+  })()
+  const mitreTechniqueData = caseTactics?.mitre?.techniques  || []
+  const stellarTacticData  = caseTactics?.stellar?.tactics   || []
+  const stellarTechData    = caseTactics?.stellar?.techniques || []
   const mitreCovPct = Math.round((detectedTactics.size / ALL_TACTICS.length) * 100)
 
   // Connectors by category
@@ -1289,30 +1293,22 @@ export function generatePDFReport({
   const gridRowCount = Math.ceil(ALL_TACTICS.length / gridCols)
   y += gridRowCount * (cellH + gridGap) + 6
 
-  // ── MITRE techniques bar chart ──────────────────────────────────────────────
-  if (mitrRecs.length > 0) {
-    const topTech = mitrRecs
-      .filter(r => r.mitre && r.mitre.affectedCases != null)
-      .sort((a, b) => b.mitre.affectedCases - a.mitre.affectedCases)
-      .slice(0, 10)
-    if (topTech.length > 0) {
-      y = needsPage(doc, y, 65)
-      drawChartTitle(doc, s.chartTechniques || 'Top Techniques by Affected Cases', ML, y + 3, CW)
-      const techPng = renderChartPNG(
-        () => hBarChart(
-          topTech.map(r => trunc(
-            `${(r.mitre.technique && r.mitre.technique.id) || ''} — ${(r.mitre.technique && r.mitre.technique.name) || r.title || ''}`,
-            45
-          )),
-          topTech.map(r => r.mitre.affectedCases),
-          topTech.map(() => C.blue)
-        ),
-        CW, 55
-      )
-      if (techPng) {
-        doc.addImage(techPng, 'PNG', ML, y + 5, CW, 55)
-        y += 62
-      }
+  // ── MITRE techniques bar chart (real API data) ──────────────────────────────
+  const topMitreTech = mitreTechniqueData.slice(0, 10)
+  if (topMitreTech.length > 0) {
+    y = needsPage(doc, y, 65)
+    drawChartTitle(doc, s.chartTechniques || 'Top MITRE Techniques by Cases', ML, y + 3, CW)
+    const techPng = renderChartPNG(
+      () => hBarChart(
+        topMitreTech.map(r => trunc(`${r.id} — ${r.name}`, 45)),
+        topMitreTech.map(r => r.caseCount),
+        topMitreTech.map(() => C.blue)
+      ),
+      CW, 55
+    )
+    if (techPng) {
+      doc.addImage(techPng, 'PNG', ML, y + 5, CW, 55)
+      y += 62
     }
   }
 
@@ -1331,6 +1327,79 @@ export function generatePDFReport({
     drawKpiCard(doc, cx, y, covCardW, covCardH, covCards[k].value, covCards[k].label, covCards[k].color)
   }
   y += covCardH + 6
+
+  // ── 5.3 Stellar Cyber XDR Proprietary Detections ────────────────────────────
+  if (stellarTacticData.length > 0) {
+    y = needsPage(doc, y, 20)
+    y = subTitle(doc, s.sub5_3 || '5.3 Detecções Proprietárias Stellar Cyber XDR', y)
+    y = bodyText(doc,
+      s.body5_3 ||
+      'Além do framework MITRE ATT&CK, a plataforma Stellar Cyber conta com um motor de análise comportamental proprietário (XDR) que detecta ameaças com táticas e técnicas exclusivas, ampliando a cobertura além dos 14 táticas padrão.',
+      y, { fontSize: 10, lineH: 5.2 }
+    )
+    y += 3
+
+    // XDR Tactics table
+    const xdrTacticRows = stellarTacticData.map(t => [t.id, t.name, String(t.caseCount), String(t.alertCount)])
+    y = tableBase(doc,
+      [
+        s.xtaTacticId   || 'Tática (ID)',
+        s.xtaTacticName || 'Tática XDR',
+        s.xtaCases      || 'Cases',
+        s.xtaAlerts     || 'Alertas',
+      ],
+      xdrTacticRows, y, {
+        columnStyles: {
+          0: { cellWidth: 28 },
+          1: { cellWidth: CW - 88 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 30 },
+        },
+        didParseCell: data => {
+          if (data.section === 'body' && data.column.index === 0) {
+            data.cell.styles.textColor = C.blue
+            data.cell.styles.fontStyle = 'bold'
+          }
+        },
+      }
+    )
+    y += 4
+
+    // XDR Techniques table (top 20)
+    if (stellarTechData.length > 0) {
+      y = needsPage(doc, y, 20)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(...C.navy)
+      doc.text(s.sub5_3_tech || '5.3.1 Técnicas XDR Detectadas', ML, y)
+      y += 6
+
+      const xdrTechRows = stellarTechData.slice(0, 20).map(t => [t.id, t.name, t.tacticName, String(t.caseCount)])
+      y = tableBase(doc,
+        [
+          s.xtaTechId   || 'Técnica (ID)',
+          s.xtaTechName || 'Técnica XDR',
+          s.xtaTactic   || 'Tática',
+          s.xtaCases    || 'Cases',
+        ],
+        xdrTechRows, y, {
+          columnStyles: {
+            0: { cellWidth: 28 },
+            1: { cellWidth: CW - 88 },
+            2: { cellWidth: 40 },
+            3: { cellWidth: 20 },
+          },
+          didParseCell: data => {
+            if (data.section === 'body' && data.column.index === 0) {
+              data.cell.styles.textColor = C.midBlue
+              data.cell.styles.fontStyle = 'bold'
+            }
+          },
+        }
+      )
+    }
+    y += 4
+  }
 
   // ════════════════════════════════════════════════════════════════════════════
   // SECTION 6 — Operational Assessment

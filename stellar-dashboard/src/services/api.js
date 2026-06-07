@@ -1,5 +1,5 @@
 import { createApiClient } from './apiClient'
-import { ENDPOINTS } from './endpoints'
+import { ENDPOINTS, API_PREFIX } from './endpoints'
 import { debug, info, warn, logApiError } from '../utils/logger'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -194,6 +194,97 @@ export async function fetchIngestionByConnector(auth, { pocStartDate, pocEndDate
   } catch (err) {
     warn('api', 'fetchIngestionByConnector fallback → empty', { error: err.message })
     handleError(err, ENDPOINTS.INGESTION_BY_CONNECTOR)
+  }
+}
+
+// ─── MITRE + Stellar Cyber XDR tactic/technique analysis ─────────────────────
+// Fetches alerts for each case and classifies detections:
+//   MITRE standard  → tactic IDs starting with "TA", technique IDs starting with "T1"/"T0"
+//   Stellar XDR     → tactic IDs starting with "XTA", technique IDs starting with "XT"
+// Results feed Section 5 (MITRE grid) and Section 5.3 (XDR proprietary detections).
+
+export function emptyTactics() {
+  return {
+    mitre:   { detectedTacticIds: new Set(), tactics: [], techniques: [] },
+    stellar: { tactics: [], techniques: [] },
+  }
+}
+
+export async function fetchCaseTactics(auth, cases) {
+  if (!cases || cases.length === 0) return emptyTactics()
+
+  const client   = createApiClient(auth)
+  const mitreT   = new Map()
+  const mitreTch = new Map()
+  const stellarT = new Map()
+  const stellarTch = new Map()
+
+  function processAlerts(docs, caseId) {
+    for (const doc of docs) {
+      const xdr     = doc?._source?.xdr_event || {}
+      const tactic  = xdr.tactic    || {}
+      const techObj = xdr.technique || {}
+      const tacId   = tactic.id
+      if (!tacId) continue
+
+      const isMitre  = tacId.startsWith('TA')
+      const tacMap   = isMitre ? mitreT   : stellarT
+      const techMap  = isMitre ? mitreTch : stellarTch
+      const tacName  = tactic.name  || ''
+      const techId   = techObj.id   || ''
+      const techName = techObj.name || ''
+
+      if (!tacMap.has(tacId)) tacMap.set(tacId, { id: tacId, name: tacName, caseIds: new Set(), alertCount: 0 })
+      const te = tacMap.get(tacId)
+      te.caseIds.add(caseId)
+      te.alertCount++
+
+      if (techId) {
+        if (!techMap.has(techId)) techMap.set(techId, { id: techId, name: techName, tacticId: tacId, tacticName: tacName, caseIds: new Set(), alertCount: 0 })
+        const te2 = techMap.get(techId)
+        te2.caseIds.add(caseId)
+        te2.alertCount++
+      }
+    }
+  }
+
+  const BATCH = 15
+  let fetched = 0
+  for (let i = 0; i < cases.length; i += BATCH) {
+    const batch = cases.slice(i, i + BATCH)
+    await Promise.allSettled(batch.map(async (c) => {
+      const caseId = c.id
+      if (!caseId) return
+      try {
+        const res  = await client.get(`${API_PREFIX}/cases/${caseId}/alerts`, {
+          params:  { tenantid: auth.tenant, cust_id: auth.tenant, limit: 100 },
+          timeout: 15_000,
+        })
+        const docs = res.data?.data?.docs ?? []
+        processAlerts(docs, caseId)
+        fetched++
+      } catch { /* individual case failure is non-fatal */ }
+    }))
+  }
+
+  function toArray(map) {
+    return Array.from(map.values())
+      .map(({ caseIds, ...rest }) => ({ ...rest, caseCount: caseIds.size }))
+      .sort((a, b) => b.caseCount - a.caseCount || b.alertCount - a.alertCount)
+  }
+
+  const detectedTacticIds = new Set(mitreT.keys())
+  info('api', `fetchCaseTactics ✅ ${fetched}/${cases.length} cases | MITRE tactics: ${detectedTacticIds.size} | Stellar tactics: ${stellarT.size}`)
+  return {
+    mitre: {
+      detectedTacticIds,
+      tactics:    toArray(mitreT),
+      techniques: toArray(mitreTch),
+    },
+    stellar: {
+      tactics:    toArray(stellarT),
+      techniques: toArray(stellarTch),
+    },
   }
 }
 
