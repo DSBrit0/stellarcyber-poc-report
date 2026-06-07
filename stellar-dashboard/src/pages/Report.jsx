@@ -219,6 +219,9 @@ export default function Report() {
       })
       setDownloaded(true)
       setTimeout(() => setDownloaded(false), 4000)
+    } catch (err) {
+      console.error('[PDF] generation failed:', err)
+      alert(`PDF generation error: ${err?.message || err}`)
     } finally {
       setGenerating(false)
     }

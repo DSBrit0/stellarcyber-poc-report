@@ -523,7 +523,7 @@ function drawCover(doc, pocMeta, s) {
   const row2Y   = blockY + rowH + 5
 
   // Light grid separators
-  doc.setDrawColor(...C.lightGray)
+  doc.setDrawColor(...C.gray)
   doc.setLineWidth(0.25)
   doc.line(divX, blockY - 3, divX, row2Y + rowH)   // vertical
   doc.line(colL, row2Y - 3, PW - MR, row2Y - 3)    // horizontal between rows
