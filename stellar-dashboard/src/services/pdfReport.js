@@ -643,7 +643,8 @@ export function generatePDFReport({
     const valid = assets.filter(a => a.entity_count != null && a.entity_count > 0)
     if (!valid.length) return null
     const avg = valid.reduce((sum, a) => sum + Number(a.entity_count), 0) / valid.length
-    return Math.round(avg).toLocaleString('pt-BR')
+    const locStr = locale === 'pt' ? 'pt-BR' : locale === 'es' ? 'es-MX' : 'en-US'
+    return Math.round(avg).toLocaleString(locStr)
   })()
 
   // Total displayed (crit + high + mediumTotal + lowCount)
@@ -878,9 +879,10 @@ export function generatePDFReport({
   y = subTitle(doc, s.sub1_2 || '1.2 Context and Objectives', y)
   const body1_1 = (
     s.body1_1 ||
-    'This Proof of Concept evaluated Stellar Cyber’s Open XDR platform against the security environment of {clientName}. The assessment covered {pocStartDate} to {pocEndDate}.'
+    "This Proof of Concept evaluated Stellar Cyber's Open XDR platform against the security environment of {clientName}. The assessment covered {pocStartDate} to {pocEndDate}."
   )
     .replace('{clientName}',   pocMeta.clientName || s.clientNamePlaceholder || 'the client')
+    .replace('{client}',       pocMeta.clientName || s.clientNamePlaceholder || 'the client')
     .replace('{pocStartDate}', fmtDate(pocMeta.pocStartDate))
     .replace('{pocEndDate}',   fmtDate(pocMeta.pocEndDate))
   y = bodyText(doc, body1_1, y)
@@ -904,8 +906,13 @@ export function generatePDFReport({
     y += 2
   }
 
-  const body1_2 = s.body1_2 ||
-    'The primary objective was to validate detection capabilities, response workflows, and integration breadth across the customer’s existing security stack.'
+  const body1_2 = (s.body1_2 ||
+    "The primary objective was to validate detection capabilities, response workflows, and integration breadth across the customer's existing security stack.")
+    .replace('{startDate}',  fmtDate(pocMeta.pocStartDate))
+    .replace('{endDate}',    fmtDate(pocMeta.pocEndDate))
+    .replace('{connCount}',  String(connectors.length))
+    .replace('{caseCount}',  String(totalCasesCount))
+    .replace('{mitrePct}',   String(mitreCovPct))
   y = bodyText(doc, body1_2, y)
   y += 4
 
@@ -1315,7 +1322,7 @@ export function generatePDFReport({
   y = subTitle(doc, s.sub6_2 || '6.2 Automation & Playbooks', y)
   y = bodyText(doc,
     s.body6_2 ||
-    'Stellar Cyber’s built-in SOAR capabilities enable automated triage, enrichment and response playbooks that reduce analyst fatigue and accelerate containment.',
+    "Stellar Cyber's built-in SOAR capabilities enable automated triage, enrichment and response playbooks that reduce analyst fatigue and accelerate containment.",
     y
   )
   y += 4
@@ -1463,7 +1470,7 @@ export function generatePDFReport({
   // Conclusion body
   const body10 = (
     s.body10 ||
-    'Based on the results of this Proof of Concept, Stellar Cyber’s Open XDR platform demonstrated {verdict} alignment with {clientName}’s security objectives.'
+    "Based on the results of this Proof of Concept, Stellar Cyber's Open XDR platform demonstrated {verdict} alignment with {clientName}'s security objectives."
   )
     .replace('{verdict}',    verdict || (s.verdictPending || 'pending'))
     .replace('{clientName}', pocMeta.clientName || s.clientNamePlaceholder || 'the client')
