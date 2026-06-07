@@ -696,10 +696,63 @@ export function generatePDFReport({
   drawCover(doc, pocMeta, s)
 
   // ════════════════════════════════════════════════════════════════════════════
-  // SECTION 1 — Executive Summary
+  // SECTION 1 — Page 3: Context and Objectives + Success Criteria
   // ════════════════════════════════════════════════════════════════════════════
   let y = newPage(doc)
   y = sectionTitle(doc, s.sec1 || '1. Executive Summary', y)
+
+  // ── 1.2 Context and Objectives ──────────────────────────────────────────────
+  y = subTitle(doc, s.sub1_2 || '1.2 Context and Objectives', y)
+  const body1_1 = (
+    s.body1_1 ||
+    "This Proof of Concept evaluated Stellar Cyber's Open XDR platform against the security environment of {clientName}. The assessment covered {pocStartDate} to {pocEndDate}."
+  )
+    .replace('{clientName}',   pocMeta.clientName || s.clientNamePlaceholder || 'the client')
+    .replace('{client}',       pocMeta.clientName || s.clientNamePlaceholder || 'the client')
+    .replace('{pocStartDate}', fmtDate(pocMeta.pocStartDate))
+    .replace('{pocEndDate}',   fmtDate(pocMeta.pocEndDate))
+  y = bodyText(doc, body1_1, y)
+  y += 2
+
+  if (pocMeta.successCriteria && pocMeta.successCriteria.length > 0) {
+    const critItems = String(pocMeta.successCriteria)
+      .split(/[;\n]/)
+      .map(c => c.trim())
+      .filter(Boolean)
+    if (critItems.length > 0) {
+      y = needsPage(doc, y, 12)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...C.navy)
+      doc.text(s.successCriteriaTitle || 'Success Criteria:', ML, y)
+      y += 5
+      for (const crit of critItems) {
+        y = needsPage(doc, y, 6)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(...C.text)
+        const lines = doc.splitTextToSize(`• ${crit}`, CW - 6)
+        doc.text(lines, ML + 3, y)
+        y += lines.length * 4.5
+      }
+      y += 2
+    }
+  }
+
+  const body1_2 = (s.body1_2 ||
+    "The primary objective was to validate detection capabilities, response workflows, and integration breadth across the customer's existing security stack.")
+    .replace('{startDate}',  fmtDate(pocMeta.pocStartDate))
+    .replace('{endDate}',    fmtDate(pocMeta.pocEndDate))
+    .replace('{connCount}',  String(connectors.length))
+    .replace('{caseCount}',  String(totalCasesCount))
+    .replace('{mitrePct}',   String(mitreCovPct))
+  y = bodyText(doc, body1_2, y)
+  y += 4
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Page 4: Executive Summary — 1.1 KPI Cards + Charts + Table
+  // ════════════════════════════════════════════════════════════════════════════
+  y = newPage(doc)
 
   // ── 1.1 KPI Cards ──────────────────────────────────────────────────────────
   y = subTitle(doc, s.sub1_1 || '1.1 Key Performance Indicators', y)
@@ -874,55 +927,6 @@ export function generatePDFReport({
     [s.kpiMetric || 'Metric', s.kpiValue || 'Value', s.kpiNotes || 'Notes'],
     kpiRows, y
   )
-
-  // ── 1.2 Context and Objectives ──────────────────────────────────────────────
-  y = needsPage(doc, y, 20)
-  y = subTitle(doc, s.sub1_2 || '1.2 Context and Objectives', y)
-  const body1_1 = (
-    s.body1_1 ||
-    "This Proof of Concept evaluated Stellar Cyber's Open XDR platform against the security environment of {clientName}. The assessment covered {pocStartDate} to {pocEndDate}."
-  )
-    .replace('{clientName}',   pocMeta.clientName || s.clientNamePlaceholder || 'the client')
-    .replace('{client}',       pocMeta.clientName || s.clientNamePlaceholder || 'the client')
-    .replace('{pocStartDate}', fmtDate(pocMeta.pocStartDate))
-    .replace('{pocEndDate}',   fmtDate(pocMeta.pocEndDate))
-  y = bodyText(doc, body1_1, y)
-  y += 2
-
-  if (pocMeta.successCriteria && pocMeta.successCriteria.length > 0) {
-    const critItems = String(pocMeta.successCriteria)
-      .split(/[;\n]/)
-      .map(c => c.trim())
-      .filter(Boolean)
-    if (critItems.length > 0) {
-      y = needsPage(doc, y, 12)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(...C.navy)
-      doc.text(s.successCriteriaTitle || 'Success Criteria:', ML, y)
-      y += 5
-      for (const crit of critItems) {
-        y = needsPage(doc, y, 6)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        doc.setTextColor(...C.text)
-        const lines = doc.splitTextToSize(`• ${crit}`, CW - 6)
-        doc.text(lines, ML + 3, y)
-        y += lines.length * 4.5
-      }
-      y += 2
-    }
-  }
-
-  const body1_2 = (s.body1_2 ||
-    "The primary objective was to validate detection capabilities, response workflows, and integration breadth across the customer's existing security stack.")
-    .replace('{startDate}',  fmtDate(pocMeta.pocStartDate))
-    .replace('{endDate}',    fmtDate(pocMeta.pocEndDate))
-    .replace('{connCount}',  String(connectors.length))
-    .replace('{caseCount}',  String(totalCasesCount))
-    .replace('{mitrePct}',   String(mitreCovPct))
-  y = bodyText(doc, body1_2, y)
-  y += 4
 
   // ════════════════════════════════════════════════════════════════════════════
   // ARCHITECTURE PAGE
