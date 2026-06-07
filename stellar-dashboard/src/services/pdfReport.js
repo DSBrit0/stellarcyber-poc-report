@@ -1024,16 +1024,43 @@ export function generatePDFReport({
   // 2.3 Success Criteria
   y = needsPage(doc, y, 20)
   y = subTitle(doc, s.sub2_3 || '2.3 Success Criteria', y)
-  const scBase = s.successCriteriaRows || [
-    [s.sc1 || 'Detection Rate',         s.sc1target || '≥ 85% of simulated attacks detected'],
-    [s.sc2 || 'Time to Detect (MTTD)',  s.sc2target || '< 5 minutes average'],
-    [s.sc3 || 'Integration Coverage',   s.sc3target || '≥ 80% of existing tools integrated'],
-    [s.sc4 || 'False Positive Rate',    s.sc4target || '< 10% of total alerts'],
+
+  // MTTD: median of (created_at − start_timestamp) in minutes across cases in scope
+  const mttdValues = cases
+    .filter(c => c.startedAt != null && c.detectedAt != null && c.detectedAt > c.startedAt)
+    .map(c => (c.detectedAt - c.startedAt) / 1000 / 60)
+  const mttdStr = (() => {
+    if (!mttdValues.length) return '—'
+    const sorted = [...mttdValues].sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)]
+    return `${median.toFixed(1)} min`
+  })()
+
+  // Alert noise reduction: total raw alerts across cases vs number of cases
+  const scTotalAlerts = cases.reduce((sum, c) => sum + (c.alertCount || 1), 0)
+  const scNoiseRedPct = scTotalAlerts > cases.length
+    ? Math.round((1 - cases.length / scTotalAlerts) * 100)
+    : 0
+  const scCorrRatio = cases.length > 0 ? Math.round(scTotalAlerts / cases.length) : 0
+  const noiseStr    = cases.length > 0 ? `${scNoiseRedPct}% (${scCorrRatio}:1)` : '—'
+
+  // Integration coverage: active connectors vs total configured
+  const integPct = connectors.length > 0 ? Math.round(activeConn.length / connectors.length * 100) : 0
+  const integStr  = connectors.length > 0 ? `${activeConn.length}/${connectors.length} (${integPct}%)` : '—'
+
+  // MITRE detection coverage (already computed above)
+  const detectionStr = `${mitreCovPct}%`
+
+  const scRows = [
+    [s.sc1 || 'MITRE Detection Coverage', s.sc1target || '≥ 85% tactics detected',      detectionStr],
+    [s.sc2 || 'Time to Detect (MTTD)',    s.sc2target || '< 5 min (median)',             mttdStr],
+    [s.sc3 || 'Integration Coverage',     s.sc3target || '100% active sources',          integStr],
+    [s.sc4 || 'Alert Noise Reduction',    s.sc4target || '> 80% correlated alerts',      noiseStr],
   ]
   y = tableBase(doc,
-    [s.scCriteria || 'Criterion', s.scTarget || 'Target'],
-    scBase, y,
-    { columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: CW - 60 } } }
+    [s.scCriteria || 'Criterion', s.scTarget || 'Target', s.scResult || 'Result'],
+    scRows, y,
+    { columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: CW - 55 - 35 }, 2: { cellWidth: 35 } } }
   )
 
   // ════════════════════════════════════════════════════════════════════════════

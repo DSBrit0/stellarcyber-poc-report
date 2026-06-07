@@ -381,6 +381,8 @@ function normalizeCases(items) {
       alertCount: c.size || c.assets_affected || c.alert_count || c.asset_count || 1,
       tenantName:     c.tenant_name || c.cust_name || '',
       custId:         c.cust_id || '',
+      startedAt:  typeof c.start_timestamp === 'number' ? c.start_timestamp : null,
+      detectedAt: typeof c.created_at      === 'number' ? c.created_at      : null,
       rawDate,
       createdAt: rawDate != null
         ? (typeof rawDate === 'number' ? new Date(rawDate).toISOString() : rawDate)
