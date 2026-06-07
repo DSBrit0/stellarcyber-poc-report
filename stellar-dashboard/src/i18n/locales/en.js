@@ -535,7 +535,7 @@ export default {
     // ── Cover & footer ────────────────────────────────────────────────────────
     coverConfidential:  'CONFIDENTIAL',
     coverEyebrow:       'PROOF OF CONCEPT',
-    coverTitle1:        'Open XDR',
+    coverTitle1:        'Stellar Cyber XDR',
     coverTitle2:        'Platform',
     coverReportType:    'Proof of Concept Report',
     footerVersion:      'Version',

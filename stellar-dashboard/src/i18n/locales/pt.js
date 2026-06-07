@@ -535,7 +535,7 @@ export default {
     // ── Capa e rodapé ─────────────────────────────────────────────────────────
     coverConfidential:  'CONFIDENCIAL',
     coverEyebrow:       'PROVA DE CONCEITO',
-    coverTitle1:        'Open XDR',
+    coverTitle1:        'Stellar Cyber XDR',
     coverTitle2:        'Plataforma',
     coverReportType:    'Relatório de Prova de Conceito',
     footerVersion:      'Versão',

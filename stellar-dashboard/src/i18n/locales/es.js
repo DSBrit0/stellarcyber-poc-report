@@ -535,7 +535,7 @@ export default {
     // ── Portada y pie de página ───────────────────────────────────────────────
     coverConfidential:  'CONFIDENCIAL',
     coverEyebrow:       'PRUEBA DE CONCEPTO',
-    coverTitle1:        'Open XDR',
+    coverTitle1:        'Stellar Cyber XDR',
     coverTitle2:        'Plataforma',
     coverReportType:    'Informe de Prueba de Concepto',
     footerVersion:      'Versión',
