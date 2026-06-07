@@ -114,15 +114,17 @@ function needsPage(doc, y, needed) {
 }
 
 // ─── Text helpers ─────────────────────────────────────────────────────────────
-function sectionTitle(doc, text, y) {
+function sectionTitle(doc, text, y, size) {
+  const fs = size || 9.5
+  const barH = fs > 10 ? 10 : 7.5
   y = needsPage(doc, y, 16)
   i(doc, C.navy)
-  doc.rect(ML, y, CW, 7.5, 'F')
+  doc.rect(ML, y, CW, barH, 'F')
   doc.setTextColor(...C.white)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.text(text, ML + 3, y + 5.2)
-  return y + 7.5 + 3
+  doc.setFontSize(fs)
+  doc.text(text, ML + 3, y + barH * 0.69)
+  return y + barH + 3
 }
 
 function appendixTitle(doc, text, y) {
@@ -136,16 +138,17 @@ function appendixTitle(doc, text, y) {
   return y + 7.5 + 3
 }
 
-function subTitle(doc, text, y) {
+function subTitle(doc, text, y, size) {
+  const fs = size || 9
   y = needsPage(doc, y, 12)
   doc.setTextColor(...C.midBlue)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(fs)
   doc.text(text, ML, y)
   doc.setDrawColor(...C.midBlue)
   doc.setLineWidth(0.3)
-  doc.line(ML, y + 1.5, ML + CW, y + 1.5)
-  return y + 7
+  doc.line(ML, y + 2, ML + CW, y + 2)
+  return y + fs * 0.9
 }
 
 function bodyText(doc, text, y, opts) {
@@ -699,10 +702,10 @@ export function generatePDFReport({
   // SECTION 1 — Page 3: Context and Objectives + Success Criteria
   // ════════════════════════════════════════════════════════════════════════════
   let y = newPage(doc)
-  y = sectionTitle(doc, s.sec1 || '1. Executive Summary', y)
+  y = sectionTitle(doc, s.sec1 || '1. Executive Summary', y, 12)
 
   // ── 1.2 Context and Objectives ──────────────────────────────────────────────
-  y = subTitle(doc, s.sub1_2 || '1.2 Context and Objectives', y)
+  y = subTitle(doc, s.sub1_2 || '1.2 Context and Objectives', y, 11)
   const body1_1 = (
     s.body1_1 ||
     "This Proof of Concept evaluated Stellar Cyber's Open XDR platform against the security environment of {clientName}. The assessment covered {pocStartDate} to {pocEndDate}."
@@ -711,8 +714,8 @@ export function generatePDFReport({
     .replace('{client}',       pocMeta.clientName || s.clientNamePlaceholder || 'the client')
     .replace('{pocStartDate}', fmtDate(pocMeta.pocStartDate))
     .replace('{pocEndDate}',   fmtDate(pocMeta.pocEndDate))
-  y = bodyText(doc, body1_1, y)
-  y += 2
+  y = bodyText(doc, body1_1, y, { fontSize: 10.5, lineH: 5.5 })
+  y += 4
 
   if (pocMeta.successCriteria && pocMeta.successCriteria.length > 0) {
     const critItems = String(pocMeta.successCriteria)
@@ -720,22 +723,22 @@ export function generatePDFReport({
       .map(c => c.trim())
       .filter(Boolean)
     if (critItems.length > 0) {
-      y = needsPage(doc, y, 12)
+      y = needsPage(doc, y, 14)
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
+      doc.setFontSize(10.5)
       doc.setTextColor(...C.navy)
-      doc.text(s.successCriteriaTitle || 'Success Criteria:', ML, y)
-      y += 5
+      doc.text(s.successCriteriaTitle || 'Critérios de Sucesso:', ML, y)
+      y += 7
       for (const crit of critItems) {
-        y = needsPage(doc, y, 6)
+        y = needsPage(doc, y, 8)
         doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
+        doc.setFontSize(10.5)
         doc.setTextColor(...C.text)
         const lines = doc.splitTextToSize(`• ${crit}`, CW - 6)
         doc.text(lines, ML + 3, y)
-        y += lines.length * 4.5
+        y += lines.length * 5.5
       }
-      y += 2
+      y += 3
     }
   }
 
@@ -746,7 +749,7 @@ export function generatePDFReport({
     .replace('{connCount}',  String(connectors.length))
     .replace('{caseCount}',  String(totalCasesCount))
     .replace('{mitrePct}',   String(mitreCovPct))
-  y = bodyText(doc, body1_2, y)
+  y = bodyText(doc, body1_2, y, { fontSize: 10.5, lineH: 5.5 })
   y += 4
 
   // ════════════════════════════════════════════════════════════════════════════
