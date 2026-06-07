@@ -767,8 +767,42 @@ export function generatePDFReport({
   y = bodyText(doc, body1_2, y, { fontSize: 10.5, lineH: 5.5 })
   y += 4
 
+  // ── 1.1 Executive Summary Table ────────────────────────────────────────────
+  y = needsPage(doc, y, 30)
+  const kpiRows = [
+    [
+      s.kpiCasesDetected || 'Cases / Alerts',
+      totalCasesStr,
+      `${critCases.length} ${s.critLabel || 'critical'}, ${highCases.length} ${s.highLabel || 'high'}`,
+    ],
+    [
+      s.kpiAvgEntities || 'Média Assets monitorado/Dia',
+      avgEntities || '—',
+      s.kpiEntitiesNote || 'Média de assets ativos por dia (hosts / usuários / dispositivos)',
+    ],
+    [
+      s.kpiActiveConn || 'Active Sources',
+      `${activeConn.length} / ${connectors.length}`,
+      s.kpiConnNote || 'Active data sources connected',
+    ],
+    [
+      s.kpiMitreCov || 'MITRE Coverage',
+      `${mitreCovPct}% (${detectedTactics.size}/${ALL_TACTICS.length})`,
+      s.kpiMitreNote || 'Tactics detected out of 14',
+    ],
+    [
+      s.kpiOpenCases || 'Open Cases',
+      String(openCases.length),
+      pct(openCases.length, totalCasesCount) + ` ${s.ofTotal || 'of total'}`,
+    ],
+  ]
+  y = tableBase(doc,
+    [s.kpiMetric || 'Metric', s.kpiValue || 'Value', s.kpiNotes || 'Notes'],
+    kpiRows, y
+  )
+
   // ════════════════════════════════════════════════════════════════════════════
-  // Page 4: Executive Summary — 1.1 KPI Cards + Charts + Table
+  // Page 4: Executive Summary — 1.1 KPI Cards + Charts
   // ════════════════════════════════════════════════════════════════════════════
   y = newPage(doc)
 
@@ -913,74 +947,6 @@ export function generatePDFReport({
   }
   y += chartH + 8
 
-  // ── KPI Summary Table ───────────────────────────────────────────────────────
-  y = needsPage(doc, y, 30)
-  const kpiRows = [
-    [
-      s.kpiCasesDetected || 'Cases / Alerts',
-      totalCasesStr,
-      `${critCases.length} ${s.critLabel || 'critical'}, ${highCases.length} ${s.highLabel || 'high'}`,
-    ],
-    [
-      s.kpiAvgEntities || 'Média Assets monitorado/Dia',
-      avgEntities || '—',
-      s.kpiEntitiesNote || 'Média de assets ativos por dia (hosts / usuários / dispositivos)',
-    ],
-    [
-      s.kpiActiveConn || 'Active Sources',
-      `${activeConn.length} / ${connectors.length}`,
-      s.kpiConnNote || 'Active data sources connected',
-    ],
-    [
-      s.kpiMitreCov || 'MITRE Coverage',
-      `${mitreCovPct}% (${detectedTactics.size}/${ALL_TACTICS.length})`,
-      s.kpiMitreNote || 'Tactics detected out of 14',
-    ],
-    [
-      s.kpiOpenCases || 'Open Cases',
-      String(openCases.length),
-      pct(openCases.length, totalCasesCount) + ` ${s.ofTotal || 'of total'}`,
-    ],
-  ]
-  y = tableBase(doc,
-    [s.kpiMetric || 'Metric', s.kpiValue || 'Value', s.kpiNotes || 'Notes'],
-    kpiRows, y
-  )
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // ARCHITECTURE PAGE
-  // ════════════════════════════════════════════════════════════════════════════
-  y = newPage(doc)
-  y = appendixTitle(doc, s.secArch || 'Arquitetura Mínima Sugerida', y)
-  if (pocMeta.architectureImage) {
-    try {
-      const imgData = pocMeta.architectureImage
-      const maxW = CW
-      const maxH = 160
-      const dims = pocMeta.architectureImageDims
-      const PX_TO_MM = 25.4 / 96
-      const imgW = dims ? dims.w * PX_TO_MM : maxW
-      const imgH = dims ? dims.h * PX_TO_MM : maxH
-      // scale down only — never upscale a small image
-      const ratio = Math.min(1, maxW / imgW, maxH / imgH)
-      const drawW = imgW * ratio
-      const drawH = imgH * ratio
-      const drawX = ML + (CW - drawW) / 2
-      doc.addImage(imgData, 'PNG', drawX, y, drawW, drawH)
-      y += drawH + 6
-    } catch (_e) {
-      y = infoNote(doc, s.archImageError || 'Architecture image could not be rendered.', y)
-      y += 4
-    }
-  } else {
-    y = infoNote(
-      doc,
-      s.noArchImage || 'No architecture diagram provided. Add an image to pocMeta.architectureImage.',
-      y
-    )
-    y += 4
-  }
-
   // ════════════════════════════════════════════════════════════════════════════
   // SECTION 2 — Environment & Methodology
   // ════════════════════════════════════════════════════════════════════════════
@@ -1003,22 +969,6 @@ export function generatePDFReport({
     [s.envParam || 'Parameter', s.envValue || 'Value'],
     env2Rows, y,
     { columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: CW - 55 } } }
-  )
-
-  // 2.2 Methodology Phases
-  y = needsPage(doc, y, 40)
-  y = subTitle(doc, s.sub2_2 || '2.2 Methodology Phases', y)
-  const methRows = s.methodologyPhases || [
-    ['1', s.phase1 || 'Kickoff & Scoping',     s.phase1desc || 'Define success criteria, environments and integrations.'],
-    ['2', s.phase2 || 'Deployment',             s.phase2desc || 'Install sensors, configure connectors, validate data flow.'],
-    ['3', s.phase3 || 'Detection Validation',   s.phase3desc || 'Execute attack simulations and verify detections.'],
-    ['4', s.phase4 || 'Response & Automation',  s.phase4desc || 'Validate playbooks, SOAR workflows and response times.'],
-    ['5', s.phase5 || 'Reporting & Debrief',    s.phase5desc || 'Analyze results, identify gaps and present findings.'],
-  ]
-  y = tableBase(doc,
-    [s.phaseNum || '#', s.phaseName || 'Phase', s.phaseDesc || 'Description'],
-    methRows, y,
-    { columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 45 }, 2: { cellWidth: CW - 55 } } }
   )
 
   // 2.3 Success Criteria
@@ -1062,6 +1012,56 @@ export function generatePDFReport({
     scRows, y,
     { columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: CW - 55 - 35 }, 2: { cellWidth: 35 } } }
   )
+
+  // 2.2 Methodology Phases
+  y = needsPage(doc, y, 40)
+  y = subTitle(doc, s.sub2_2 || '2.2 Methodology Phases', y)
+  const methRows = s.methodologyPhases || [
+    ['1', s.phase1 || 'Kickoff & Scoping',     s.phase1desc || 'Define success criteria, environments and integrations.'],
+    ['2', s.phase2 || 'Deployment',             s.phase2desc || 'Install sensors, configure connectors, validate data flow.'],
+    ['3', s.phase3 || 'Detection Validation',   s.phase3desc || 'Execute attack simulations and verify detections.'],
+    ['4', s.phase4 || 'Response & Automation',  s.phase4desc || 'Validate playbooks, SOAR workflows and response times.'],
+    ['5', s.phase5 || 'Reporting & Debrief',    s.phase5desc || 'Analyze results, identify gaps and present findings.'],
+  ]
+  y = tableBase(doc,
+    [s.phaseNum || '#', s.phaseName || 'Phase', s.phaseDesc || 'Description'],
+    methRows, y,
+    { columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 45 }, 2: { cellWidth: CW - 55 } } }
+  )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ARCHITECTURE PAGE
+  // ════════════════════════════════════════════════════════════════════════════
+  y = newPage(doc)
+  y = appendixTitle(doc, s.secArch || 'Arquitetura Mínima Sugerida', y)
+  if (pocMeta.architectureImage) {
+    try {
+      const imgData = pocMeta.architectureImage
+      const maxW = CW
+      const maxH = 160
+      const dims = pocMeta.architectureImageDims
+      const PX_TO_MM = 25.4 / 96
+      const imgW = dims ? dims.w * PX_TO_MM : maxW
+      const imgH = dims ? dims.h * PX_TO_MM : maxH
+      // scale down only — never upscale a small image
+      const ratio = Math.min(1, maxW / imgW, maxH / imgH)
+      const drawW = imgW * ratio
+      const drawH = imgH * ratio
+      const drawX = ML + (CW - drawW) / 2
+      doc.addImage(imgData, 'PNG', drawX, y, drawW, drawH)
+      y += drawH + 6
+    } catch (_e) {
+      y = infoNote(doc, s.archImageError || 'Architecture image could not be rendered.', y)
+      y += 4
+    }
+  } else {
+    y = infoNote(
+      doc,
+      s.noArchImage || 'No architecture diagram provided. Add an image to pocMeta.architectureImage.',
+      y
+    )
+    y += 4
+  }
 
   // ════════════════════════════════════════════════════════════════════════════
   // SECTION 3 — Data Sources
@@ -1157,20 +1157,25 @@ export function generatePDFReport({
     y = infoNote(doc, s.noCases || 'No cases data available for this PoC period.', y)
     y += 4
   } else {
-    // ── Timeline chart (full width CW × 45mm) ──────────────────────────────
-    const tlData = buildTimelineData(cases, pocMeta.pocStartDate, pocMeta.pocEndDate)
-    if (tlData.labels.length > 0) {
-      y = needsPage(doc, y, 55)
-      drawChartTitle(doc, s.chartTimeline || 'Daily Critical & High Cases', ML, y + 3, CW)
-      const tlPng = renderChartPNG(
-        () => lineChart(tlData.labels, tlData.data, C.red),
-        CW, 45
-      )
-      if (tlPng) {
-        doc.addImage(tlPng, 'PNG', ML, y + 5, CW, 45)
-        y += 52
-      }
-    }
+    // ── 4.2 Detection Metrics ────────────────────────────────────────────────
+    y = needsPage(doc, y, 40)
+    y = subTitle(doc, s.sub4_2 || '4.2 Detection Metrics', y)
+    const avgScore = cases.length > 0
+      ? Math.round(cases.reduce((sum, c) => sum + (c.score || 0), 0) / cases.length)
+      : 0
+    const detMetRows = [
+      [s.metCritical  || 'Critical Cases', fmtNum(critCases.length),                    pct(critCases.length, totalCasesCount)],
+      [s.metHigh      || 'High Cases',     fmtNum(highCases.length),                    pct(highCases.length, totalCasesCount)],
+      [s.metMedium    || 'Medium Cases',   fmtNum(mediumTotal),                         pct(mediumTotal, totalCasesCount)],
+      [s.metLow       || 'Low Cases',      fmtNum(lowCount),                            pct(lowCount, totalCasesCount)],
+      [s.metOpen      || 'Open Cases',     fmtNum(openCases.length),                    pct(openCases.length, totalCasesCount)],
+      [s.metAvgScore  || 'Average Score',  String(avgScore),                            ''],
+    ]
+    y = tableBase(doc,
+      [s.metMetric || 'Metric', s.metValue || 'Value', s.metPct || 'Of Total'],
+      detMetRows, y,
+      { columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 35 }, 2: { cellWidth: CW - 105 } } }
+    )
 
     // ── Detection types bar chart (CW × 50mm) ──────────────────────────────
     const detTypes = buildDetectionTypes(cases)
@@ -1188,6 +1193,21 @@ export function generatePDFReport({
       if (dtPng) {
         doc.addImage(dtPng, 'PNG', ML, y + 5, CW, 50)
         y += 57
+      }
+    }
+
+    // ── Timeline chart (full width CW × 45mm) ──────────────────────────────
+    const tlData = buildTimelineData(cases, pocMeta.pocStartDate, pocMeta.pocEndDate)
+    if (tlData.labels.length > 0) {
+      y = needsPage(doc, y, 55)
+      drawChartTitle(doc, s.chartTimeline || 'Daily Critical & High Cases', ML, y + 3, CW)
+      const tlPng = renderChartPNG(
+        () => lineChart(tlData.labels, tlData.data, C.red),
+        CW, 45
+      )
+      if (tlPng) {
+        doc.addImage(tlPng, 'PNG', ML, y + 5, CW, 45)
+        y += 52
       }
     }
 
@@ -1249,26 +1269,6 @@ export function generatePDFReport({
       )
       y += 4
     }
-
-    // ── 4.2 Detection Metrics ────────────────────────────────────────────────
-    y = needsPage(doc, y, 40)
-    y = subTitle(doc, s.sub4_2 || '4.2 Detection Metrics', y)
-    const avgScore = cases.length > 0
-      ? Math.round(cases.reduce((sum, c) => sum + (c.score || 0), 0) / cases.length)
-      : 0
-    const detMetRows = [
-      [s.metCritical  || 'Critical Cases', fmtNum(critCases.length),                    pct(critCases.length, totalCasesCount)],
-      [s.metHigh      || 'High Cases',     fmtNum(highCases.length),                    pct(highCases.length, totalCasesCount)],
-      [s.metMedium    || 'Medium Cases',   fmtNum(mediumTotal),                         pct(mediumTotal, totalCasesCount)],
-      [s.metLow       || 'Low Cases',      fmtNum(lowCount),                            pct(lowCount, totalCasesCount)],
-      [s.metOpen      || 'Open Cases',     fmtNum(openCases.length),                    pct(openCases.length, totalCasesCount)],
-      [s.metAvgScore  || 'Average Score',  String(avgScore),                            ''],
-    ]
-    y = tableBase(doc,
-      [s.metMetric || 'Metric', s.metValue || 'Value', s.metPct || 'Of Total'],
-      detMetRows, y,
-      { columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 35 }, 2: { cellWidth: CW - 105 } } }
-    )
   }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -1276,26 +1276,22 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   y = newPage(doc)
   y = sectionTitle(doc, s.sec5 || '5. MITRE ATT&CK Coverage', y)
-  y = subTitle(doc, s.sub5_1 || '5.1 Tactic Coverage', y)
 
-  // 5.1 Table
-  const tacticRows = ALL_TACTICS.map(t => {
-    const detected = detectedTactics.has(t.id) || detectedTactics.has(t.name)
-    return [t.id, t.name, detected ? (s.detected || 'Detected') : (s.notDetected || 'Not Detected')]
-  })
-  y = tableBase(doc,
-    [s.tacticId || 'Tactic ID', s.tacticName || 'Tactic', s.tacticStatus || 'Status'],
-    tacticRows, y, {
-      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 80 }, 2: { cellWidth: CW - 105 } },
-      didParseCell: data => {
-        if (data.section === 'body' && data.column.index === 2) {
-          const isDetected = data.cell.text[0] === (s.detected || 'Detected')
-          data.cell.styles.textColor = isDetected ? C.green : C.muted
-          data.cell.styles.fontStyle = isDetected ? 'bold' : 'normal'
-        }
-      },
-    }
-  )
+  // ── 5.2 Coverage Summary ─────────────────────────────────────────────────────
+  y = needsPage(doc, y, 40)
+  y = subTitle(doc, s.sub5_2 || '5.2 Coverage Summary', y)
+  const covCardW = (CW - 6) / 3
+  const covCardH = 16
+  const covCards = [
+    { label: s.covDetected    || 'Detected Tactics',    value: String(detectedTactics.size),                     color: C.blue  },
+    { label: s.covNotDetected || 'Not Detected',        value: String(ALL_TACTICS.length - detectedTactics.size), color: C.muted },
+    { label: s.covTotal       || 'Total MITRE Tactics', value: String(ALL_TACTICS.length),                       color: C.navy  },
+  ]
+  for (let k = 0; k < covCards.length; k++) {
+    const cx = ML + k * (covCardW + 3)
+    drawKpiCard(doc, cx, y, covCardW, covCardH, covCards[k].value, covCards[k].label, covCards[k].color)
+  }
+  y += covCardH + 6
 
   // ── MITRE tactic grid (14 cells, jsPDF primitives) ──────────────────────────
   y = needsPage(doc, y, 45)
@@ -1327,6 +1323,27 @@ export function generatePDFReport({
   const gridRowCount = Math.ceil(ALL_TACTICS.length / gridCols)
   y += gridRowCount * (cellH + gridGap) + 6
 
+  // 5.1 Tactic Coverage
+  y = subTitle(doc, s.sub5_1 || '5.1 Tactic Coverage', y)
+
+  const tacticRows = ALL_TACTICS.map(t => {
+    const detected = detectedTactics.has(t.id) || detectedTactics.has(t.name)
+    return [t.id, t.name, detected ? (s.detected || 'Detected') : (s.notDetected || 'Not Detected')]
+  })
+  y = tableBase(doc,
+    [s.tacticId || 'Tactic ID', s.tacticName || 'Tactic', s.tacticStatus || 'Status'],
+    tacticRows, y, {
+      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 80 }, 2: { cellWidth: CW - 105 } },
+      didParseCell: data => {
+        if (data.section === 'body' && data.column.index === 2) {
+          const isDetected = data.cell.text[0] === (s.detected || 'Detected')
+          data.cell.styles.textColor = isDetected ? C.green : C.muted
+          data.cell.styles.fontStyle = isDetected ? 'bold' : 'normal'
+        }
+      },
+    }
+  )
+
   // ── MITRE techniques bar chart (real API data) ──────────────────────────────
   const topMitreTech = mitreTechniqueData.slice(0, 10)
   if (topMitreTech.length > 0) {
@@ -1345,22 +1362,6 @@ export function generatePDFReport({
       y += 62
     }
   }
-
-  // ── 5.2 Coverage Summary ─────────────────────────────────────────────────────
-  y = needsPage(doc, y, 40)
-  y = subTitle(doc, s.sub5_2 || '5.2 Coverage Summary', y)
-  const covCardW = (CW - 6) / 3
-  const covCardH = 16
-  const covCards = [
-    { label: s.covDetected    || 'Detected Tactics',    value: String(detectedTactics.size),                    color: C.blue  },
-    { label: s.covNotDetected || 'Not Detected',        value: String(ALL_TACTICS.length - detectedTactics.size),color: C.muted },
-    { label: s.covTotal       || 'Total MITRE Tactics', value: String(ALL_TACTICS.length),                      color: C.navy  },
-  ]
-  for (let k = 0; k < covCards.length; k++) {
-    const cx = ML + k * (covCardW + 3)
-    drawKpiCard(doc, cx, y, covCardW, covCardH, covCards[k].value, covCards[k].label, covCards[k].color)
-  }
-  y += covCardH + 6
 
   // ── 5.3 Stellar Cyber XDR Proprietary Detections ────────────────────────────
   if (stellarTacticData.length > 0) {
