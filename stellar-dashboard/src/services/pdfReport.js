@@ -28,9 +28,9 @@ function i(doc, arr) { doc.setFillColor(...arr) }
 function fmtDate(d) {
   if (!d) return '—'
   try {
-    const dt = typeof d === 'string' ? new Date(d) : d
-    if (isNaN(dt)) return String(d)
-    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const dt = d instanceof Date ? d : new Date(d)
+    if (isNaN(dt.getTime())) return String(d)
+    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
   } catch { return String(d) }
 }
 function fmtNum(n) {
