@@ -7,6 +7,7 @@ import {
   fetchIngestionTimeline,
   fetchIngestionBySensor,
   fetchIngestionByConnector,
+  fetchDataSensors,
   fetchCaseTactics,
   emptyTactics,
 } from '../services/api'
@@ -25,6 +26,7 @@ const EMPTY_DATA = {
   ingestionTimeline:    [],
   ingestionBySensor:    [],
   ingestionByConnector: [],
+  dataSensors:          [],
   caseTactics:          null,
 }
 
@@ -47,17 +49,18 @@ export function DataProvider({ children }) {
     const dates = syncDatesRef.current
 
     const results = await Promise.allSettled([
-      fetchCases(auth, dates),
-      fetchEntityUsage(auth, dates),
-      fetchConnectors(auth),
-      fetchIngestionStats(auth),
-      fetchIngestionTimeline(auth),
-      fetchIngestionBySensor(auth, dates),
-      fetchIngestionByConnector(auth, dates),
+      fetchCases(auth, dates),              // 0
+      fetchEntityUsage(auth, dates),        // 1
+      fetchConnectors(auth),                // 2
+      fetchIngestionStats(auth),            // 3
+      fetchIngestionTimeline(auth),         // 4
+      fetchIngestionBySensor(auth, dates),  // 5
+      fetchIngestionByConnector(auth, dates), // 6
+      fetchDataSensors(auth),               // 7
     ])
 
     // index 0 = fetchCases → returns { cases, lowCount, mediumTotal }
-    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector']
+    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector', 'dataSensors']
 
     // Fetch MITRE + Stellar XDR tactic data for cases in the POC period.
     // Runs after cases are available; each case triggers one /cases/{id}/alerts call.
@@ -73,28 +76,24 @@ export function DataProvider({ children }) {
     }
 
     // Enrich ingestionBySensor: /ingestion-stats/sensor returns only UUIDs (entry_identifier).
-    // Cross-reference with connectors' run_on field to derive human-readable sensor names.
+    // Cross-reference with /data_sensors (sensor_id) to get hostname, type, and version.
     let enrichedIngestionBySensor = null
-    const connResult    = results[2]  // fetchConnectors → array of connectors
-    const sensorResult  = results[5]  // fetchIngestionBySensor → array of sensors
+    const dataSensorsResult = results[7]  // fetchDataSensors → array of sensor metadata
+    const sensorIngResult   = results[5]  // fetchIngestionBySensor → array of sensors
     if (
-      connResult?.status === 'fulfilled' &&
-      sensorResult?.status === 'fulfilled' &&
-      Array.isArray(sensorResult.value)
+      dataSensorsResult?.status === 'fulfilled' &&
+      sensorIngResult?.status === 'fulfilled' &&
+      Array.isArray(sensorIngResult.value) &&
+      Array.isArray(dataSensorsResult.value)
     ) {
-      const connList = connResult.value || []
-      const sensorConnMap = {}
-      for (const c of connList) {
-        const ro = c.run_on || ''
-        if (ro.length === 32) {
-          if (!sensorConnMap[ro]) sensorConnMap[ro] = []
-          sensorConnMap[ro].push(c)
-        }
+      const sensorMetaMap = {}
+      for (const ds of dataSensorsResult.value) {
+        if (ds.id) sensorMetaMap[ds.id] = ds
       }
-      enrichedIngestionBySensor = sensorResult.value.map((s, idx) => {
-        const mapped = sensorConnMap[s.id]
-        if (mapped && mapped.length > 0) {
-          return { ...s, name: mapped.map(c => c.name).join(', ') }
+      enrichedIngestionBySensor = sensorIngResult.value.map((s, idx) => {
+        const meta = sensorMetaMap[s.id]
+        if (meta) {
+          return { ...s, name: meta.hostname, type: meta.type, version: meta.version }
         }
         return { ...s, name: `Sensor ${idx + 1}` }
       })

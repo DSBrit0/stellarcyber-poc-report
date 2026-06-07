@@ -640,6 +640,7 @@ export default {
     connIngEvents:     'Events',
     sensorName:        'Sensor',
     sensorType:        'Type',
+    sensorVersion:     'Version',
     sensorBytes:       'Volume',
     sensorEvents:      'Events',
     // ── Section 4 — Detection ─────────────────────────────────────────────────

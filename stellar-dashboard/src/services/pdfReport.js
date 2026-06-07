@@ -1091,12 +1091,20 @@ export function generatePDFReport({
     y = subTitle(doc, s.sub3_3 || '3.3 Data Ingestion Detail', y)
     if (ingestionBySensor.length > 0) {
       const sensorRows = ingestionBySensor.map(r => [
-        trunc(r.name || r.sensor || '—', 40),
+        trunc(r.name || '—', 30),
+        r.type    || '—',
+        r.version || '—',
         fmtGB(r.bytesIngested || r.bytes || r.size || 0),
       ])
       y = tableCompact(doc,
-        [s.sensorName || 'Sensor', s.sensorBytes || 'Volume'],
-        sensorRows, y
+        [
+          s.sensorName    || 'Sensor',
+          s.sensorType    || 'Tipo',
+          s.sensorVersion || 'Versão',
+          s.sensorBytes   || 'Volume',
+        ],
+        sensorRows, y,
+        { columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 38 }, 2: { cellWidth: 22 }, 3: { cellWidth: CW - 100 } } }
       )
     }
     if (ingestionByConnector.length > 0) {

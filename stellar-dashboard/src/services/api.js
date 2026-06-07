@@ -197,6 +197,29 @@ export async function fetchIngestionByConnector(auth, { pocStartDate, pocEndDate
   }
 }
 
+// ─── Data Sensors ─────────────────────────────────────────────────────────────
+// GET /connect/api/v1/data_sensors?cust_id=<tenant>
+// Returns full sensor details: hostname, feature (type), sw_version, connection_status.
+// Used to enrich /ingestion-stats/sensor which only returns sensor UUIDs.
+
+export async function fetchDataSensors(auth) {
+  try {
+    const params = { cust_id: auth.tenant }
+    debug('api', `GET ${ENDPOINTS.DATA_SENSORS}`, params)
+
+    const res   = await createApiClient(auth).get(ENDPOINTS.DATA_SENSORS, { params })
+    const raw   = res.data
+    const items = raw?.sensors ?? raw?.data ?? (Array.isArray(raw) ? raw : [])
+    const result = normalizeDataSensors(items)
+    const connected = result.filter(s => s.connectionStatus === 'connected').length
+    info('api', `fetchDataSensors ✅ ${result.length} sensors | ${connected} connected`)
+    return result
+  } catch (err) {
+    warn('api', 'fetchDataSensors fallback → empty', { error: err.message })
+    return []
+  }
+}
+
 // ─── MITRE + Stellar Cyber XDR tactic/technique analysis ─────────────────────
 // Fetches alerts for each case and classifies detections:
 //   MITRE standard  → tactic IDs starting with "TA", technique IDs starting with "T1"/"T0"
@@ -289,6 +312,27 @@ export async function fetchCaseTactics(auth, cases) {
 }
 
 // ─── Normalizers ─────────────────────────────────────────────────────────────
+
+function normalizeDataSensors(items) {
+  const FEATURE_LABELS = {
+    ds:      'Data Sensor',
+    wds:     'Windows Agent',
+    modular: 'Modular Sensor',
+    sds:     'Security Data Sensor',
+  }
+  return items.map(d => {
+    const raw = d.sw_version || ''
+    const match = raw.match(/(\d+\.\d+\.\d+)/)
+    return {
+      id:               d.sensor_id || d.internal_sensor_id || '',
+      hostname:         d.hostname || '',
+      type:             FEATURE_LABELS[d.feature] || d.feature || d.mode || '',
+      version:          match ? match[1] : raw,
+      connectionStatus: d.connection_status || '',
+      profile:          (d.sensor_profile_name || '').trim(),
+    }
+  })
+}
 
 function normalizeIngestionBySensor(items) {
   return items.map((d, i) => {
