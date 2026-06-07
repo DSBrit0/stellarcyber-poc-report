@@ -584,7 +584,7 @@ export default {
     statusOpen:           'Open',
     statusClosed:         'Analyzed',
     // ── Section 1 — KPIs ──────────────────────────────────────────────────────
-    kpiAvgEntities:       'Avg. Entities / Day',
+    kpiAvgEntities:       'Avg. Monitored Assets/Day',
     kpiMetric:            'Metric',
     kpiValue:             'Value',
     kpiNotes:             'Notes',
@@ -675,7 +675,7 @@ export default {
     metTotalCases:     'Total Cases',
     metCritHigh:       'Critical + High',
     metMitreCov:       'MITRE Tactic Coverage',
-    metAvgEntitiesDay: 'Avg. Entities / Day',
+    metAvgEntitiesDay: 'Avg. Monitored Assets/Day',
     metActiveSources:  'Active Sources',
     metTotalIngested:  'Total Data Ingested',
     entitiesNote:      'from entity_count (entity_usages API)',
@@ -739,7 +739,7 @@ export default {
     archImageError: 'Architecture image could not be rendered.',
     headerSub:  'Proof of Concept Report',
     // ── Entity label fix ──────────────────────────────────────────────────────
-    envEntities: 'Avg. Entities / Day',
-    rmEntities:  'Avg. Entities / Day',
+    envEntities: 'Avg. Monitored Assets/Day',
+    rmEntities:  'Avg. Monitored Assets/Day',
   },
 }

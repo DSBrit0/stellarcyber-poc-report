@@ -584,7 +584,7 @@ export default {
     statusOpen:           'Aberto',
     statusClosed:         'Analisado',
     // ── Seção 1 — KPIs ────────────────────────────────────────────────────────
-    kpiAvgEntities:       'Méd. Entidades / Dia',
+    kpiAvgEntities:       'Média Assets monitorado/Dia',
     kpiMetric:            'Métrica',
     kpiValue:             'Valor',
     kpiNotes:             'Notas',
@@ -675,7 +675,7 @@ export default {
     metTotalCases:     'Total de Cases',
     metCritHigh:       'Críticos + Altos',
     metMitreCov:       'Cobertura de Táticas MITRE',
-    metAvgEntitiesDay: 'Méd. Entidades / Dia',
+    metAvgEntitiesDay: 'Média Assets monitorado/Dia',
     metActiveSources:  'Fontes Ativas',
     metTotalIngested:  'Total de Dados Ingeridos',
     entitiesNote:      'de entity_count (API entity_usages)',
@@ -739,7 +739,7 @@ export default {
     archImageError: 'Imagem de arquitetura não pôde ser renderizada.',
     headerSub:  'Relatório de Prova de Conceito',
     // ── Correção de label Entidades ───────────────────────────────────────────
-    envEntities: 'Méd. Entidades / Dia',
-    rmEntities:  'Méd. Entidades / Dia',
+    envEntities: 'Média Assets monitorado/Dia',
+    rmEntities:  'Média Assets monitorado/Dia',
   },
 }

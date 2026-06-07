@@ -777,7 +777,7 @@ export function generatePDFReport({
     { label: s.kpiCritCases      || 'Críticos',              value: String(critCases.length),                    color: C.red     },
     { label: s.kpiOpenCases      || 'Casos Abertos',         value: String(openCases.length),                    color: C.orange  },
     { label: s.kpiResolvedCases  || 'Casos Resolvidos',      value: String(resolvedCases.length),                color: C.green   },
-    { label: s.kpiAvgEntities    || 'Méd. Entidades / Dia',  value: avgEntities || '—',                     color: C.navy    },
+    { label: s.kpiAvgEntities    || 'Média Assets monitorado/Dia',  value: avgEntities || '—',                     color: C.navy    },
     { label: s.kpiActiveConn     || 'Conectores',            value: `${activeConn.length}/${connectors.length}`, color: C.midBlue },
     { label: s.kpiMitreCov       || 'MITRE ATT&CK',          value: `${mitreCovPct}%`,                           color: C.blue    },
   ]
@@ -917,9 +917,9 @@ export function generatePDFReport({
       `${critCases.length} ${s.critLabel || 'critical'}, ${highCases.length} ${s.highLabel || 'high'}`,
     ],
     [
-      s.kpiAvgEntities || 'Avg. Entities / Day',
+      s.kpiAvgEntities || 'Média Assets monitorado/Dia',
       avgEntities || '—',
-      s.kpiEntitiesNote || 'Daily active entities (hosts / users / devices) — entity_count field',
+      s.kpiEntitiesNote || 'Média de assets ativos por dia (hosts / usuários / dispositivos)',
     ],
     [
       s.kpiActiveConn || 'Active Sources',
