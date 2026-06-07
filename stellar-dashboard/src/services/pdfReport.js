@@ -430,22 +430,26 @@ function buildDetectionTypes(cases) {
 }
 
 // ─── Cover info-block helper ──────────────────────────────────────────────────
-function drawInfoBlock(doc, heading, x, y, fields, headingColor) {
+function drawInfoBlock(doc, heading, x, y, fields, headingColor, maxW) {
+  const blockW = maxW || 78
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...headingColor)
   doc.text(heading, x, y)
   doc.setDrawColor(...headingColor)
   doc.setLineWidth(0.3)
-  doc.line(x, y + 1.5, x + 80, y + 1.5)
+  doc.line(x, y + 1.5, x + blockW, y + 1.5)
   let fy = y + 7
   for (const f of fields) {
     if (f.val) {
       doc.setFont('helvetica', f.bold ? 'bold' : 'normal')
       doc.setFontSize(f.size)
       doc.setTextColor(...(f.bold ? C.navy : C.muted))
-      doc.text(String(f.val), x, fy)
-      fy += f.size * 0.5 + 1.8
+      const lines = doc.splitTextToSize(String(f.val), blockW)
+      for (const line of lines) {
+        doc.text(line, x, fy)
+        fy += f.size * 0.5 + 1.8
+      }
     }
   }
 }
@@ -507,13 +511,15 @@ function drawCover(doc, pocMeta, s) {
   doc.setLineWidth(0.5)
   doc.line(26, 130, 96, 130)
 
-  // 4. Info grid — 2×2 table layout starting y≈210mm
-  const blockY  = 200
+  // 4. Info grid — 2×2 table layout starting y≈190mm (2cm above original)
+  const blockY  = 190
   const colL    = 26          // left column x
   const colR    = 113         // right column x
   const rowH    = 46          // height of each row block
   const divX    = 108         // vertical divider
   const row2Y   = blockY + rowH + 5
+  const colLW   = divX - colL - 4   // max text width left col (~78mm)
+  const colRW   = PW - MR - colR - 2 // max text width right col (~81mm)
 
   // Light grid separators
   doc.setDrawColor(...C.gray)
@@ -526,25 +532,25 @@ function drawCover(doc, pocMeta, s) {
     { val: pocMeta.clientName,  bold: true,  size: 10 },
     { val: pocMeta.clientDept,  bold: false, size: 8 },
     { val: pocMeta.clientEmail, bold: false, size: 8 },
-  ], C.blue)
+  ], C.blue, colLW)
 
   // ── Row 1 Right: STELLAR CYBER ANALYST ────────────────────────────────────
   drawInfoBlock(doc, s.blockStellarCyber || 'STELLAR CYBER SYSTEM ENGINEER', colR, blockY, [
     { val: pocMeta.seName,  bold: true,  size: 10 },
     { val: pocMeta.seEmail, bold: false, size: 8 },
     { val: pocMeta.sePhone, bold: false, size: 8 },
-  ], C.navy)
+  ], C.navy, colRW)
 
   // ── Row 2 Left: STAKEHOLDERS (analysts list) ───────────────────────────────
   const analystRows = (pocMeta.analysts || []).map(a => ({ val: a, bold: false, size: 8 }))
-  drawInfoBlock(doc, s.blockStakeholders || 'STAKEHOLDERS', colL, row2Y, analystRows, C.blue)
+  drawInfoBlock(doc, s.blockStakeholders || 'STAKEHOLDERS', colL, row2Y, analystRows, C.blue, colLW)
 
   // ── Row 2 Right: PARTNER ──────────────────────────────────────────────────
   drawInfoBlock(doc, s.blockPartner || 'PARTNER', colR, row2Y, [
     { val: pocMeta.partnerName,  bold: true,  size: 10 },
     { val: pocMeta.partnerEmail, bold: false, size: 8 },
     { val: pocMeta.partnerSite,  bold: false, size: 8 },
-  ], C.navy)
+  ], C.navy, colRW)
 
   // 5. Metadata footer at y≈283mm
   const version  = pocMeta.version || '1.0'
