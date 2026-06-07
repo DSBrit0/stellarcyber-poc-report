@@ -927,9 +927,12 @@ export function generatePDFReport({
       const imgData = pocMeta.architectureImage
       const maxW = CW
       const maxH = 160
-      const imgW = pocMeta.architectureImageWidth  || maxW
-      const imgH = pocMeta.architectureImageHeight || maxH
-      const ratio = Math.min(maxW / imgW, maxH / imgH)
+      const dims = pocMeta.architectureImageDims
+      const PX_TO_MM = 25.4 / 96
+      const imgW = dims ? dims.w * PX_TO_MM : maxW
+      const imgH = dims ? dims.h * PX_TO_MM : maxH
+      // scale down only — never upscale a small image
+      const ratio = Math.min(1, maxW / imgW, maxH / imgH)
       const drawW = imgW * ratio
       const drawH = imgH * ratio
       const drawX = ML + (CW - drawW) / 2
