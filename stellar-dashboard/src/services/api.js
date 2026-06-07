@@ -227,7 +227,7 @@ function normalizeCases(items) {
       severity:       normalizeSeverity(c.severity || c.priority),
       status:         c.status || 'New',
       score:          typeof c.score === 'number' ? c.score : null,
-      assetsAffected: c.size || c.assets_affected || c.asset_count || 1,
+      alertCount: c.size || c.assets_affected || c.alert_count || c.asset_count || 1,
       tenantName:     c.tenant_name || c.cust_name || '',
       custId:         c.cust_id || '',
       rawDate,

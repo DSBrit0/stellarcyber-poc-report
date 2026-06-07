@@ -408,13 +408,13 @@ function buildTimelineData(cases, pocStartDate, pocEndDate) {
 
 // ─── Detection types builder ──────────────────────────────────────────────────
 // Grouped by c.name (only stable type-identifying field; no alertType/xdrEventType
-// in normalizeCase). assetsAffected = c.size || assets_affected || 1 from API.
+// in normalizeCase). alertCount = c.size || assets_affected || alert_count || 1 from API.
 function buildDetectionTypes(cases) {
   const groups = {}
   for (const c of cases) {
     const key = (c.name || '—').replace(/ and \d+ other\(s\)$/i, '').trim()
     if (!groups[key]) groups[key] = { total: 0, scores: [] }
-    groups[key].total += (c.assetsAffected || 1)
+    groups[key].total += (c.alertCount || 1)
     if (c.score != null) groups[key].scores.push(c.score)
   }
   return Object.entries(groups)
@@ -1148,7 +1148,7 @@ export function generatePDFReport({
       c.severity || '—',
       c.status   || '—',
       c.score    != null ? String(c.score) : '—',
-      c.assetsAffected != null ? String(c.assetsAffected) : '—',
+      c.alertCount != null ? String(c.alertCount) : '—',
       fmtDate(c.rawDate || c.createdAt),
     ])
     y = tableCompact(doc,
@@ -1157,7 +1157,7 @@ export function generatePDFReport({
         s.caseSev    || 'Severity',
         s.caseStatus || 'Status',
         s.caseScore  || 'Score',
-        s.caseAssets || 'Assets',
+        s.caseAlerts || 'Alertas',
         s.caseDate   || 'Date',
       ],
       caseRows, y, {

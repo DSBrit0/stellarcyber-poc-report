@@ -634,7 +634,7 @@ export default {
     caseSev:    'Severidad',
     caseStatus: 'Estado',
     caseScore:  'Score',
-    caseAssets: 'Activos',
+    caseAlerts: 'Alertas',
     caseDate:   'Fecha',
     mediumTruncated: 'Mostrando los 100 primeros casos medios. Total de casos medios: {n}',
     lowOmitted:      '{n} casos de baja severidad omitidos por brevedad.',
