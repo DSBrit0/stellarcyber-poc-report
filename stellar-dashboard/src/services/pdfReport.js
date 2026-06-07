@@ -508,7 +508,7 @@ function drawCover(doc, pocMeta, s) {
   doc.line(26, 130, 96, 130)
 
   // 4. Info grid — 2×2 table layout starting y≈210mm
-  const blockY  = 210
+  const blockY  = 200
   const colL    = 26          // left column x
   const colR    = 113         // right column x
   const rowH    = 46          // height of each row block
