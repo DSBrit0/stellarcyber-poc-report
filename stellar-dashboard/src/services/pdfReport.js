@@ -890,21 +890,28 @@ export function generatePDFReport({
   y += 2
 
   if (pocMeta.successCriteria && pocMeta.successCriteria.length > 0) {
-    y = needsPage(doc, y, 12)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...C.navy)
-    doc.text(s.successCriteriaTitle || 'Success Criteria:', ML, y)
-    y += 5
-    for (const crit of pocMeta.successCriteria) {
-      y = needsPage(doc, y, 6)
-      doc.setFont('helvetica', 'normal')
+    const critItems = String(pocMeta.successCriteria)
+      .split(/[;\n]/)
+      .map(c => c.trim())
+      .filter(Boolean)
+    if (critItems.length > 0) {
+      y = needsPage(doc, y, 12)
+      doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
-      doc.setTextColor(...C.text)
-      doc.text(`• ${crit}`, ML + 3, y)
-      y += 4.5
+      doc.setTextColor(...C.navy)
+      doc.text(s.successCriteriaTitle || 'Success Criteria:', ML, y)
+      y += 5
+      for (const crit of critItems) {
+        y = needsPage(doc, y, 6)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(...C.text)
+        const lines = doc.splitTextToSize(`• ${crit}`, CW - 6)
+        doc.text(lines, ML + 3, y)
+        y += lines.length * 4.5
+      }
+      y += 2
     }
-    y += 2
   }
 
   const body1_2 = (s.body1_2 ||
