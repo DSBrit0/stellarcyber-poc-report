@@ -17,6 +17,8 @@ const DEFAULTS = {
   partnerSite:          '',
   pocStartDate:         '',
   pocEndDate:           '',
+  platformVersion:      '',
+  region:               '',
   version:              '1.0',
   verdict:              '',
   comments:             '',

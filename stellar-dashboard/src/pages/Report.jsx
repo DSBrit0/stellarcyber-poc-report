@@ -387,6 +387,12 @@ export default function Report() {
             <Field label={t('report.version')}>
               <input style={INPUT} placeholder="1.0" value={pocMeta.version} onChange={setField('version')} />
             </Field>
+            <Field label={t('report.platformVersion')}>
+              <input style={INPUT} placeholder={t('report.platformVersionPlaceholder')} value={pocMeta.platformVersion} onChange={setField('platformVersion')} />
+            </Field>
+            <Field label={t('report.region')}>
+              <input style={INPUT} placeholder={t('report.regionPlaceholder')} value={pocMeta.region} onChange={setField('region')} />
+            </Field>
           </div>
 
           <Field label={t('report.verdict')} onHelp={() => setShowVerdictGuide(true)}>
