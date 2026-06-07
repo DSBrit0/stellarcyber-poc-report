@@ -542,8 +542,10 @@ function drawCover(doc, pocMeta, s) {
   ], C.navy, colRW)
 
   // ── Row 2 Left: STAKEHOLDERS (analysts list) ───────────────────────────────
-  const analystRows = (pocMeta.analysts || []).map(a => ({ val: a, bold: false, size: 8 }))
-  drawInfoBlock(doc, s.blockStakeholders || 'STAKEHOLDERS', colL, row2Y, analystRows, C.blue, colLW)
+  const analystsJoined = (pocMeta.analysts || []).filter(Boolean).join('; ')
+  drawInfoBlock(doc, s.blockStakeholders || 'STAKEHOLDERS', colL, row2Y, [
+    { val: analystsJoined, bold: false, size: 8 },
+  ], C.blue, colLW)
 
   // ── Row 2 Right: PARTNER ──────────────────────────────────────────────────
   drawInfoBlock(doc, s.blockPartner || 'PARTNER', colR, row2Y, [
