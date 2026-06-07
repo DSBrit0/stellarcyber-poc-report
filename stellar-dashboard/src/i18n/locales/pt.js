@@ -629,9 +629,9 @@ export default {
     scCriteria: 'Critério',
     scTarget:   'Meta',
     scResult:   'Resultado',
-    sc1: 'Cobertura MITRE ATT&CK',    sc1target: '≥ 85% das táticas detectadas',
-    sc2: 'Tempo de Detecção (MTTD)',  sc2target: '< 5 min (mediana)',
-    sc3: 'Cobertura de Integração',   sc3target: '100% das fontes ativas',
+    sc1: 'Cobertura MITRE ATT&CK',    sc1target: '> 85% das táticas detectadas',
+    sc2: 'Tempo de Detecção (MTTD)',  sc2target: '< 5 min e não > 15 min',
+    sc3: 'Cobertura de Integração',   sc3target: '100% das fontes enviaram dados',
     sc4: 'Redução de Ruído',          sc4target: '> 80% alertas correlacionados',
     // ── Seção 3 — Fontes de Dados ─────────────────────────────────────────────
     statTotalSources:  'Total de Fontes',

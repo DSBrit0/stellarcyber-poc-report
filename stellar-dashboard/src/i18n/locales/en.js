@@ -629,9 +629,9 @@ export default {
     scCriteria: 'Criterion',
     scTarget:   'Target',
     scResult:   'Result',
-    sc1: 'MITRE ATT&CK Coverage',   sc1target: '≥ 85% of tactics detected',
-    sc2: 'Time to Detect (MTTD)',   sc2target: '< 5 min (median)',
-    sc3: 'Integration Coverage',    sc3target: '100% of active sources',
+    sc1: 'MITRE ATT&CK Coverage',   sc1target: '> 85% of tactics detected',
+    sc2: 'Time to Detect (MTTD)',   sc2target: '< 5 min and not > 15 min',
+    sc3: 'Integration Coverage',    sc3target: '100% of sources sent data',
     sc4: 'Alert Noise Reduction',   sc4target: '> 80% correlated alerts',
     // ── Section 3 — Data Sources ──────────────────────────────────────────────
     statTotalSources:  'Total Sources',
