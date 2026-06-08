@@ -145,6 +145,7 @@ export default function Report() {
   const { pocMeta, setPocMeta }                          = usePocMeta()
   const [generating, setGenerating]                      = useState(false)
   const [downloaded, setDownloaded]                      = useState(false)
+  const [btnPressed, setBtnPressed]                      = useState(false)
   const [showVerdictGuide, setShowVerdictGuide]          = useState(false)
   const archImageRef                                     = useRef(null)
 
@@ -243,24 +244,7 @@ export default function Report() {
           </p>
         </div>
 
-        <button
-          onClick={handleDownload}
-          disabled={generating || loading || !syncedAt}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
-          style={{
-            background: (generating || loading || !syncedAt) ? 'rgba(0,102,255,0.4)' : 'linear-gradient(135deg, #0066ff, #00d4ff)',
-            color: 'white',
-            boxShadow: (generating || loading || !syncedAt) ? 'none' : '0 0 20px rgba(0,212,255,0.3)',
-          }}
-        >
-          {generating ? (
-            <><Loader size={14} className="animate-spin" />{t('report.generating')}</>
-          ) : downloaded ? (
-            <><CheckCircle2 size={14} />{t('report.downloaded')}</>
-          ) : (
-            <><Download size={14} />{t('report.download')}</>
-          )}
-        </button>
+        <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} pendingLabel={t('report.apiPending')} loading={loading} syncedAt={syncedAt} />
       </div>
 
       {/* Sync bar — POC period + sync button + status */}
@@ -274,11 +258,6 @@ export default function Report() {
         onSync={sync}
         t={t}
       />
-
-      {/* Status pills */}
-      <div className="flex flex-wrap gap-3">
-        <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} pendingLabel={t('report.apiPending')} loading={loading} syncedAt={syncedAt} />
-      </div>
 
       {/* API error banner */}
       {hasErrors && (
@@ -475,6 +454,34 @@ export default function Report() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Download PDF — bottom of page */}
+      <div className="flex justify-end pt-2 pb-2">
+        <button
+          onClick={handleDownload}
+          disabled={generating || loading || !syncedAt}
+          onMouseDown={() => setBtnPressed(true)}
+          onMouseUp={() => setBtnPressed(false)}
+          onMouseLeave={() => setBtnPressed(false)}
+          className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed flex-shrink-0"
+          style={{
+            background: (generating || loading || !syncedAt)
+              ? 'rgba(0,102,255,0.4)'
+              : btnPressed
+              ? 'linear-gradient(135deg, #0052cc, #00aecf)'
+              : 'linear-gradient(135deg, #0066ff, #00d4ff)',
+            color: 'white',
+            boxShadow: (generating || loading || !syncedAt || btnPressed) ? 'none' : '0 0 20px rgba(0,212,255,0.3)',
+            transition: 'background 0.12s ease, box-shadow 0.12s ease',
+          }}
+        >
+          {generating ? (
+            <><Loader size={14} className="animate-spin" />{t('report.generating')}</>
+          ) : (
+            <><Download size={14} />{t('report.download')}</>
+          )}
+        </button>
       </div>
 
       {showVerdictGuide && <VerdictGuideModal onClose={() => setShowVerdictGuide(false)} />}
