@@ -277,7 +277,7 @@ export default function Report() {
 
       {/* Status pills */}
       <div className="flex flex-wrap gap-3">
-        <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} loading={loading} />
+        <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} pendingLabel={t('report.apiPending')} loading={loading} syncedAt={syncedAt} />
       </div>
 
       {/* API error banner */}
@@ -626,11 +626,18 @@ function SyncStatusPill({ syncedAt, isSynced, loading, hasDates, t }) {
   )
 }
 
-function StatusPill({ ok, okLabel, errLabel, loading }) {
+function StatusPill({ ok, okLabel, errLabel, pendingLabel, loading, syncedAt }) {
   if (loading) return (
     <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b' }}>
       <Loader size={11} className="animate-spin" />Carregando…
+    </div>
+  )
+  if (!syncedAt) return (
+    <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
+      style={{ background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.25)', color: '#94a3b8' }}>
+      <RefreshCw size={11} />
+      {pendingLabel}
     </div>
   )
   return (

@@ -106,6 +106,7 @@ export default {
     downloaded:        '¡Descargado!',
     apiOk:             'API Conectada',
     apiError:          'Error de API',
+    apiPending:        'Haga el sync',
     lastSync:          'Última sincronización:',
     dataError:         'Algunos datos no pudieron cargarse',
     cases:            'Casos',
