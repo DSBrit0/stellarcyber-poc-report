@@ -124,7 +124,7 @@ function sectionTitle(doc, text, y, size) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(fs)
   doc.text(text, ML + 3, y + barH * 0.69)
-  return y + barH + 3
+  return y + barH + 2
 }
 
 function appendixTitle(doc, text, y) {
@@ -135,7 +135,7 @@ function appendixTitle(doc, text, y) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9.5)
   doc.text(text, ML + 3, y + 5.2)
-  return y + 7.5 + 3
+  return y + 7.5 + 2
 }
 
 function subTitle(doc, text, y, size) {
@@ -148,7 +148,7 @@ function subTitle(doc, text, y, size) {
   doc.setDrawColor(...C.midBlue)
   doc.setLineWidth(0.3)
   doc.line(ML, y + 2, ML + CW, y + 2)
-  return y + fs * 0.9
+  return y + fs * 0.67
 }
 
 function bodyText(doc, text, y, opts) {
@@ -196,7 +196,7 @@ function tableBase(doc, head, body, y, opts) {
     tableWidth: CW,
     didDrawPage: () => { _pageNum += 1; addChrome(doc) },
   }, o))
-  return doc.lastAutoTable.finalY + 4
+  return doc.lastAutoTable.finalY + 7
 }
 
 function tableCompact(doc, head, body, y, opts) {
@@ -213,7 +213,7 @@ function tableCompact(doc, head, body, y, opts) {
     tableWidth: CW,
     didDrawPage: () => { _pageNum += 1; addChrome(doc) },
   }, o))
-  return doc.lastAutoTable.finalY + 4
+  return doc.lastAutoTable.finalY + 7
 }
 
 // ─── Chart rendering ──────────────────────────────────────────────────────────
