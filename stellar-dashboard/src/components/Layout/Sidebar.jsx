@@ -82,7 +82,7 @@ export default function Sidebar({ open, onClose }) {
         {/* Footer */}
         <div className="px-5 py-4 text-xs text-gray-600" style={{ borderTop: '1px solid rgba(0,212,255,0.08)' }}>
           <div>{t('nav.footer')}</div>
-          <div className="mt-0.5" style={{ color: '#00d4ff44' }}>v2.0.0</div>
+          <div className="mt-0.5" style={{ color: '#00d4ff44' }}>v{__APP_VERSION__}</div>
         </div>
       </aside>
     </>
