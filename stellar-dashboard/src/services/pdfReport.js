@@ -663,9 +663,15 @@ export function generatePDFReport({
     return Math.round(avg).toLocaleString(locStr)
   })()
 
-  // Total displayed (crit + high + mediumTotal + lowCount)
-  const totalCasesCount = critCases.length + highCases.length + mediumTotal + lowCount
-  const totalCasesStr   = fmtNum(totalCasesCount)
+  // lowCount may be the string '500+' when the API capped at 500.
+  // Use lowNum (always a number) for arithmetic; keep lowCount for display where the '+' matters.
+  const lowNum = typeof lowCount === 'number' ? lowCount : 500
+
+  // Total displayed (crit + high + mediumTotal + lowNum)
+  const totalCasesCount = critCases.length + highCases.length + mediumTotal + lowNum
+  const totalCasesStr   = typeof lowCount === 'string'
+    ? fmtNum(totalCasesCount) + '+'
+    : fmtNum(totalCasesCount)
 
   // MITRE coverage — real data from API (caseTactics populated by DataContext.fetchCaseTactics)
   // Falls back to recommendations-based detection when caseTactics is unavailable.
@@ -833,7 +839,7 @@ export function generatePDFReport({
   const chartH = 70
 
   // Row 1: Severity donut (left) | Status donut (right)
-  const sevData  = [critCases.length, highCases.length, mediumTotal, lowCount]
+  const sevData  = [critCases.length, highCases.length, mediumTotal, lowNum]
   const sevTotal = sevData.reduce((a, b) => a + b, 0)
 
   const c1x = ML
@@ -1168,7 +1174,7 @@ export function generatePDFReport({
       [s.metCritical  || 'Critical Cases', fmtNum(critCases.length),                    pct(critCases.length, totalCasesCount)],
       [s.metHigh      || 'High Cases',     fmtNum(highCases.length),                    pct(highCases.length, totalCasesCount)],
       [s.metMedium    || 'Medium Cases',   fmtNum(mediumTotal),                         pct(mediumTotal, totalCasesCount)],
-      [s.metLow       || 'Low Cases',      fmtNum(lowCount),                            pct(lowCount, totalCasesCount)],
+      [s.metLow       || 'Low Cases',      fmtNum(lowCount),                            pct(lowNum, totalCasesCount)],
       [s.metOpen      || 'Open Cases',     fmtNum(openCases.length),                    pct(openCases.length, totalCasesCount)],
       [s.metAvgScore  || 'Average Score',  String(avgScore),                            ''],
     ]
@@ -1261,7 +1267,7 @@ export function generatePDFReport({
       )
       y += 4
     }
-    if (lowCount > 0) {
+    if (lowNum > 0) {
       y = infoNote(
         doc,
         (s.lowOmitted || '{n} low-severity cases omitted from table for brevity.')
