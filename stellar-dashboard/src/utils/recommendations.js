@@ -124,7 +124,8 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
   const mitreRecs = generateMitreRecommendations(cases)
   recs.push(...mitreRecs)
 
-  if (recs.length === 0) {
+  const hasData = cases.length > 0 || allConnectors.length > 0 || (ingestionTimeline?.length ?? 0) > 0
+  if (recs.length === 0 && hasData) {
     recs.push({
       id: 'all-good',
       priority: 'info',

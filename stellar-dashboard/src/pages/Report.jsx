@@ -180,7 +180,9 @@ export default function Report() {
   const { cases, lowCount, mediumTotal, assets, connectors, ingestionTimeline, ingestionBySensor, ingestionByConnector, caseTactics } = data
 
 
-  const recommendations = generateRecommendations({ cases, connectors, ingestionTimeline })
+  const recommendations = syncedAt
+    ? generateRecommendations({ cases, connectors, ingestionTimeline })
+    : []
 
   const critCases    = cases.filter(c => c.severity?.toLowerCase() === 'critical').length
   const openCases    = cases.filter(c => !['closed', 'resolved'].includes((c.status || '').toLowerCase())).length
