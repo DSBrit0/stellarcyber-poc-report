@@ -624,6 +624,7 @@ export function generatePDFReport({
   lowCount = 0,
   mediumTotal = 0,
   connectors = [],
+  dataSensors = [],
   assets = [],
   recommendations = [],
   ingestionBySensor = [],
@@ -1590,13 +1591,59 @@ export function generatePDFReport({
   y = sectionTitle(doc, s.sec10 || '10. Conclusion', y)
   y = subTitle(doc, s.sub10_1 || '10.1 PoC Scorecard', y)
 
-  const scorecardRows = s.scorecardRows || [
-    [s.sc10_1 || 'Detection Capability',     pocMeta.scoreDetection     || '—', pocMeta.noteDetection     || ''],
-    [s.sc10_2 || 'Investigation Efficiency', pocMeta.scoreInvestigation || '—', pocMeta.noteInvestigation || ''],
-    [s.sc10_3 || 'Response Automation',      pocMeta.scoreAutomation    || '—', pocMeta.noteAutomation    || ''],
-    [s.sc10_4 || 'Integration Coverage',     pocMeta.scoreIntegration   || '—', pocMeta.noteIntegration   || ''],
-    [s.sc10_5 || 'Ease of Use',              pocMeta.scoreEase          || '—', pocMeta.noteEase          || ''],
-    [s.sc10_6 || 'MITRE Coverage',           `${mitreCovPct}%`,                      `${detectedTactics.size} of ${ALL_TACTICS.length} tactics`],
+  // Scorecard: real values derived from API data
+  function scoreLabel(p) {
+    if (p >= 70) return s.ratingHigh || 'Alto'
+    if (p >= 35) return s.ratingMed  || 'Médio'
+    return s.ratingLow || 'Baixo'
+  }
+
+  // Capacidade de Detecção: avg score of loaded cases
+  const validScores = cases.filter(c => typeof c.score === 'number' && c.score > 0)
+  const avgScore = validScores.length > 0
+    ? Math.round(validScores.reduce((sum, c) => sum + c.score, 0) / validScores.length)
+    : 0
+  const critHighCount = critCases.length + highCases.length
+  const detectionScore = scoreLabel(avgScore)
+  const detectionNote  = `${fmtNum(critHighCount)} ${s.sc_critHigh || 'casos Crit+High'} | Score: ${avgScore}`
+
+  // Eficiência de Investigação: % cases closed/resolved
+  const totalCasesForPct = cases.length
+  const closedPct = totalCasesForPct > 0
+    ? Math.round(resolvedCases.length / totalCasesForPct * 100)
+    : 0
+  const investigScore = scoreLabel(closedPct)
+  const investigNote  = `${fmtNum(resolvedCases.length)} ${s.sc_of || 'de'} ${fmtNum(totalCasesForPct)} ${s.sc_closed || 'casos resolvidos'} (${closedPct}%)`
+
+  // Automação de Resposta: NDR (Modular Sensor connected) + EDR connector
+  const hasNDR = dataSensors.some(ds =>
+    (ds.type || '').toLowerCase().includes('modular') &&
+    (ds.connectionStatus || '').toLowerCase() === 'connected'
+  )
+  const EDR_KEYWORDS = ['edr', 'endpoint', 'crowdstrike', 'sentinelone', 'carbon black', 'defender', 'cybereason', 'cylance', 'sophos', 'cortex']
+  const hasEDR = connectors.some(c => {
+    const str = ((c.name || '') + ' ' + (c.type || '') + ' ' + (c.category || '')).toLowerCase()
+    return EDR_KEYWORDS.some(kw => str.includes(kw))
+  })
+  const autoScore = hasNDR && hasEDR ? (s.sc_yes || 'Sim') : (s.sc_no || 'Não')
+  const autoNote  = hasNDR && hasEDR
+    ? (s.sc_autoYes    || 'NDR e EDR integrado')
+    : hasNDR
+      ? (s.sc_autoNoEDR || 'NDR implementado, falta EDR')
+      : (s.sc_autoNoNDR || 'Baixo índice de resposta, falta EDR')
+
+  // Cobertura de Integração: active / total connectors
+  const integScore = scoreLabel(integPct)
+
+  // Cobertura MITRE
+  const mitreScore = scoreLabel(mitreCovPct)
+
+  const scorecardRows = [
+    [s.sc10_1 || 'Detection Capability',     detectionScore, detectionNote],
+    [s.sc10_2 || 'Investigation Efficiency', investigScore,  investigNote],
+    [s.sc10_3 || 'Response Automation',      autoScore,      autoNote],
+    [s.sc10_4 || 'Integration Coverage',     integScore,     integStr],
+    [s.sc10_6 || 'MITRE Coverage',           mitreScore,     `${detectedTactics.size} ${s.sc_of || 'de'} ${ALL_TACTICS.length} ${s.sc_tactics || 'táticas'}`],
   ]
   y = tableBase(doc,
     [s.scArea || 'Area', s.scScore || 'Score', s.scNotes || 'Notes'],

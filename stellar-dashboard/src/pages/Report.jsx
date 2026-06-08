@@ -178,7 +178,7 @@ export default function Report() {
     return e => setPocMeta({ [key]: e.target.value })
   }
 
-  const { cases, lowCount, mediumTotal, assets, connectors, ingestionTimeline, ingestionBySensor, ingestionByConnector, caseTactics } = data
+  const { cases, lowCount, mediumTotal, assets, connectors, dataSensors, ingestionTimeline, ingestionBySensor, ingestionByConnector, caseTactics } = data
 
 
   const recommendations = syncedAt
@@ -218,6 +218,7 @@ export default function Report() {
         lowCount,
         mediumTotal,
         connectors,
+        dataSensors,
         assets,
         recommendations,
         ingestionBySensor,
