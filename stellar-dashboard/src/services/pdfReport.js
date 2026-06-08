@@ -124,7 +124,7 @@ function sectionTitle(doc, text, y, size) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(fs)
   doc.text(text, ML + 3, y + barH * 0.69)
-  return y + barH + 2
+  return y + barH + 5
 }
 
 function appendixTitle(doc, text, y) {
@@ -148,7 +148,7 @@ function subTitle(doc, text, y, size) {
   doc.setDrawColor(...C.midBlue)
   doc.setLineWidth(0.3)
   doc.line(ML, y + 2, ML + CW, y + 2)
-  return y + fs * 0.67
+  return y + fs * 1
 }
 
 function bodyText(doc, text, y, opts) {
@@ -196,7 +196,7 @@ function tableBase(doc, head, body, y, opts) {
     tableWidth: CW,
     didDrawPage: () => { _pageNum += 1; addChrome(doc) },
   }, o))
-  return doc.lastAutoTable.finalY + 7
+  return doc.lastAutoTable.finalY + 5
 }
 
 function tableCompact(doc, head, body, y, opts) {
@@ -213,7 +213,7 @@ function tableCompact(doc, head, body, y, opts) {
     tableWidth: CW,
     didDrawPage: () => { _pageNum += 1; addChrome(doc) },
   }, o))
-  return doc.lastAutoTable.finalY + 7
+  return doc.lastAutoTable.finalY + 5
 }
 
 // ─── Chart rendering ──────────────────────────────────────────────────────────
@@ -1066,7 +1066,7 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   // SECTION 3 — Data Sources
   // ════════════════════════════════════════════════════════════════════════════
-  y = needsPage(doc, y, 20)
+  y = newPage(doc)
   y = sectionTitle(doc, s.sec3 || '3. Data Sources & Ingestion', y)
 
   // 3.1 Stat cards (4 boxes)
