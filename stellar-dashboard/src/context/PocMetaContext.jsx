@@ -1,4 +1,5 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { useAuth } from './AuthContext'
 
 const STORAGE_KEY    = 'poc_meta'
 const ARCH_IMAGE_KEY = 'poc_arch_image'
@@ -28,18 +29,28 @@ const DEFAULTS = {
 const PocMetaContext = createContext(null)
 
 export function PocMetaProvider({ children }) {
-  const [pocMeta, setPocMetaState] = useState(() => {
-    try {
-      const saved    = localStorage.getItem(STORAGE_KEY)
-      const archImg  = localStorage.getItem(ARCH_IMAGE_KEY) || ''
-      // dates are session-only — always start empty to force the user to set the period each session
-      const loaded = saved ? JSON.parse(saved) : {}
-      const { pocStartDate: _s, pocEndDate: _e, ...persisted } = loaded
-      return { ...DEFAULTS, ...persisted, architectureImage: archImg }
-    } catch {
-      return { ...DEFAULTS, architectureImage: '' }
+  const { auth } = useAuth()
+
+  const [pocMeta, setPocMetaState] = useState(() => ({ ...DEFAULTS, architectureImage: '' }))
+
+  // On login: load from localStorage. On logout (auth → null): clear storage and reset to DEFAULTS.
+  useEffect(() => {
+    if (auth) {
+      try {
+        const saved   = localStorage.getItem(STORAGE_KEY)
+        const archImg = localStorage.getItem(ARCH_IMAGE_KEY) || ''
+        const loaded  = saved ? JSON.parse(saved) : {}
+        const { pocStartDate: _s, pocEndDate: _e, ...persisted } = loaded
+        setPocMetaState({ ...DEFAULTS, ...persisted, architectureImage: archImg })
+      } catch {
+        setPocMetaState({ ...DEFAULTS, architectureImage: '' })
+      }
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(ARCH_IMAGE_KEY)
+      setPocMetaState({ ...DEFAULTS, architectureImage: '' })
     }
-  })
+  }, [!!auth])
 
   function setPocMeta(updates) {
     setPocMetaState(prev => {
