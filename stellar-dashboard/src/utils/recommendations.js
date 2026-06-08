@@ -1,6 +1,6 @@
-import { correlateMitre } from './mitreMapping'
+import { correlateMitre, getMitreById } from './mitreMapping'
 
-export function generateRecommendations({ cases, connectors, sensors, tenants, assets, ingestionTimeline }) {
+export function generateRecommendations({ cases, connectors, sensors, tenants, assets, ingestionTimeline, mitreTechniques = [], locale = 'pt' }) {
   const recs = []
 
   const allConnectors = connectors ?? sensors ?? []
@@ -120,8 +120,8 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
     })
   }
 
-  // 6. MITRE ATT&CK-enriched recommendations from open cases
-  const mitreRecs = generateMitreRecommendations(cases)
+  // 6. MITRE ATT&CK recommendations — real API techniques + library lookup by ID
+  const mitreRecs = generateMitreRecommendations(mitreTechniques, locale)
   recs.push(...mitreRecs)
 
   const hasData = cases.length > 0 || allConnectors.length > 0 || (ingestionTimeline?.length ?? 0) > 0
@@ -148,48 +148,35 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
 }
 
 /**
- * Groups open cases by MITRE ATT&CK technique and returns one recommendation per technique.
- * Each recommendation includes the MITRE technique, tactic, risk, and mitigation.
+ * Builds MITRE ATT&CK recommendations from real API technique data.
+ * Each technique detected by the API is looked up in the local MITRE library by ID.
+ * Techniques not in the library get a reference link to attack.mitre.org.
  */
-function generateMitreRecommendations(cases) {
-  const techniqueMap = new Map()
+function generateMitreRecommendations(mitreTechniques, locale) {
+  if (!mitreTechniques || mitreTechniques.length === 0) return []
 
-  for (const c of cases) {
-    if (['closed', 'resolved'].includes((c.status || '').toLowerCase())) continue
-    const correlation = correlateMitre(c.name || c.description || '')
-    if (!correlation) continue
-
-    const key = correlation.technique.id
-    if (!techniqueMap.has(key)) {
-      techniqueMap.set(key, { correlation, cases: [] })
-    }
-    techniqueMap.get(key).cases.push(c)
-  }
-
-  return Array.from(techniqueMap.values()).map(({ correlation, cases: affected }) => {
-    const hasCritical = affected.some(c => c.severity?.toLowerCase() === 'critical')
-    const hasHigh     = affected.some(c => c.severity?.toLowerCase() === 'high')
+  return mitreTechniques.map(tech => {
+    const rule       = getMitreById(tech.id)
+    const mitigation = rule?.mitigation?.[locale] || rule?.mitigation?.pt || null
+    const techPath   = (tech.id || '').replace('.', '/')
+    const refUrl     = `attack.mitre.org/techniques/${techPath}`
 
     return {
-      id:       `mitre-${correlation.technique.id}`,
-      priority: hasCritical ? 'critical' : 'warning',
-      title:    `${correlation.technique.id}: ${correlation.technique.name}`,
-      description:
-        `${affected.length} caso(s) associado(s) à tática ${correlation.tactic.name} (${correlation.tactic.id}). ` +
-        correlation.risk,
-      steps: [
-        correlation.mitigation,
-        `Revise ${affected.length} caso(s) afetado(s) na página de Cases`,
-        `Referência MITRE ATT&CK: attack.mitre.org/techniques/${correlation.technique.id.replace('.', '/')}`,
-      ],
-      impact:   hasCritical ? 90 : hasHigh ? 70 : 50,
-      category: 'MITRE ATT&CK',
+      id:          `mitre-${tech.id}`,
+      priority:    tech.caseCount >= 5 ? 'critical' : tech.caseCount >= 2 ? 'warning' : 'info',
+      title:       `${tech.id}: ${tech.name || tech.id}`,
+      description: mitigation || refUrl,
+      steps:       mitigation
+        ? [mitigation, `${tech.caseCount} case(s) · ${tech.alertCount} alert(s)`, refUrl]
+        : [`${tech.caseCount} case(s) · ${tech.alertCount} alert(s)`, refUrl],
+      impact:      Math.min(90, (tech.caseCount || 0) * 8 + Math.min((tech.alertCount || 0), 10)),
+      category:    'MITRE ATT&CK',
       mitre: {
-        technique:     correlation.technique,
-        tactic:        correlation.tactic,
-        risk:          correlation.risk,
-        mitigation:    correlation.mitigation,
-        affectedCases: affected.length,
+        technique:  { id: tech.id,       name: tech.name      },
+        tactic:     { id: tech.tacticId, name: tech.tacticName },
+        mitigation: mitigation || refUrl,
+        caseCount:  tech.caseCount,
+        alertCount: tech.alertCount,
       },
     }
   })

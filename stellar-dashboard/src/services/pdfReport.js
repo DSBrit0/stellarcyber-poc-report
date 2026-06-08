@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { Chart, registerables } from 'chart.js'
+import { getMitreMitigation } from '../utils/mitreMapping'
 Chart.register(...registerables)
 
 // ─── Color palette ────────────────────────────────────────────────────────────
@@ -1527,29 +1528,32 @@ export function generatePDFReport({
     )
   }
 
-  // 8.2 MITRE-based Recommendations — real API data from caseTactics.mitre.techniques
+  // 8.2 MITRE-based Recommendations — real API techniques + library mitigation lookup
   y = needsPage(doc, y, 40)
   y = subTitle(doc, s.sub8_2 || '8.2 MITRE ATT&CK Recommendations', y)
   if (mitreTechniqueData.length === 0) {
     y = infoNote(doc, s.noMitreRecs || 'No MITRE techniques detected during the POC period.', y)
     y += 4
   } else {
-    const mitreRecRows = mitreTechniqueData.map(tech => [
-      tech.id   || '—',
-      trunc(tech.name || '—', 35),
-      tech.tacticName || tech.tacticId || '—',
-      String(tech.caseCount  || 0),
-      String(tech.alertCount || 0),
-    ])
+    const mitreRecRows = mitreTechniqueData.map(tech => {
+      const mitigation = getMitreMitigation(tech.id, locale)
+      const mitigationText = mitigation
+        ? mitigation
+        : `attack.mitre.org/techniques/${(tech.id || '').replace('.', '/')}`
+      return [
+        tech.id || '—',
+        trunc(tech.name || '—', 40),
+        trunc(mitigationText, 110),
+      ]
+    })
     y = tableCompact(doc,
       [
-        s.mitreId     || 'Technique ID',
-        s.mitreName   || 'Technique',
-        s.mitreTactic || 'Tactic',
-        s.mitreCases  || 'Cases',
-        s.mitreAlerts || 'Alerts',
+        s.mitreId          || 'Technique ID',
+        s.mitreName        || 'Technique',
+        s.mitreMitigation  || 'Mitigation',
       ],
-      mitreRecRows, y
+      mitreRecRows, y,
+      { columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 48 }, 2: { cellWidth: CW - 70 } } }
     )
   }
 

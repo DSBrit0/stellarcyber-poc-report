@@ -181,7 +181,13 @@ export default function Report() {
 
 
   const recommendations = syncedAt
-    ? generateRecommendations({ cases, connectors, ingestionTimeline })
+    ? generateRecommendations({
+        cases,
+        connectors,
+        ingestionTimeline,
+        mitreTechniques: caseTactics?.mitre?.techniques || [],
+        locale,
+      })
     : []
 
   const critCases    = cases.filter(c => c.severity?.toLowerCase() === 'critical').length
