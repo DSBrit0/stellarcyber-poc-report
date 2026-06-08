@@ -1486,12 +1486,12 @@ export function generatePDFReport({
     [s.metCritHigh       || 'Critical + High',       fmtNum(critCases.length + highCases.length), pct(critCases.length + highCases.length, totalCasesCount)],
     [s.metMitreCov       || 'MITRE Tactic Coverage', `${mitreCovPct}%`,                           `${detectedTactics.size} / ${ALL_TACTICS.length}`],
     [
-      s.metAvgEntitiesDay || 'Média Assets/Dia',
+      s.metAvgEntitiesDay || 'Média Ativos/Dia',
       avgEntities || '—',
-      s.entitiesNote || 'from entity_count (entity_usages API)',
+      s.entitiesNote || 'Assets diários',
     ],
     [s.metActiveSources  || 'Active Sources',        fmtNum(activeConn.length),                   `${s.of || 'of'} ${fmtNum(connectors.length)}`],
-    [s.metTotalIngested  || 'Total Data Ingested',   fmtGB(totalIngest),                          ''],
+    [s.metTotalIngested  || 'Total Data Ingested',   fmtGB(totalIngest),                          s.ingestedNote || 'Total do período'],
   ]
   y = tableBase(doc,
     [s.roiMetric || 'Metric', s.roiValue || 'Value', s.roiContext || 'Context'],
