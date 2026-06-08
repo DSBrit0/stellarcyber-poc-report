@@ -94,6 +94,7 @@ function AnalystsList({ analysts, setPocMeta, t }) {
           onChange={e => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           maxLength={60}
+          spellCheck={false}
         />
         <button
           type="button"
@@ -326,6 +327,7 @@ export default function Report() {
                 maxLength={550}
                 value={pocMeta.successCriteria}
                 onChange={setField('successCriteria')}
+                spellCheck={false}
               />
               <span style={{
                 position: 'absolute', bottom: '8px', right: '10px',
@@ -400,6 +402,7 @@ export default function Report() {
                 maxLength={1500}
                 value={pocMeta.comments}
                 onChange={setField('comments')}
+                spellCheck={false}
               />
               <span style={{
                 position: 'absolute', bottom: '8px', right: '10px',

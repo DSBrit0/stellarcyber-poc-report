@@ -1,4 +1,4 @@
-import { useState, Component } from 'react'
+import { useState, Component, Fragment } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { DataProvider } from './context/DataContext'
@@ -18,10 +18,14 @@ import Settings from './pages/Settings'
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { error: null }
+    this.state = { error: null, resetKey: 0 }
+    this.handleReset = this.handleReset.bind(this)
   }
   static getDerivedStateFromError(error) {
     return { error }
+  }
+  handleReset() {
+    this.setState(s => ({ error: null, resetKey: s.resetKey + 1 }))
   }
   render() {
     if (this.state.error) {
@@ -32,7 +36,7 @@ class ErrorBoundary extends Component {
             {this.state.error.message}
           </div>
           <button
-            onClick={() => this.setState({ error: null })}
+            onClick={this.handleReset}
             className="text-xs px-4 py-2 rounded-lg"
             style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.2)', color: '#00d4ff' }}
           >
@@ -41,7 +45,7 @@ class ErrorBoundary extends Component {
         </div>
       )
     }
-    return this.props.children
+    return <Fragment key={this.state.resetKey}>{this.props.children}</Fragment>
   }
 }
 

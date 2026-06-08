@@ -147,6 +147,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
             onChange={set('password')}
             required
             autoComplete="current-password"
+            spellCheck={false}
             className="w-full rounded-lg pl-9 pr-10 py-2.5 text-sm outline-none transition-all font-mono"
             style={fieldStyle}
             onFocus={focusStyle}
@@ -378,6 +379,7 @@ function IconField({ icon: Icon, label, value, onChange, type, placeholder, requ
           onChange={onChange}
           required={required}
           autoComplete={autoComplete}
+          spellCheck={false}
           className="w-full rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none transition-all"
           style={fieldStyle}
           onFocus={focusStyle}
