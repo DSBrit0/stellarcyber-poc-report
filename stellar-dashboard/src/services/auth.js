@@ -2,7 +2,7 @@ import axios from 'axios'
 import { ENDPOINTS, HTTP } from './endpoints'
 import {
   debug, info, warn, error as logError,
-  validateLoginFields, validateAuthResponse, logApiError,
+  validateLoginFields, validateApiKeyFields, validateAuthResponse, logApiError,
 } from '../utils/logger'
 
 /**
@@ -23,24 +23,40 @@ export async function testConnectivity(url) {
   }
 }
 
-export async function authenticate({ url, username, password, jwtToken }) {
+export const AUTH_METHODS = { API_KEY: 'apiKey', BASIC: 'basic' }
+
+/**
+ * Obtém um JWT via POST /access_token.
+ * - apiKey: scoped API key enviada como "Authorization: Bearer <key>" (esquema apiKey do Swagger)
+ * - basic:  usuário + token legado via Basic Auth
+ * O JWT retornado expira em 10 min e é usado como Bearer em todas as demais chamadas.
+ */
+export async function authenticate({ method = AUTH_METHODS.BASIC, url, username, password, apiKey, jwtToken }) {
   if (jwtToken && jwtToken.trim()) {
     info('auth', 'Manual JWT token provided — bypass login')
     return { token: jwtToken.trim(), exp: null, payload: null }
   }
 
-  const { valid, errors } = validateLoginFields({ url, username, password })
+  const isApiKey = method === AUTH_METHODS.API_KEY
+  const { valid, errors } = isApiKey
+    ? validateApiKeyFields({ url, apiKey })
+    : validateLoginFields({ url, username, password })
   if (!valid) throw new Error(errors[0])
 
   const base = url.replace(/\/$/, '')
 
-  debug('auth', 'Starting authentication', { base, username, timestamp: new Date().toISOString() })
+  debug('auth', 'Starting authentication', {
+    base, method, username: isApiKey ? undefined : username, timestamp: new Date().toISOString(),
+  })
 
   try {
     const res = await axios.post(ENDPOINTS.ACCESS_TOKEN, null, {
       baseURL: '/proxy',
-      auth: { username: username.trim(), password },
-      headers: { 'X-Proxy-Target': base },
+      ...(isApiKey ? {} : { auth: { username: username.trim(), password } }),
+      headers: {
+        'X-Proxy-Target': base,
+        ...(isApiKey ? { Authorization: `Bearer ${apiKey.trim()}` } : {}),
+      },
       timeout: HTTP.AUTH_TIMEOUT,
     })
 

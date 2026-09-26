@@ -112,19 +112,7 @@ export const error = (ctx, msg, data) => log(Level.ERROR, ctx, msg, data)
 
 // ─── Validação de campos de login ─────────────────────────────────────────────
 
-/**
- * Valida os campos do formulário de login antes de enviar à API.
- * Loga cada campo verificado e retorna lista de erros encontrados.
- *
- * @param {{ url, username, password }} fields
- * @returns {{ valid: boolean, errors: string[] }}
- */
-export function validateLoginFields({ url, username, password }) {
-  debug('validation', 'Iniciando validação dos campos de login', { url, username, password: password ? '***' : '' })
-
-  const errors = []
-
-  // URL
+function validateUrlField(url, errors) {
   if (!url || !url.trim()) {
     errors.push('URL da instância é obrigatória.')
     warn('validation', 'Campo URL vazio')
@@ -142,6 +130,21 @@ export function validateLoginFields({ url, username, password }) {
       warn('validation', 'URL com formato inválido', { url })
     }
   }
+}
+
+/**
+ * Valida os campos do formulário de login antes de enviar à API.
+ * Loga cada campo verificado e retorna lista de erros encontrados.
+ *
+ * @param {{ url, username, password }} fields
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+export function validateLoginFields({ url, username, password }) {
+  debug('validation', 'Iniciando validação dos campos de login', { url, username, password: password ? '***' : '' })
+
+  const errors = []
+
+  validateUrlField(url, errors)
 
   // Usuário
   if (!username || !username.trim()) {
@@ -167,6 +170,37 @@ export function validateLoginFields({ url, username, password }) {
 
   if (errors.length === 0) {
     info('validation', 'Todos os campos de login são válidos ✅')
+  } else {
+    warn('validation', `Validação falhou — ${errors.length} erro(s) encontrado(s)`, { errors })
+  }
+
+  return { valid: errors.length === 0, errors }
+}
+
+/**
+ * Valida os campos do login por Scoped API Key (Bearer).
+ * A key é enviada como está; a própria API responde 401 se for inválida.
+ *
+ * @param {{ url, apiKey }} fields
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+export function validateApiKeyFields({ url, apiKey }) {
+  debug('validation', 'Iniciando validação do login por API Key', { url, apiKey: apiKey ? '***' : '' })
+
+  const errors = []
+
+  validateUrlField(url, errors)
+
+  if (!apiKey || !apiKey.trim()) {
+    errors.push('API Key é obrigatória.')
+    warn('validation', 'Campo API Key vazio')
+  } else if (/\s/.test(apiKey.trim())) {
+    errors.push('API Key inválida — contém espaços ou quebras de linha.')
+    warn('validation', 'API Key com espaços internos')
+  }
+
+  if (errors.length === 0) {
+    info('validation', 'Campos de login por API Key válidos ✅')
   } else {
     warn('validation', `Validação falhou — ${errors.length} erro(s) encontrado(s)`, { errors })
   }
@@ -216,7 +250,8 @@ export function validateAuthResponse(responseData, httpStatus = 200) {
   // Decodificar payload JWT
   let payload = null
   try {
-    payload = JSON.parse(atob(parts[1]))
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    payload = JSON.parse(atob(b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=')))
     debug('auth', 'Payload JWT decodificado', {
       user:    payload.name || payload.email,
       profile: payload.priv_profile_id,
@@ -227,15 +262,16 @@ export function validateAuthResponse(responseData, httpStatus = 200) {
     warn('auth', 'Não foi possível decodificar o payload JWT')
   }
 
-  // Verificar expiração
-  if (payload?.exp) {
-    const expiresInMs = (payload.exp * 1000) - Date.now()
+  // Verificar expiração — o schema AccessTokenResponse também traz `exp` no corpo
+  const exp = payload?.exp ?? (typeof responseData.exp === 'number' ? responseData.exp : null)
+  if (exp) {
+    const expiresInMs = (exp * 1000) - Date.now()
     if (expiresInMs <= 0) {
-      error('auth', 'Token recebido já está expirado', { exp: new Date(payload.exp * 1000).toISOString() })
+      error('auth', 'Token recebido já está expirado', { exp: new Date(exp * 1000).toISOString() })
       throw new Error('O token recebido já está expirado.')
     }
     info('auth', `Token válido por ${Math.round(expiresInMs / 60000)} minutos ✅`, {
-      expiresAt: new Date(payload.exp * 1000).toISOString(),
+      expiresAt: new Date(exp * 1000).toISOString(),
     })
   }
 
@@ -247,7 +283,7 @@ export function validateAuthResponse(responseData, httpStatus = 200) {
 
   return {
     token,
-    exp:     payload?.exp ?? null,
+    exp,
     payload: payload ?? null,
   }
 }

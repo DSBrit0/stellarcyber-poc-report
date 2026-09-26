@@ -34,7 +34,10 @@ const { t, locale, setLocale } = useLocale()
           <h3 className="text-sm font-semibold text-gray-200">{t('settings.connectionTitle')}</h3>
         </div>
         <InfoRow label={t('settings.instanceUrl')} value={auth?.url} />
-        <InfoRow label={t('settings.username')}    value={auth?.username} />
+        <InfoRow label={t('settings.authMethod')}  value={t(auth?.method === 'apiKey' ? 'login.methodApiKey' : 'login.methodBasic')} />
+        {auth?.method === 'apiKey'
+          ? <InfoRow label={t('settings.apiKeyId')} value={auth?.apiKeyId || '—'} mono />
+          : <InfoRow label={t('settings.username')} value={auth?.username} />}
         <InfoRow label={t('settings.tokenPreview')} value={auth?.token ? `${auth.token.slice(0, 24)}…` : '—'} mono />
       </div>
 

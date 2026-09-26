@@ -9,6 +9,9 @@
  *     --password=yourpassword \
  *     --tenant=6951699ec7314422bd3bec86f9d354ab \
  *     [--host=http://localhost:8080]
+ *
+ *   Scoped API Key (Bearer) em vez de usuário/senha:
+ *   node validate.mjs --url=... --apikey=<scoped-api-key> --tenant=...
  */
 
 // ─── Args ─────────────────────────────────────────────────────────────────────
@@ -25,16 +28,18 @@ const args = Object.fromEntries(
 const INSTANCE_URL = args.url
 const USERNAME     = args.username
 const PASSWORD     = args.password
+const API_KEY      = args.apikey
 const TENANT       = args.tenant
 const PROXY_HOST   = args.host || 'http://localhost:8080'
 
-if (!INSTANCE_URL || !USERNAME || !PASSWORD || !TENANT) {
+if (!INSTANCE_URL || !TENANT || !(API_KEY || (USERNAME && PASSWORD))) {
   console.error(`
 ❌  Parâmetros obrigatórios:
     --url=https://instance.stellarcyber.ai
-    --username=user@company.com
-    --password=senha
     --tenant=id-do-tenant
+    e um destes:
+      --apikey=<scoped-api-key>                       (Bearer)
+      --username=user@company.com --password=senha    (Basic)
 
 Opcional:
     --host=http://localhost:8080   (endereço do servidor proxy local)
@@ -162,16 +167,15 @@ async function validateHealth() {
 }
 
 async function validateAuth() {
-  section('2. AUTENTICAÇÃO (Basic Auth → JWT)')
+  section(`2. AUTENTICAÇÃO (${API_KEY ? 'Scoped API Key Bearer' : 'Basic Auth'} → JWT)`)
   console.log(`  URL:    ${TARGET}`)
-  console.log(`  User:   ${USERNAME}`)
+  console.log(`  ${API_KEY ? 'Key:    ' + API_KEY.slice(0, 12) + '…' : 'User:   ' + USERNAME}`)
   console.log(`  Tenant: ${TENANT}`)
 
-  const credentials = Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64')
-  const res = await proxyFetch('/connect/api/v1/access_token', null, {
-    method: 'POST',
-    authHeader: { Authorization: `Basic ${credentials}` },
-  })
+  const authHeader = API_KEY
+    ? { Authorization: `Bearer ${API_KEY}` }
+    : { Authorization: `Basic ${Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64')}` }
+  const res = await proxyFetch('/connect/api/v1/access_token', null, { method: 'POST', authHeader })
 
   if (!res.ok) {
     fail(`Auth HTTP ${res.status}`, JSON.stringify(res.body).slice(0, 200))
@@ -186,11 +190,13 @@ async function validateAuth() {
 
   // Decode JWT payload
   try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
     const expMs   = payload.exp ? (payload.exp * 1000 - Date.now()) : null
     const expMin  = expMs ? Math.round(expMs / 60000) : null
     ok('JWT recebido', `válido por ${expMin ?? '?'} min`)
-    ok('Payload JWT', `user=${payload.name || payload.email || '?'} | profile=${payload.priv_profile_id || '?'}`)
+    ok('Payload JWT', payload.api_key
+      ? `api_key.key_id=${payload.api_key.key_id} | user_id=${payload.api_key.user_id}`
+      : `user=${payload.name || payload.email || '?'} | profile=${payload.priv_profile_id || '?'}`)
     return { token, exp: payload.exp, payload }
   } catch {
     ok('JWT recebido', 'payload não decodificável')

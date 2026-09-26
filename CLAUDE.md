@@ -20,6 +20,7 @@ npm start         # Express on :8080, serves dist/ + /proxy + /health
 npm run dev       # Vite HMR on :5173 — UI only, see note below
 npm run lint      # ESLint
 node validate.mjs --url=https://<instance> --username=<u> --password=<p> --tenant=<id> [--host=http://localhost:8080]
+node validate.mjs --url=https://<instance> --apikey=<scoped-api-key> --tenant=<id> [--host=...]
                   # End-to-end check: auth → data endpoints → PDF normalization, via a running server
 ```
 
@@ -56,15 +57,19 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`. `a
 
 | Context | Purpose | Storage |
 |---|---|---|
-| `AuthContext` | JWT, proactive renewal 60s before expiry | `sessionStorage` (password kept only in a ref) |
+| `AuthContext` | JWT, proactive renewal 60s before expiry | `sessionStorage` (password / API key kept only in a ref) |
 | `PocMetaContext` | POC form metadata + architecture image | `localStorage` (`poc_meta`, image in `poc_arch_image`) |
 | `DataContext` | All fetched API data, 5-min polling | in-memory |
 
+- **Two login methods** (`AUTH_METHODS` in `auth.js`), both `POST /access_token` → JWT (10 min, `{access_token, exp}`):
+  - `apiKey` (default): scoped API key sent as `Authorization: Bearer <key>`. No username. The key cannot be used directly on data endpoints (401); it must be exchanged. A tenant outside the key's scope returns 403 `Tenant mismatch`.
+  - `basic`: username + password / legacy token via Basic Auth.
+  - Every data call then uses `Authorization: Bearer <jwt>`.
 - `DataContext` is mounted inside `ProtectedLayout`, so it exists only while the user is authenticated.
 - **Nothing is fetched until the user clicks Sync** on the Report page. `sync({pocStartDate, pocEndDate})` stores the dates in a ref, runs `fetchAll` and starts the interval.
 - The POC period is capped at 30 days in the UI (`SyncBar`).
 - The POC dates are never persisted. Logout wipes all POC metadata from `localStorage`.
-- Token renewal needs the in-memory password. After a page reload it is gone, so the session ends when the token expires.
+- Token renewal needs the in-memory password or API key. After a page reload it is gone, so the session ends when the token expires.
 
 ### Data flow (`src/services/`)
 

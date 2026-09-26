@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import {
   ShieldCheck, Eye, EyeOff, Loader, AlertCircle,
-  Globe, User, Lock, Hash, HelpCircle, X, AlertTriangle,
+  Globe, User, Lock, Hash, HelpCircle, X, AlertTriangle, KeyRound,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { AUTH_METHODS } from '../services/auth'
 import { useLocale, LOCALE_OPTIONS } from '../i18n'
 
 export default function Login() {
@@ -95,9 +96,10 @@ export default function Login() {
 
 function CredentialsForm({ onSubmit, connecting, authError }) {
   const { t } = useLocale()
-  const [form, setForm]         = useState({ url: '', username: '', password: '', tenantId: '' })
-  const [showPass, setShowPass] = useState(false)
+  const [method, setMethod]     = useState(AUTH_METHODS.API_KEY)
+  const [form, setForm]         = useState({ url: '', username: '', password: '', apiKey: '', tenantId: '' })
   const [showGuide, setShowGuide] = useState(false)
+  const isApiKey = method === AUTH_METHODS.API_KEY
 
   function set(k) {
     return e => setForm(prev => ({ ...prev, [k]: e.target.value }))
@@ -105,11 +107,16 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    await onSubmit({ url: form.url, username: form.username, password: form.password, tenant: form.tenantId.trim() })
+    const tenant = form.tenantId.trim()
+    await onSubmit(isApiKey
+      ? { method, url: form.url, apiKey: form.apiKey, tenant }
+      : { method, url: form.url, username: form.username, password: form.password, tenant })
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <MethodSelector value={method} onChange={setMethod} />
+
       <IconField
         icon={Globe}
         label={t('login.urlLabel')}
@@ -120,50 +127,39 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
         required
       />
 
-      <IconField
-        icon={User}
-        label={t('login.userLabel')}
-        type="text"
-        placeholder={t('login.userPlaceholder')}
-        value={form.username}
-        onChange={set('username')}
-        required
-        autoComplete="username"
-      />
-
-      {/* Password field */}
-      <div>
-        <label className="block text-xs font-medium mb-1.5" style={{ color: '#94a3b8' }}>
-          {t('login.passwordLabel')}
-        </label>
-        <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#475569' }}>
-            <Lock size={14} />
-          </div>
-          <input
-            type={showPass ? 'text' : 'password'}
+      {isApiKey ? (
+        <SecretField
+          key="apiKey"
+          icon={KeyRound}
+          label={t('login.apiKeyLabel')}
+          placeholder={t('login.apiKeyPlaceholder')}
+          value={form.apiKey}
+          onChange={set('apiKey')}
+          autoComplete="off"
+        />
+      ) : (
+        <>
+          <IconField
+            icon={User}
+            label={t('login.userLabel')}
+            type="text"
+            placeholder={t('login.userPlaceholder')}
+            value={form.username}
+            onChange={set('username')}
+            required
+            autoComplete="username"
+          />
+          <SecretField
+            key="password"
+            icon={Lock}
+            label={t('login.passwordLabel')}
             placeholder="••••••••"
             value={form.password}
             onChange={set('password')}
-            required
             autoComplete="current-password"
-            spellCheck={false}
-            className="w-full rounded-lg pl-9 pr-10 py-2.5 text-sm outline-none transition-all font-mono"
-            style={fieldStyle}
-            onFocus={focusStyle}
-            onBlur={blurStyle}
           />
-          <button
-            type="button"
-            onClick={() => setShowPass(v => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
-            style={{ color: '#475569' }}
-            tabIndex={-1}
-          >
-            {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Tenant ID field */}
       <IconField
@@ -191,11 +187,85 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
         }}
       >
         <HelpCircle size={13} />
-        {t('login.apiGuideBtn')}
+        {t(isApiKey ? 'login.apiKeyGuideBtn' : 'login.apiGuideBtn')}
       </button>
 
-      {showGuide && <ApiGuideModal onClose={() => setShowGuide(false)} />}
+      {showGuide && <ApiGuideModal method={method} onClose={() => setShowGuide(false)} />}
     </form>
+  )
+}
+
+function MethodSelector({ value, onChange }) {
+  const { t } = useLocale()
+  const options = [
+    { id: AUTH_METHODS.API_KEY, label: t('login.methodApiKey') },
+    { id: AUTH_METHODS.BASIC,   label: t('login.methodBasic') },
+  ]
+  return (
+    <div
+      role="tablist"
+      className="grid grid-cols-2 gap-1 p-1 rounded-lg"
+      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+    >
+      {options.map(opt => {
+        const active = value === opt.id
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(opt.id)}
+            className="py-2 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: active ? 'rgba(0,212,255,0.15)' : 'transparent',
+              border: `1px solid ${active ? 'rgba(0,212,255,0.35)' : 'transparent'}`,
+              color: active ? '#00d4ff' : '#64748b',
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function SecretField({ icon: Icon, label, placeholder, value, onChange, autoComplete }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div>
+      <label className="block text-xs font-medium mb-1.5" style={{ color: '#94a3b8' }}>
+        {label}
+      </label>
+      <div className="relative">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#475569' }}>
+          <Icon size={14} />
+        </div>
+        <input
+          type={show ? 'text' : 'password'}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          required
+          autoComplete={autoComplete}
+          spellCheck={false}
+          className="w-full rounded-lg pl-9 pr-10 py-2.5 text-sm outline-none transition-all font-mono"
+          style={fieldStyle}
+          onFocus={focusStyle}
+          onBlur={blurStyle}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(v => !v)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+          style={{ color: '#475569' }}
+          tabIndex={-1}
+        >
+          {show ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -240,24 +310,21 @@ function SubmitButton({ connecting }) {
   )
 }
 
-function ApiGuideModal({ onClose }) {
-  const { t } = useLocale()
-  const g = key => t(`login.apiGuide.${key}`)
+// Sub-itens de cada passo, por guia (chaves em login.<guia>.stepN_M)
+const GUIDE_STEPS = {
+  apiKeyGuide: [2, 2, 2],
+  apiGuide:    [2, 4, 2],
+}
 
-  const steps = [
-    {
-      label: g('step1'),
-      sub: [g('step1_1'), g('step1_2')],
-    },
-    {
-      label: g('step2'),
-      sub: [g('step2_1'), g('step2_2'), g('step2_3'), g('step2_4')],
-    },
-    {
-      label: g('step3'),
-      sub: [g('step3_1'), g('step3_2')],
-    },
-  ]
+function ApiGuideModal({ method, onClose }) {
+  const { t } = useLocale()
+  const guide = method === AUTH_METHODS.API_KEY ? 'apiKeyGuide' : 'apiGuide'
+  const g = key => t(`login.${guide}.${key}`)
+
+  const steps = GUIDE_STEPS[guide].map((count, i) => ({
+    label: g(`step${i + 1}`),
+    sub: Array.from({ length: count }, (_, j) => g(`step${i + 1}_${j + 1}`)),
+  }))
 
   return (
     <div
