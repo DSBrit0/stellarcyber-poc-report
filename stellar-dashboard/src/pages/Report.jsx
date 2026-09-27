@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import {
   FileText, Download, RefreshCw, CheckCircle2, AlertTriangle,
   XCircle, Shield, Layers, Radio, Lightbulb, Loader,
-  Clock, Settings2, User, Building2, CalendarDays, Info, Upload, Trash2,
+  Clock, Settings2, User, Building2, CalendarDays, Info, Upload, Trash2, Network,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
@@ -140,8 +140,8 @@ function AnalystsList({ analysts, setPocMeta, t }) {
 }
 
 export default function Report() {
-  const { auth }                                         = useAuth()
-  const { data, loading, errors, syncedAt, syncConfig, sync } = useData()
+  const { auth, tenants, setTenant }                     = useAuth()
+  const { data, loading, errors, syncedAt, syncConfig, sync, resetData } = useData()
   const { t, locale }                                    = useLocale()
   const { pocMeta, setPocMeta }                          = usePocMeta()
   const [generating, setGenerating]                      = useState(false)
@@ -208,6 +208,16 @@ export default function Report() {
   const hasErrors = Object.keys(errors).length > 0
   const apiOk     = !hasErrors && (totalCases > 0 || connectors.length > 0)
 
+  // Modo API key: o tenant é escolhido aqui; sem tenant, a página fica só leitura.
+  const isApiKey     = auth?.method === 'apiKey'
+  const tenantLocked = isApiKey && !auth?.tenant
+
+  function handleTenantChange(custId) {
+    if (!custId || custId === auth?.tenant) return
+    resetData()          // nunca misturar dados de tenants diferentes
+    setTenant(custId)
+  }
+
   async function handleDownload() {
     setGenerating(true)
     setDownloaded(false)
@@ -254,8 +264,38 @@ export default function Report() {
           </p>
         </div>
 
-        <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} pendingLabel={t('report.apiPending')} loading={loading} syncedAt={syncedAt} />
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {isApiKey && (
+            <TenantSelector
+              tenants={tenants}
+              value={auth?.tenant || ''}
+              disabled={loading}
+              onChange={handleTenantChange}
+              t={t}
+            />
+          )}
+          <StatusPill ok={apiOk} okLabel={t('report.apiOk')} errLabel={t('report.apiError')} pendingLabel={t('report.apiPending')} loading={loading} syncedAt={syncedAt} />
+        </div>
       </div>
+
+      {/* Tenants indisponíveis — Sync bloqueado até corrigir permissões */}
+      {isApiKey && (tenants.status === 'error' || (tenants.status === 'ok' && tenants.list.length === 0)) && (
+        <div className="flex items-start gap-2 rounded-lg p-4 text-sm"
+          style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5' }}>
+          <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+          <span>
+            {tenants.status === 'error'
+              ? t('report.tenantError', { error: tenants.error })
+              : t('report.tenantEmpty')}
+          </span>
+        </div>
+      )}
+
+      <fieldset
+        disabled={tenantLocked}
+        className="space-y-6"
+        style={{ border: 0, padding: 0, margin: 0, minWidth: 0, opacity: tenantLocked ? 0.45 : 1, transition: 'opacity 0.2s' }}
+      >
 
       {/* Sync bar — POC period + sync button + status */}
       <SyncBar
@@ -496,12 +536,68 @@ export default function Report() {
         </button>
       </div>
 
+      </fieldset>
+
       {showVerdictGuide && <VerdictGuideModal onClose={() => setShowVerdictGuide(false)} />}
     </div>
   )
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+// Seletor de tenant (modo API key). Sempre começa em "Tenant"; enquanto nada foi
+// escolhido fica em destaque, e o restante da página permanece só leitura.
+// Tenants sem grupo vêm primeiro; depois cada tenant group (só o nome, não
+// selecionável) com seus tenants logo abaixo.
+function TenantSelector({ tenants, value, disabled, onChange, t }) {
+  const unavailable = tenants.status !== 'ok' || tenants.list.length === 0
+  const pending     = !value
+  const ungrouped   = tenants.list.filter(tn => !tn.group)
+  const groups      = [...new Set(tenants.list.map(tn => tn.group).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+  const optStyle    = { background: '#0f1628', color: '#e2e8f0' }
+  return (
+    <div className="relative flex items-center">
+      <Network size={13} className="absolute left-3 pointer-events-none" style={{ color: pending ? '#f59e0b' : '#00d4ff' }} />
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled || unavailable}
+        aria-label={t('report.tenantPlaceholder')}
+        className={pending && !unavailable ? 'animate-pulse' : ''}
+        style={{
+          appearance: 'auto',
+          minWidth: '200px',
+          maxWidth: '280px',
+          padding: '7px 12px 7px 30px',
+          borderRadius: '8px',
+          fontSize: '13px',
+          fontWeight: 600,
+          outline: 'none',
+          cursor: (disabled || unavailable) ? 'default' : 'pointer',
+          background: pending ? 'rgba(245,158,11,0.10)' : 'rgba(0,212,255,0.08)',
+          border: `1px solid ${pending ? 'rgba(245,158,11,0.55)' : 'rgba(0,212,255,0.3)'}`,
+          boxShadow: pending ? '0 0 16px rgba(245,158,11,0.25)' : 'none',
+          color: pending ? '#fcd34d' : '#e2e8f0',
+        }}
+      >
+        <option value="" disabled>
+          {tenants.status === 'loading' ? t('report.tenantLoading') : t('report.tenantPlaceholder')}
+        </option>
+        {ungrouped.map(tn => (
+          <option key={tn.id} value={tn.id} style={optStyle}>{tn.name}</option>
+        ))}
+        {groups.map(group => (
+          <optgroup key={group} label={group} style={{ ...optStyle, color: '#00d4ff', fontWeight: 700 }}>
+            {tenants.list.filter(tn => tn.group === group).map(tn => (
+              <option key={tn.id} value={tn.id} style={{ ...optStyle, fontWeight: 400 }}>{tn.name}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  )
+}
 
 const INPUT_DATE = {
   background: 'rgba(255,255,255,0.05)',

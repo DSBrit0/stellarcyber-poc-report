@@ -63,6 +63,7 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 
 - **Two login methods** (`AUTH_METHODS` in `auth.js`), both `POST /access_token` → JWT (10 min, `{access_token, exp}`):
   - `apiKey` (default): scoped API key sent as `Authorization: Bearer <key>`. No username. The key cannot be used directly on data endpoints (401); it must be exchanged. A tenant outside the key's scope returns 403 `Tenant mismatch`.
+  - In `apiKey` mode the login has no tenant field. Right after authentication `AuthContext` calls `fetchTenants()` (`GET /tenants?fields=cust_id,cust_name,tgrp_name`, scoped by the user's tenancy; without a tenant the data endpoints return the sum of every tenant in scope, so a tenant is always required) and exposes `tenants` + `setTenant()`. The Report page shows a `TenantSelector` (top right): ungrouped tenants first, then each tenant group as a non-selectable `<optgroup>` with its tenants (groups hold no data; `tgrp_name` matches `/tenant_groups`, which some keys cannot read); until a tenant is chosen everything below the header is a disabled `<fieldset>`. If `/tenants` fails or is empty, Sync stays blocked with a permissions hint. Changing tenant calls `DataContext.resetData()` and requires a new Sync.
   - `basic`: username + password / legacy token via Basic Auth.
   - Every data call then uses `Authorization: Bearer <jwt>`.
 - `DataContext` is mounted inside `ProtectedLayout`, so it exists only while the user is authenticated.

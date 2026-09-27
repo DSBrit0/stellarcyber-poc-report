@@ -151,6 +151,18 @@ export function DataProvider({ children }) {
     intervalRef.current = setInterval(() => fetchAll(), 5 * 60 * 1000)
   }, [fetchAll])
 
+  // resetData() — descarta os dados carregados e para o polling (ex.: troca de tenant),
+  // para que o relatório nunca misture dados de tenants diferentes. Exige novo Sync.
+  const resetData = useCallback(() => {
+    clearInterval(intervalRef.current)
+    intervalRef.current = null
+    syncDatesRef.current = { pocStartDate: '', pocEndDate: '' }
+    setSyncedAt(null)
+    setSyncConfig({ pocStartDate: '', pocEndDate: '' })
+    setData(EMPTY_DATA)
+    setErrors({})
+  }, [])
+
   // Reset all state when user disconnects
   useEffect(() => {
     if (!auth) {
@@ -175,6 +187,7 @@ export function DataProvider({ children }) {
       syncedAt,
       syncConfig,
       sync,
+      resetData,
       // backward compat aliases used by Header and Recommendations
       lastRefresh: syncedAt,
       refresh:     () => fetchAll(),

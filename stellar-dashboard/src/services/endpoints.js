@@ -11,6 +11,7 @@ export const ENDPOINTS = {
   INGESTION_BY_SENSOR:    `${API_PREFIX}/ingestion-stats/sensor`,
   INGESTION_BY_CONNECTOR: `${API_PREFIX}/ingestion-stats/connector`,
   DATA_SENSORS:           `${API_PREFIX}/data_sensors`,
+  TENANTS:                `${API_PREFIX}/tenants`,
   // Case alerts: ${API_PREFIX}/cases/{id}/alerts  (ID is dynamic — constructed in api.js)
 }
 

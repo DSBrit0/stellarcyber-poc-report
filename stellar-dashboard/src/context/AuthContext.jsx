@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { authenticate, AUTH_METHODS } from '../services/auth'
+import { fetchTenants } from '../services/api'
 import { info, warn } from '../utils/logger'
 
 const SESSION_KEY = 'stellar_session'
@@ -77,6 +78,37 @@ export function AuthProvider({ children }) {
     return () => clearTimeout(timer)
   }, [auth?.exp, auth?.url, auth?.username, auth?.method, disconnect])
 
+  // ── Tenants disponíveis (só no modo API key) ─────────────────────────────
+  // Buscados logo após a autenticação via GET /tenants. A lista fica associada à
+  // sessão (URL + key); ao desconectar, tenantsKey vira null e o estado volta a idle.
+  const [tenantsState, setTenantsState] = useState({ key: null, status: 'idle', list: [], error: null })
+  const authRef = useRef(auth)
+  useEffect(() => { authRef.current = auth }, [auth])
+
+  const tenantsKey = auth?.method === AUTH_METHODS.API_KEY && auth?.token
+    ? `${auth.url}|${auth.apiKeyId}`
+    : null
+
+  useEffect(() => {
+    if (!tenantsKey) return
+    let cancelled = false
+    fetchTenants(authRef.current)
+      .then(list => { if (!cancelled) setTenantsState({ key: tenantsKey, status: 'ok', list, error: null }) })
+      .catch(err => {
+        warn('auth', 'Falha ao listar tenants', { error: err.message })
+        if (!cancelled) setTenantsState({ key: tenantsKey, status: 'error', list: [], error: err.message })
+      })
+    return () => { cancelled = true }
+  }, [tenantsKey])
+
+  const tenants = !tenantsKey
+    ? { status: 'idle', list: [], error: null }
+    : tenantsState.key === tenantsKey ? tenantsState : { status: 'loading', list: [], error: null }
+
+  const setTenant = useCallback((custId) => {
+    setAuth(prev => (prev ? { ...prev, tenant: custId || null } : prev))
+  }, [])
+
   // ── Connect ───────────────────────────────────────────────────────────────
   const connect = useCallback(async (credentials) => {
     setConnecting(true)
@@ -109,6 +141,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       auth, connecting, authError,
       connect, disconnect,
+      tenants, setTenant,
     }}>
       {children}
     </AuthContext.Provider>

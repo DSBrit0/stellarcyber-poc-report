@@ -109,7 +109,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
     e.preventDefault()
     const tenant = form.tenantId.trim()
     await onSubmit(isApiKey
-      ? { method, url: form.url, apiKey: form.apiKey, tenant }
+      ? { method, url: form.url, apiKey: form.apiKey }
       : { method, url: form.url, username: form.username, password: form.password, tenant })
   }
 
@@ -161,16 +161,18 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
         </>
       )}
 
-      {/* Tenant ID field */}
-      <IconField
-        icon={Hash}
-        label={t('login.tenantLabel')}
-        type="text"
-        placeholder={t('login.tenantPlaceholder')}
-        value={form.tenantId}
-        onChange={set('tenantId')}
-        required
-      />
+      {/* Tenant ID field — só no modo Basic; no modo API key o tenant é escolhido no Report */}
+      {!isApiKey && (
+        <IconField
+          icon={Hash}
+          label={t('login.tenantLabel')}
+          type="text"
+          placeholder={t('login.tenantPlaceholder')}
+          value={form.tenantId}
+          onChange={set('tenantId')}
+          required
+        />
+      )}
 
       <ErrorBanner message={authError} />
 
@@ -316,6 +318,12 @@ const GUIDE_STEPS = {
   apiGuide:    [2, 4, 2],
 }
 
+// Guias que exibem o aviso final (login.<guia>.warning)
+const GUIDE_WARNING = {
+  apiKeyGuide: false,
+  apiGuide:    true,
+}
+
 function ApiGuideModal({ method, onClose }) {
   const { t } = useLocale()
   const guide = method === AUTH_METHODS.API_KEY ? 'apiKeyGuide' : 'apiGuide'
@@ -394,7 +402,7 @@ function ApiGuideModal({ method, onClose }) {
           ))}
 
           {/* Warning */}
-          <div
+          {GUIDE_WARNING[guide] && <div
             className="flex items-start gap-2 rounded-lg px-4 py-3 text-xs"
             style={{
               background: 'rgba(245,158,11,0.08)',
@@ -404,7 +412,7 @@ function ApiGuideModal({ method, onClose }) {
           >
             <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
             <span>{g('warning')}</span>
-          </div>
+          </div>}
         </div>
 
         {/* Footer */}

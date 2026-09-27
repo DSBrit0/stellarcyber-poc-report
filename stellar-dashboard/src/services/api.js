@@ -230,6 +230,31 @@ export async function fetchDataSensors(auth) {
   }
 }
 
+// ─── Tenants ──────────────────────────────────────────────────────────────────
+// GET /connect/api/v1/tenants?fields=cust_id,cust_name,tgrp_name  (Swagger: listTenants, jwt)
+// Lists the tenants visible to the authenticated user (scoped by its tenancy).
+// tgrp_name is the tenant group the tenant belongs to ('' when none) — groups hold no
+// data of their own, they are only used to organise the list.
+// Returns: [{ id, name, group }] sorted by name.
+
+export async function fetchTenants(auth) {
+  try {
+    const params = { fields: 'cust_id,cust_name,tgrp_name' }
+    debug('api', `GET ${ENDPOINTS.TENANTS}`, params)
+
+    const res    = await createApiClient(auth).get(ENDPOINTS.TENANTS, { params })
+    const items  = Array.isArray(res.data?.data) ? res.data.data : []
+    const result = items
+      .filter(t => t.cust_id)
+      .map(t => ({ id: t.cust_id, name: t.cust_name || t.cust_id, group: t.tgrp_name || '' }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    info('api', `fetchTenants ✅ ${result.length} tenants`)
+    return result
+  } catch (err) {
+    handleError(err, ENDPOINTS.TENANTS)
+  }
+}
+
 // ─── MITRE + Stellar Cyber XDR tactic/technique analysis ─────────────────────
 // Fetches alerts for each case and classifies detections:
 //   MITRE standard  → tactic IDs starting with "TA", technique IDs starting with "T1"/"T0"

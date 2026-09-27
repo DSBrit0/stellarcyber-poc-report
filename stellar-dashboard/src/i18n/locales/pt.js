@@ -54,7 +54,6 @@ export default {
       step3:   'Requisitos e segurança:',
       step3_1: 'Use uma conta local — usuários SSO não acessam a API',
       step3_2: 'Se a key for exposta, revogue-a na mesma aba "API Keys"',
-      warning: 'O Tenant ID precisa estar dentro do escopo da conta; caso contrário a API retorna 403 (Tenant mismatch).',
       close:   'Fechar',
     },
     apiGuideBtn:     'Como criar uma conta e API Key?',
@@ -109,6 +108,10 @@ export default {
     none:       'Nenhum conector encontrado',
   },
   report: {
+    tenantPlaceholder: 'Tenant',
+    tenantLoading:     'Carregando tenants…',
+    tenantError:       'Não foi possível listar os tenants desta API key: {error} Verifique as permissões do usuário em System | ORGANIZATION MANAGEMENT | Users: ele precisa ter privilégio para consultar tenants (GET /tenants).',
+    tenantEmpty:       'Nenhum tenant disponível para esta API key. Verifique as permissões do usuário em System | ORGANIZATION MANAGEMENT | Users: o escopo (tenancy) dele precisa incluir ao menos um tenant.',
     title:             'Relatório de PoC',
     subtitle:          'Configure os metadados e gere o PDF profissional de Prova de Conceito.',
     pocPeriod:         'Período da POC',

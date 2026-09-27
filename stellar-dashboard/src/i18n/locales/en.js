@@ -54,7 +54,6 @@ export default {
       step3:   'Requirements and security:',
       step3_1: 'Use a local account — SSO users cannot access the API',
       step3_2: 'If the key is exposed, revoke it in the same "API Keys" tab',
-      warning: 'The Tenant ID must be within the account\'s scope; otherwise the API returns 403 (Tenant mismatch).',
       close:   'Close',
     },
     apiGuideBtn:     'How to create an account and API Key?',
@@ -109,6 +108,10 @@ export default {
     none:       'No connectors found',
   },
   report: {
+    tenantPlaceholder: 'Tenant',
+    tenantLoading:     'Loading tenants…',
+    tenantError:       'Could not list the tenants for this API key: {error} Check the user permissions in System | ORGANIZATION MANAGEMENT | Users: the user needs privilege to query tenants (GET /tenants).',
+    tenantEmpty:       'No tenant available for this API key. Check the user permissions in System | ORGANIZATION MANAGEMENT | Users: the user scope (tenancy) must include at least one tenant.',
     title:             'PoC Report',
     subtitle:          'Configure metadata and generate the professional Proof of Concept PDF.',
     pocPeriod:         'POC Period',
