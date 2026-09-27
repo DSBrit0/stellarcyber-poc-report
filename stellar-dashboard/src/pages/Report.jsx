@@ -346,13 +346,13 @@ export default function Report() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label={t('report.clientName')}>
-              <input style={INPUT} placeholder={t('report.clientPlaceholder')} value={pocMeta.clientName} onChange={setField('clientName')} />
+              <input style={INPUT} placeholder={t('report.clientPlaceholder')} value={pocMeta.clientName} onChange={setField('clientName')} name="client_name" autoComplete="section-client organization" />
             </Field>
             <Field label={t('report.clientDept')}>
-              <input style={INPUT} placeholder={t('report.deptPlaceholder')} value={pocMeta.clientDept} onChange={setField('clientDept')} />
+              <input style={INPUT} placeholder={t('report.deptPlaceholder')} value={pocMeta.clientDept} onChange={setField('clientDept')} name="client_department" autoComplete="on" />
             </Field>
             <Field label={t('report.clientEmail')}>
-              <input style={INPUT} type="email" placeholder={t('report.clientEmailPlaceholder')} value={pocMeta.clientEmail} onChange={setField('clientEmail')} />
+              <input style={INPUT} type="email" placeholder={t('report.clientEmailPlaceholder')} value={pocMeta.clientEmail} onChange={setField('clientEmail')} name="client_email" autoComplete="section-client email" />
             </Field>
           </div>
 
@@ -385,13 +385,13 @@ export default function Report() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label={t('report.seName')}>
-              <input style={INPUT} placeholder={t('report.sePlaceholder')} maxLength={20} value={pocMeta.seName} onChange={setField('seName')} />
+              <input style={INPUT} placeholder={t('report.sePlaceholder')} maxLength={20} value={pocMeta.seName} onChange={setField('seName')} name="se_name" autoComplete="section-se name" />
             </Field>
             <Field label={t('report.seEmail')}>
-              <input style={INPUT} type="email" placeholder={t('report.emailPlaceholder')} maxLength={50} value={pocMeta.seEmail} onChange={setField('seEmail')} />
+              <input style={INPUT} type="email" placeholder={t('report.emailPlaceholder')} maxLength={50} value={pocMeta.seEmail} onChange={setField('seEmail')} name="se_email" autoComplete="section-se email" />
             </Field>
             <Field label={t('report.sePhone')}>
-              <input style={INPUT} type="tel" placeholder={t('report.sePhonePlaceholder')} maxLength={20} value={pocMeta.sePhone} onChange={setField('sePhone')} />
+              <input style={INPUT} type="tel" placeholder={t('report.sePhonePlaceholder')} maxLength={20} value={pocMeta.sePhone} onChange={setField('sePhone')} name="se_phone" autoComplete="section-se tel" />
             </Field>
           </div>
 
@@ -400,13 +400,13 @@ export default function Report() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label={t('report.partnerName')}>
-              <input style={INPUT} placeholder={t('report.partnerPlaceholder')} value={pocMeta.partnerName} onChange={setField('partnerName')} />
+              <input style={INPUT} placeholder={t('report.partnerPlaceholder')} value={pocMeta.partnerName} onChange={setField('partnerName')} name="partner_contact_name" autoComplete="section-partner name" />
             </Field>
             <Field label={t('report.partnerEmail')}>
-              <input style={INPUT} type="email" placeholder={t('report.partnerEmailPlaceholder')} value={pocMeta.partnerEmail} onChange={setField('partnerEmail')} />
+              <input style={INPUT} type="email" placeholder={t('report.partnerEmailPlaceholder')} value={pocMeta.partnerEmail} onChange={setField('partnerEmail')} name="partner_email" autoComplete="section-partner email" />
             </Field>
             <Field label={t('report.partnerSite')}>
-              <input style={INPUT} placeholder={t('report.partnerSitePlaceholder')} value={pocMeta.partnerSite} onChange={setField('partnerSite')} />
+              <input style={INPUT} placeholder={t('report.partnerSitePlaceholder')} value={pocMeta.partnerSite} onChange={setField('partnerSite')} name="partner_website" autoComplete="section-partner url" />
             </Field>
           </div>
 

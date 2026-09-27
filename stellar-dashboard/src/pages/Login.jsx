@@ -125,6 +125,8 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
         value={form.url}
         onChange={set('url')}
         required
+        name="instance_url"
+        autoComplete="url"
       />
 
       {isApiKey ? (
@@ -135,7 +137,8 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
           placeholder={t('login.apiKeyPlaceholder')}
           value={form.apiKey}
           onChange={set('apiKey')}
-          autoComplete="off"
+          name="api_key"
+          autoComplete="current-password"
         />
       ) : (
         <>
@@ -147,6 +150,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
             value={form.username}
             onChange={set('username')}
             required
+            name="username"
             autoComplete="username"
           />
           <SecretField
@@ -156,6 +160,7 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
             placeholder="••••••••"
             value={form.password}
             onChange={set('password')}
+            name="password"
             autoComplete="current-password"
           />
         </>
@@ -171,6 +176,8 @@ function CredentialsForm({ onSubmit, connecting, authError }) {
           value={form.tenantId}
           onChange={set('tenantId')}
           required
+          name="tenant_id"
+          autoComplete="on"
         />
       )}
 
@@ -233,7 +240,7 @@ function MethodSelector({ value, onChange }) {
   )
 }
 
-function SecretField({ icon: Icon, label, placeholder, value, onChange, autoComplete }) {
+function SecretField({ icon: Icon, label, placeholder, value, onChange, autoComplete, name }) {
   const [show, setShow] = useState(false)
   return (
     <div>
@@ -250,6 +257,7 @@ function SecretField({ icon: Icon, label, placeholder, value, onChange, autoComp
           value={value}
           onChange={onChange}
           required
+          name={name}
           autoComplete={autoComplete}
           spellCheck={false}
           className="w-full rounded-lg pl-9 pr-10 py-2.5 text-sm outline-none transition-all font-mono"
@@ -437,7 +445,7 @@ function ApiGuideModal({ method, onClose }) {
   )
 }
 
-function IconField({ icon: Icon, label, value, onChange, type, placeholder, required, autoComplete }) {
+function IconField({ icon: Icon, label, value, onChange, type, placeholder, required, autoComplete, name }) {
   return (
     <div>
       <label className="block text-xs font-medium mb-1.5" style={{ color: '#94a3b8' }}>
@@ -453,6 +461,7 @@ function IconField({ icon: Icon, label, value, onChange, type, placeholder, requ
           value={value}
           onChange={onChange}
           required={required}
+          name={name}
           autoComplete={autoComplete}
           spellCheck={false}
           className="w-full rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none transition-all"
