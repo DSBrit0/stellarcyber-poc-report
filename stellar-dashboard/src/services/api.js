@@ -1,5 +1,5 @@
 import { createApiClient } from './apiClient'
-import { ENDPOINTS, API_PREFIX } from './endpoints'
+import { ENDPOINTS, API_PREFIX, PAGING } from './endpoints'
 import { debug, info, warn, logApiError } from '../utils/logger'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -11,64 +11,74 @@ function handleError(err, endpoint) {
   throw error
 }
 
-// Date-string "YYYY-MM-DD" → millisecond timestamp for start (00:00:01) and end (23:59:59) of that day
-function dayStart(dateStr) { return new Date(dateStr).getTime() + 1000 }      // 00:00:01.000
-function dayEnd(dateStr)   { return new Date(dateStr).getTime() + 86399000 }  // 23:59:59.000
+// Date-string "YYYY-MM-DD" → epoch ms at 00:00:00.000 and 23:59:59.999 UTC of that day
+function dayStart(dateStr) { return new Date(dateStr).getTime() }
+function dayEnd(dateStr)   { return new Date(dateStr).getTime() + 86_399_999 }
 
 // ─── Cases ────────────────────────────────────────────────────────────────────
-// The API ignores start_time/end_time for the cases endpoint — date filtering
-// is applied client-side. Four parallel requests (one per severity) are made
-// so Critical/High cases outside the recent 500-result window are not missed.
+// GET /connect/api/v1/cases — o período do POC vai no servidor via FROM~created_at /
+// TO~created_at (epoch ms). Sem esses filtros a API devolve só as últimas ~24h.
+// Uma consulta por severidade:
+//   - Critical/High: todas, paginando com skip até `total` (teto PAGING.CASES_MAX)
+//   - Medium:        as 100 mais recentes + `total`
+//   - Low:           só o `total`
 //
 // Returns: { cases: [...critical, ...high, ...mediumTop100], lowCount, mediumTotal }
-//   - cases:       all Critical + all High + top 100 Medium within the POC period
-//   - lowCount:    count of Low cases in period (number, or '500+' if ≥ 500 found)
-//   - mediumTotal: total Medium cases found in period (may be > 100)
 
 export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
   try {
-    const startMs = pocStartDate ? dayStart(pocStartDate) : 0
-    const endMs   = pocEndDate   ? dayEnd(pocEndDate)     : Infinity
-
-    function filterByDate(arr) {
-      if (!pocStartDate && !pocEndDate) return arr
-      return arr.filter(c => c.rawDate != null && c.rawDate >= startMs && c.rawDate <= endMs)
-    }
-
-    const SEVS = ['Critical', 'High', 'Medium', 'Low']
-
-    function extract(settled, label) {
-      if (settled.status !== 'fulfilled') {
-        warn('api', `fetchCases ${label} failed`, { error: settled.reason?.message })
-        return []
-      }
-      const raw = settled.value.data
-      return normalizeCases(raw?.data?.cases ?? raw?.cases ?? (Array.isArray(raw) ? raw : []))
-    }
-
-    const base   = { tenantid: auth.tenant, limit: 500, sort: 'start_timestamp', order: 'desc' }
     const client = createApiClient(auth)
-    debug('api', `GET ${ENDPOINTS.CASES} ×4 (by severity)`, base)
+    const base   = {
+      tenantid: auth.tenant,
+      sort:     'created_at',
+      order:    'desc',
+      ...(pocStartDate ? { 'FROM~created_at': dayStart(pocStartDate) } : {}),
+      ...(pocEndDate   ? { 'TO~created_at':   dayEnd(pocEndDate) }     : {}),
+    }
+    const page = (severity, limit, skip = 0) =>
+      client.get(ENDPOINTS.CASES, { params: { ...base, severity, limit, skip }, timeout: 90_000 })
+        .then(res => ({
+          cases: res.data?.data?.cases ?? [],
+          total: res.data?.data?.total ?? 0,
+        }))
 
-    const settled = await Promise.allSettled(
-      SEVS.map(sev => client.get(ENDPOINTS.CASES, { params: { ...base, severity: sev }, timeout: 90_000 }))
-    )
-    const [critRes, highRes, medRes, lowRes] = settled
+    async function all(severity) {
+      const first = await page(severity, PAGING.CASES_PAGE)
+      const cases = [...first.cases]
+      const max   = Math.min(first.total, PAGING.CASES_MAX)
+      while (cases.length < max) {
+        const next = await page(severity, PAGING.CASES_PAGE, cases.length)
+        if (next.cases.length === 0) break
+        cases.push(...next.cases)
+      }
+      if (first.total > cases.length) warn('api', `fetchCases ${severity}: ${cases.length}/${first.total} (teto ${PAGING.CASES_MAX})`)
+      return cases
+    }
+
+    debug('api', `GET ${ENDPOINTS.CASES} ×4 (by severity)`, base)
+    const settled = await Promise.allSettled([
+      all('Critical'),
+      all('High'),
+      page('Medium', PAGING.MEDIUM_TOP),
+      page('Low', 1),
+    ])
 
     // All 4 calls failed → propagate as a real error so DataContext records it
     if (settled.every(r => r.status === 'rejected')) {
       handleError(settled[0].reason, ENDPOINTS.CASES)
     }
+    const value = (i, label, fallback) => {
+      if (settled[i].status === 'fulfilled') return settled[i].value
+      warn('api', `fetchCases ${label} failed`, { error: settled[i].reason?.message })
+      return fallback
+    }
 
-    const critCases = filterByDate(extract(critRes, 'Critical'))
-    const highCases = filterByDate(extract(highRes, 'High'))
-
-    const medFiltered = filterByDate(extract(medRes, 'Medium'))
-    const mediumTotal = medFiltered.length
-    const medTop100   = medFiltered.slice(0, 100)
-
-    const lowFiltered = filterByDate(extract(lowRes, 'Low'))
-    const lowCount    = lowFiltered.length >= 500 ? '500+' : lowFiltered.length
+    const critCases   = normalizeCases(value(0, 'Critical', []))
+    const highCases   = normalizeCases(value(1, 'High', []))
+    const medium      = value(2, 'Medium', { cases: [], total: 0 })
+    const medTop100   = normalizeCases(medium.cases)
+    const mediumTotal = medium.total
+    const lowCount    = value(3, 'Low', { total: 0 }).total
 
     const cases = [...critCases, ...highCases, ...medTop100]
 
@@ -86,8 +96,8 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
 
 export async function fetchEntityUsage(auth, { pocStartDate, pocEndDate } = {}) {
   try {
-    // API only supports 'days' (last N days from today, max 30) — no date range params.
-    // Always request 30 days to maximise coverage, then filter client-side by POC period.
+    // API only supports 'days' (1–31 days back; the series ends on the previous day).
+    // Request 30 days to cover the POC period, then filter client-side by POC dates.
     const params = { days: 30, ...(auth.tenant ? { cust_id: auth.tenant } : {}) }
     debug('api', `GET ${ENDPOINTS.ENTITY_USAGE_DAILY}`, params)
 
@@ -278,13 +288,18 @@ export async function fetchCaseTactics(auth, cases) {
     await Promise.allSettled(batch.map(async (c) => {
       const caseId = c.id
       if (!caseId) return
+      // A API trunca `limit` em 50 — pagina com skip até o size do case (teto CASE_ALERTS_MAX)
+      const wanted = Math.min(c.alertCount || PAGING.CASE_ALERTS_PAGE, PAGING.CASE_ALERTS_MAX)
       try {
-        const res  = await client.get(`${API_PREFIX}/cases/${caseId}/alerts`, {
-          params:  { tenantid: auth.tenant, cust_id: auth.tenant, limit: 100 },
-          timeout: 15_000,
-        })
-        const docs = res.data?.data?.docs ?? []
-        processAlerts(docs, caseId)
+        for (let skip = 0; skip < wanted; skip += PAGING.CASE_ALERTS_PAGE) {
+          const res  = await client.get(`${API_PREFIX}/cases/${caseId}/alerts`, {
+            params:  { limit: PAGING.CASE_ALERTS_PAGE, skip },
+            timeout: 15_000,
+          })
+          const docs = res.data?.data?.docs ?? []
+          processAlerts(docs, caseId)
+          if (docs.length < PAGING.CASE_ALERTS_PAGE) break
+        }
         fetched++
       } catch { /* individual case failure is non-fatal */ }
     }))
@@ -314,12 +329,20 @@ export async function fetchCaseTactics(auth, cases) {
 // ─── Normalizers ─────────────────────────────────────────────────────────────
 
 function normalizeDataSensors(items) {
-  // Classification priority:
+  // Classification priority (DataSensor.feature / DataSensor.mode in the Swagger):
   //   1. feature === 'modular' → Stellar proprietary appliance
-  //   2. os contains 'windows'  → Windows Server agent
-  //   3. default                → Linux Server agent
-  function sensorTypeLabel(feature, os) {
+  //   2. mode === 'device'      → physical sensor, named by feature
+  //   3. os contains 'windows'  → Windows Server agent
+  //   4. default                → Linux Server agent
+  const DEVICE_LABELS = {
+    ds:  'Data Sensor',
+    sds: 'Security Data Sensor',
+    wds: 'Windows Data Sensor',
+    dds: 'Deception Data Sensor',
+  }
+  function sensorTypeLabel(feature, mode, os) {
     if (feature === 'modular') return 'Modular Sensor'
+    if (mode === 'device') return DEVICE_LABELS[feature] || 'Data Sensor'
     if ((os || '').toLowerCase().includes('windows')) return 'Windows Server Sensor'
     return 'Linux Server Sensor'
   }
@@ -330,7 +353,7 @@ function normalizeDataSensors(items) {
     return {
       id:               d.sensor_id || d.internal_sensor_id || '',
       hostname:         d.hostname || '',
-      type:             sensorTypeLabel(d.feature, d.os),
+      type:             sensorTypeLabel(d.feature, d.mode, d.os),
       version:          match ? match[1] : raw,
       connectionStatus: d.connection_status || '',
       profile:          (d.sensor_profile_name || '').trim(),

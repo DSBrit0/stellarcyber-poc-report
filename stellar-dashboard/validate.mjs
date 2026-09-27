@@ -278,7 +278,7 @@ async function validateConnectors(token) {
   section('6. CONNECTORS — GET /connect/api/v1/connectors')
   try {
     const res = await proxyFetch(
-      `/connect/api/v1/connectors?tenantid=${TENANT}`,
+      `/connect/api/v1/connectors?cust_id=${TENANT}`,
       token
     )
     if (!res.ok) { fail(`HTTP ${res.status}`, JSON.stringify(res.body).slice(0, 300)); return [] }

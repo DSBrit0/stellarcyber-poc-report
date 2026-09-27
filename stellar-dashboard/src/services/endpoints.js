@@ -8,7 +8,6 @@ export const ENDPOINTS = {
   CASES:                  `${API_PREFIX}/cases`,
   ENTITY_USAGE_DAILY:     `${API_PREFIX}/entity_usages/daily_count/all`,
   CONNECTORS:             `${API_PREFIX}/connectors`,
-  EVENTS:                 `${API_PREFIX}/events`,
   INGESTION_BY_SENSOR:    `${API_PREFIX}/ingestion-stats/sensor`,
   INGESTION_BY_CONNECTOR: `${API_PREFIX}/ingestion-stats/connector`,
   DATA_SENSORS:           `${API_PREFIX}/data_sensors`,
@@ -21,6 +20,18 @@ export const HTTP = {
   MAX_RETRIES:   2,
   RETRY_DELAY:   800,
   DEFAULT_LIMIT: 200,
+}
+
+// Paginação (Swagger 7.0 SaaS + validação ao vivo):
+// - GET /cases: `limit` + `skip`; a resposta traz `total`. Sem FROM~/TO~created_at a
+//   API devolve só as últimas ~24h, então o período do POC é sempre enviado.
+// - GET /cases/{id}/alerts: `limit` máximo 50 (valores maiores são truncados em 50).
+export const PAGING = {
+  CASES_PAGE:      500,
+  CASES_MAX:       5_000,  // teto por severidade (10 páginas)
+  MEDIUM_TOP:      100,
+  CASE_ALERTS_PAGE: 50,
+  CASE_ALERTS_MAX:  500,   // teto por case (10 páginas)
 }
 
 // HTTP status codes that warrant an automatic retry

@@ -41,8 +41,15 @@ export function DataProvider({ children }) {
 
   const intervalRef  = useRef(null)
   const syncDatesRef = useRef({ pocStartDate: '', pocEndDate: '' })
+  // O intervalo de polling guarda o fetchAll do momento do Sync; lendo o auth por ref,
+  // cada ciclo usa o JWT atual (renovado a cada ~9 min) em vez do token do Sync.
+  const authRef = useRef(auth)
+  useEffect(() => { authRef.current = auth }, [auth])
 
-  const fetchAll = useCallback(async () => {
+  // withTactics: busca os alerts dos cases (MITRE/XDR). Só no Sync — é a etapa mais
+  // pesada (paginação de alerts); no polling o resultado anterior é mantido.
+  const fetchAll = useCallback(async ({ withTactics = false } = {}) => {
+    const auth = authRef.current
     if (!auth) return
     setLoading(true)
     const newErrors = {}
@@ -63,10 +70,10 @@ export function DataProvider({ children }) {
     const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector', 'dataSensors']
 
     // Fetch MITRE + Stellar XDR tactic data for cases in the POC period.
-    // Runs after cases are available; each case triggers one /cases/{id}/alerts call.
+    // Runs after cases are available; each case pages through /cases/{id}/alerts.
     let caseTactics = null
     const casesResult = results[0]
-    if (casesResult.status === 'fulfilled' && casesResult.value?.cases?.length > 0) {
+    if (withTactics && casesResult.status === 'fulfilled' && casesResult.value?.cases?.length > 0) {
       try {
         caseTactics = await fetchCaseTactics(auth, casesResult.value.cases)
       } catch (err) {
@@ -129,7 +136,7 @@ export function DataProvider({ children }) {
     setErrors(newErrors)
     setSyncedAt(new Date())
     setLoading(false)
-  }, [auth, disconnect])
+  }, [disconnect])
 
   // sync(dates) — manual trigger from UI; updates dates + fetches + restarts 5-min interval
   const sync = useCallback((dates) => {
@@ -140,8 +147,8 @@ export function DataProvider({ children }) {
     syncDatesRef.current = normalized
     setSyncConfig({ ...normalized })
     clearInterval(intervalRef.current)
-    fetchAll()
-    intervalRef.current = setInterval(fetchAll, 5 * 60 * 1000)
+    fetchAll({ withTactics: true })
+    intervalRef.current = setInterval(() => fetchAll(), 5 * 60 * 1000)
   }, [fetchAll])
 
   // Reset all state when user disconnects
@@ -170,7 +177,7 @@ export function DataProvider({ children }) {
       sync,
       // backward compat aliases used by Header and Recommendations
       lastRefresh: syncedAt,
-      refresh:     fetchAll,
+      refresh:     () => fetchAll(),
     }}>
       {children}
     </DataContext.Provider>

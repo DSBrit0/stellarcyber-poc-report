@@ -51,7 +51,7 @@ Each customer has its own instance URL (custom domain or public IP), so there is
 - Only paths under `/connect/api/v1/` are forwarded; any `..` is rejected.
 - Internal addresses are blocked: loopback, RFC1918, CGNAT, link-local/metadata, multicast, IPv6 ULA/link-local and IPv4-mapped forms. IP literals are checked in the middleware. Hostnames are checked at connect time by a custom `https.Agent` `lookup`, which also blocks DNS rebinding.
 
-A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`. `auth.testConnectivity()` is the one call that goes straight from the browser, without the proxy.
+A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 
 ### Context layer (`src/context/`)
 
@@ -67,22 +67,23 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`. `a
   - Every data call then uses `Authorization: Bearer <jwt>`.
 - `DataContext` is mounted inside `ProtectedLayout`, so it exists only while the user is authenticated.
 - **Nothing is fetched until the user clicks Sync** on the Report page. `sync({pocStartDate, pocEndDate})` stores the dates in a ref, runs `fetchAll` and starts the interval.
+- Case alerts (MITRE/XDR, the heaviest step) are fetched only on Sync (`fetchAll({ withTactics: true })`); the 5-min polling keeps the previous `caseTactics`. `fetchAll` reads `auth` through a ref so the interval always uses the current (renewed) JWT.
 - The POC period is capped at 30 days in the UI (`SyncBar`).
 - The POC dates are never persisted. Logout wipes all POC metadata from `localStorage`.
 - Token renewal needs the in-memory password or API key. After a page reload it is gone, so the session ends when the token expires.
 
 ### Data flow (`src/services/`)
 
-- `endpoints.js` is the single source of truth for paths and HTTP constants. `apiClient.js` builds an Axios instance with the proxy base URL and headers, and retries on 429/502/503/504.
+- `endpoints.js` is the single source of truth for paths, HTTP constants and page sizes (`PAGING`). The API reference is the SaaS Swagger (`docs.stellarcyber.ai/prod-docs/7.0.xs/Resources/SwaggerUI/dist/spec-saas.js`). `apiClient.js` builds an Axios instance with the proxy base URL and headers, and retries on 429/502/503/504.
 - `DataContext.fetchAll` runs every fetcher in `Promise.allSettled` and maps results by **array index** to the `keys` list. Adding a fetcher means updating both arrays in the same order.
 - Any 401 calls `disconnect()`. Other failures keep the previous data and show up in `errors`.
 - **Cases:**
-  - The API ignores the case time filters, so `fetchCases` makes 4 requests (one per severity, `limit: 500`) and filters by date on the client (`start_timestamp`, falling back to `created_at`).
-  - It keeps all Critical and High cases, the top 100 Medium cases (plus `mediumTotal`), and only a count for Low (`lowCount` is `'500+'` when capped, and the totals then treat it as 500).
-- **MITRE / XDR:** `fetchCaseTactics` calls `/cases/{id}/alerts` for each kept case (batches of 15). Tactics starting with `TA` count as MITRE; `XTA`/`XT` count as Stellar XDR proprietary.
+  - Without a date filter `/cases` returns only the last ~24h. `fetchCases` always sends the POC period as `FROM~created_at` / `TO~created_at` (epoch ms, documented) with `sort=created_at`. `start_time`/`end_time` are not documented and are ignored.
+  - One query per severity: all Critical and High (paged with `skip` up to `total`, cap `PAGING.CASES_MAX`), the 100 most recent Medium plus `mediumTotal`, and only `total` for Low (`lowCount` is an exact number).
+- **MITRE / XDR:** `fetchCaseTactics` calls `/cases/{id}/alerts` for each kept case (batches of 15). The API caps `limit` at 50, so it pages with `skip` up to the case `size` (cap `PAGING.CASE_ALERTS_MAX`). Tactics starting with `TA` count as MITRE; `XTA`/`XT` count as Stellar XDR proprietary.
 - **Sensors:** `/ingestion-stats/sensor` returns only UUIDs. They are joined with `/data_sensors` in `fetchAll` to get hostname, type and version.
-- `entity_usages/daily_count` supports only `days` (max 30 back from *today*). For POCs that ended more than 30 days ago, asset data comes back empty.
-- The POC date boundaries (`dayStart`/`dayEnd`) are computed in UTC.
+- `entity_usages/daily_count` supports only `days` (1–31, 422 otherwise); the series ends on the previous day. For POCs that ended more than 31 days ago, asset data comes back empty.
+- The POC date boundaries (`dayStart`/`dayEnd`) are 00:00:00.000–23:59:59.999 UTC.
 
 ### PDF export
 

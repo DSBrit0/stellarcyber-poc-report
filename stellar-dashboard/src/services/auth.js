@@ -1,27 +1,9 @@
 import axios from 'axios'
 import { ENDPOINTS, HTTP } from './endpoints'
 import {
-  debug, info, warn, error as logError,
+  debug, info, error as logError,
   validateLoginFields, validateApiKeyFields, validateAuthResponse, logApiError,
 } from '../utils/logger'
-
-/**
- * Testa se a URL é acessível (faz um HEAD request para raiz).
- * Útil para validar antes de tentar autenticar.
- */
-export async function testConnectivity(url) {
-  const base = url.replace(/\/$/, '')
-  try {
-    debug('auth', 'Testing connectivity', { url: base })
-    const res = await axios.head(base, { timeout: 5000 })
-    info('auth', 'URL is reachable', { url: base, status: res.status })
-    return { reachable: true, status: res.status }
-  } catch (err) {
-    const code = err.code || (err.response?.status ? `HTTP${err.response.status}` : 'unknown')
-    warn('auth', 'URL not reachable', { url: base, code })
-    return { reachable: false, error: err.message, code }
-  }
-}
 
 export const AUTH_METHODS = { API_KEY: 'apiKey', BASIC: 'basic' }
 
