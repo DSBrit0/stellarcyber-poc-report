@@ -976,7 +976,7 @@ export default {
     // ── Template 2 (analítico) ────────────────────────────────────────────────
     t2CoverTitle1: 'Stellar Cyber ISOC',
     t2ConnCatNote: 'Number of configured connectors in each category; % of the total.',
-    t2SensorGBNote: 'Data each sensor sent in the period (GB, before enrichment and compression). The exact value is at the end of each bar.',
+    t2SensorGBNote: 'Data each sensor sent in the period (GB, before enrichment and compression).',
     t2SensorTypeNote: 'Number of sensors of each type; % of the total.',
     t2ConnStatusNote: 'Number of connectors in each status reported by the API; % of the total.',
     t2HeatNote: 'Each cell is one hour of one weekday (UTC). The number is how many critical and high cases were created in that hour over the period; the darker the cell, the more cases. Empty gray = no case.',

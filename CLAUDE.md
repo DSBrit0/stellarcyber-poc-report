@@ -98,7 +98,7 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 
 Two report models, chosen next to the download button (`ReportTemplatePicker` in `Report.jsx`, remembered in `localStorage` `stellar_report_template`) and passed as `generatePDFReport({ template })`:
 - `1` — **Relatório Técnico** (default): the original layout. Must stay unchanged; every Template 2 change goes through `if (T2)` / `_tpl === 2`.
-- `2` — **Relatório Executivo**: same data, drawn by the `t2*` functions (dark cover, executive dashboard after 1.2, charts with values and explanatory notes, 2.2 as a phase flow, tactic matrix colored by alerts). Section 8 is drawn right after section 5, so its subsections are renumbered 8→6, 6→7, 7→8 (`t2Renumber`). Its strings live under `pdf.t2*`. The file name gets `_Executive`.
+- `2` — **Relatório Executivo**: same data, drawn by the `t2*` functions (dark cover, executive dashboard after 1.2, charts with values and explanatory notes, 2.2 as a phase flow, tactic matrix colored by alerts). Section 8 is drawn right after section 5, so its subsections are renumbered 8→6, 6→7, 7→8 (`t2Renumber`). Its strings live under `pdf.t2*`. The file name gets `_Executive`. It leaves out the architecture page, the 10.1 scorecard table (the scorecard is on its dashboard) and the "less than 30 days" notices of 7.3/7.4 (`hideShortPeriod`).
 - Helvetica in jsPDF has no `≥`, `→` and similar glyphs; write them out in PDF strings.
 
 ### i18n

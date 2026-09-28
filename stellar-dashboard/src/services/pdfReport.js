@@ -1242,7 +1242,7 @@ function t2SourcesCharts(doc, y, s, d) {
   if (d.sensors.length) {
     const hs = Math.min(78, 26 + d.sensors.length * 6)
     y = needsPage(doc, y, hs + 4)
-    const c = t2Card(doc, ML, y, CW, hs, s.t2ChartSensorGB || 'GB ingested per sensor', s.t2SensorGBNote || 'Data each sensor sent in the period (GB, before enrichment and compression). The exact value is at the end of each bar.')
+    const c = t2Card(doc, ML, y, CW, hs, s.t2ChartSensorGB || 'GB ingested per sensor', s.t2SensorGBNote || 'Data each sensor sent in the period (GB, before enrichment and compression).')
     t2Chart(doc, c, () => t2HBar(d.sensors.map(r => trunc(r.name, 28)), d.sensors.map(r => r.gb), d.sensors.map(r => ((r.type || '').toLowerCase().includes('modular') ? C.navy : C.blue)), { axisTitle: 'GB', fmt: gb }))
     y += hs + 4
   }
@@ -1922,38 +1922,41 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   // ARCHITECTURE PAGE
   // ════════════════════════════════════════════════════════════════════════════
-  y = newPage(doc)
-  y = appendixTitle(doc, s.secArch || 'Arquitetura Mínima Sugerida', y)
-  if (pocMeta.architectureImage) {
-    try {
-      const imgData = pocMeta.architectureImage
-      const maxW = CW
-      const maxH = 160
-      // Size from the pixels actually embedded (not the stored on-screen size), so the
-      // aspect ratio always matches the image — older uploads could carry a rotated size.
-      const props = (() => { try { return doc.getImageProperties(imgData) } catch { return null } })()
-      const dims  = props?.width && props?.height ? { w: props.width, h: props.height } : pocMeta.architectureImageDims
-      const PX_TO_MM = 25.4 / 96
-      const imgW = dims ? dims.w * PX_TO_MM : maxW
-      const imgH = dims ? dims.h * PX_TO_MM : maxH
-      // scale down only — never upscale a small image
-      const ratio = Math.min(1, maxW / imgW, maxH / imgH)
-      const drawW = imgW * ratio
-      const drawH = imgH * ratio
-      const drawX = ML + (CW - drawW) / 2
-      doc.addImage(imgData, 'PNG', drawX, y, drawW, drawH, undefined, IMG_COMPRESSION)
-      y += drawH + 6
-    } catch (_e) {
-      y = infoNote(doc, s.archImageError || 'Architecture image could not be rendered.', y)
+  // Technical report only (the Executive report has no architecture page)
+  if (!T2) {
+    y = newPage(doc)
+    y = appendixTitle(doc, s.secArch || 'Arquitetura Mínima Sugerida', y)
+    if (pocMeta.architectureImage) {
+      try {
+        const imgData = pocMeta.architectureImage
+        const maxW = CW
+        const maxH = 160
+        // Size from the pixels actually embedded (not the stored on-screen size), so the
+        // aspect ratio always matches the image — older uploads could carry a rotated size.
+        const props = (() => { try { return doc.getImageProperties(imgData) } catch { return null } })()
+        const dims  = props?.width && props?.height ? { w: props.width, h: props.height } : pocMeta.architectureImageDims
+        const PX_TO_MM = 25.4 / 96
+        const imgW = dims ? dims.w * PX_TO_MM : maxW
+        const imgH = dims ? dims.h * PX_TO_MM : maxH
+        // scale down only — never upscale a small image
+        const ratio = Math.min(1, maxW / imgW, maxH / imgH)
+        const drawW = imgW * ratio
+        const drawH = imgH * ratio
+        const drawX = ML + (CW - drawW) / 2
+        doc.addImage(imgData, 'PNG', drawX, y, drawW, drawH, undefined, IMG_COMPRESSION)
+        y += drawH + 6
+      } catch (_e) {
+        y = infoNote(doc, s.archImageError || 'Architecture image could not be rendered.', y)
+        y += 4
+      }
+    } else {
+      y = infoNote(
+        doc,
+        s.noArchImage || 'No architecture diagram provided. Add an image to pocMeta.architectureImage.',
+        y
+      )
       y += 4
     }
-  } else {
-    y = infoNote(
-      doc,
-      s.noArchImage || 'No architecture diagram provided. Add an image to pocMeta.architectureImage.',
-      y
-    )
-    y += 4
   }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -2452,6 +2455,7 @@ export function generatePDFReport({
     y = drawLicenseCompliance(doc, y, lic, {
       fmt: fmtLoc,
       fmtDay,
+      hideShortPeriod: T2,
       txt: {
         recommended:     s.licRecommended     || 'Recommended license quantity: {l} assets',
         recommendedNote: s.licRecommendedNote || 'Highest number of assets present on each of 3 consecutive days ({from} — {to}). With this quantity no notification level is reached in the observed period.',
@@ -2613,7 +2617,7 @@ export function generatePDFReport({
   // ════════════════════════════════════════════════════════════════════════════
   y = newPage(doc)
   y = sectionTitle(doc, s.sec10 || '10. Conclusion', y)
-  y = subTitle(doc, s.sub10_1 || '10.1 PoC Scorecard', y)
+  if (!T2) y = subTitle(doc, s.sub10_1 || '10.1 PoC Scorecard', y)
 
   // Scorecard: real values derived from API data
   function scoreLabel(p) {
@@ -2669,7 +2673,8 @@ export function generatePDFReport({
     [s.sc10_4 || 'Integration Coverage',     integScore,     integStr],
     [s.sc10_6 || 'MITRE Coverage',           mitreScore,     `${detectedTactics.size} ${s.sc_of || 'de'} ${ALL_TACTICS.length} ${s.sc_tactics || 'táticas'}`],
   ]
-  y = tableBase(doc,
+  // Technical report only (the Executive report shows the scorecard on its dashboard)
+  if (!T2) y = tableBase(doc,
     [s.scArea || 'Area', s.scScore || 'Score', s.scNotes || 'Notes'],
     scorecardRows, y,
     { columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 25 }, 2: { cellWidth: CW - 85 } } }
