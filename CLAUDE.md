@@ -94,6 +94,11 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 
 `src/services/pdfReport.js` builds the PDF with jsPDF + jspdf-autotable; it does not render a page. The architecture image is normalized on upload (`utils/image.js`: `createImageBitmap(file, { imageOrientation: 'from-image' })` → canvas → JPEG/PNG), because jsPDF ignores EXIF orientation and phone photos came out rotated and squeezed; the PDF sizes it from the embedded pixels (`doc.getImageProperties`), not from the stored size. Charts are Chart.js drawn to an offscreen canvas and embedded as PNGs. Layout moves top to bottom with a running `y` cursor, and `needsPage(doc, y, h)` handles page breaks. The document is a cover page plus sections 1–10. Report-level metrics (totals, MITRE coverage %, avg assets/day, scorecard) are derived at the top of `generatePDFReport`.
 
+Two report models, chosen next to the download button (`ReportTemplatePicker` in `Report.jsx`, remembered in `localStorage` `stellar_report_template`) and passed as `generatePDFReport({ template })`:
+- `1` — **Relatório Técnico** (default): the original layout. Must stay unchanged; every Template 2 change goes through `if (T2)` / `_tpl === 2`.
+- `2` — **Relatório Executivo**: same data, drawn by the `t2*` functions (dark cover, executive dashboard after 1.2, charts with values and explanatory notes, 2.2 as a phase flow, tactic matrix colored by alerts). Section 8 is drawn right after section 5, so its subsections are renumbered 8→6, 6→7, 7→8 (`t2Renumber`). Its strings live under `pdf.t2*`. The file name gets `_Executive`.
+- Helvetica in jsPDF has no `≥`, `→` and similar glyphs; write them out in PDF strings.
+
 ### i18n
 
 - The implementation is custom. `useLocale()` returns `t(key, vars)`, which supports `{var}` interpolation. The default locale is `pt`.

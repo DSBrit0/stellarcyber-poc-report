@@ -150,6 +150,7 @@ export default function Report() {
   const [downloaded, setDownloaded]                      = useState(false)
   const [btnPressed, setBtnPressed]                      = useState(false)
   const [showVerdictGuide, setShowVerdictGuide]          = useState(false)
+  const [reportTemplate, setReportTemplate]              = useState(readReportTemplate)
   const archImageRef                                     = useRef(null)
 
   async function handleArchImageUpload(e) {
@@ -247,6 +248,7 @@ export default function Report() {
         pocMeta,
         locale,
         s: getPdfStrings(locale),
+        template: reportTemplate,
       })
       setDownloaded(true)
       setTimeout(() => setDownloaded(false), 4000)
@@ -520,7 +522,12 @@ export default function Report() {
       </div>
 
       {/* Download PDF — bottom of page */}
-      <div className="flex justify-end pt-2 pb-2">
+      <div className="flex flex-wrap items-end justify-end gap-3 pt-2 pb-2">
+        <ReportTemplatePicker
+          value={reportTemplate}
+          onChange={v => { setReportTemplate(v); saveReportTemplate(v) }}
+          t={t}
+        />
         <button
           onClick={handleDownload}
           disabled={generating || loading || !syncedAt}
@@ -555,6 +562,62 @@ export default function Report() {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+// Report model picked for the PDF: 1 = Technical (the original layout),
+// 2 = Executive (same content with more charts). The choice is remembered in
+// this browser only; the Technical report is the default.
+const REPORT_TEMPLATE_KEY = 'stellar_report_template'
+function readReportTemplate() {
+  try { return localStorage.getItem(REPORT_TEMPLATE_KEY) === '2' ? 2 : 1 } catch { return 1 }
+}
+function saveReportTemplate(v) {
+  try { localStorage.setItem(REPORT_TEMPLATE_KEY, String(v)) } catch { /* storage unavailable */ }
+}
+
+function ReportTemplatePicker({ value, onChange, t }) {
+  const options = [
+    { id: 1, label: t('report.templateTechnical'), hint: t('report.templateTechnicalHint') },
+    { id: 2, label: t('report.templateExecutive'), hint: t('report.templateExecutiveHint') },
+  ]
+  return (
+    <div role="radiogroup" aria-label={t('report.templateLabel')} className="flex flex-col gap-1">
+      <span className="text-xs font-semibold" style={{ color: '#94a3b8' }}>{t('report.templateLabel')}</span>
+      <div className="flex gap-2">
+        {options.map(o => {
+          const on = value === o.id
+          return (
+            <button
+              key={o.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              data-template={o.id}
+              title={o.hint}
+              onClick={() => onChange(o.id)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold"
+              style={{
+                background: on ? 'rgba(0,212,255,0.12)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${on ? 'rgba(0,212,255,0.6)' : 'rgba(148,163,184,0.25)'}`,
+                color: on ? '#00d4ff' : '#cbd5e1',
+                transition: 'background 0.12s ease, border-color 0.12s ease',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${on ? '#00d4ff' : '#64748b'}`,
+                  background: on ? 'radial-gradient(#00d4ff 40%, transparent 45%)' : 'transparent',
+                }}
+              />
+              {o.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 // Seletor de tenant (modo API key). Sempre começa em "Tenant"; enquanto nada foi
 // escolhido fica em destaque, e o restante da página permanece só leitura.
