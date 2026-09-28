@@ -4,6 +4,7 @@ import { Chart, registerables } from 'chart.js'
 import { getMitreMitigation } from '../utils/mitreMapping'
 import { assetStats, assetCompliance } from '../utils/assetCompliance'
 import { verdictCode, verdictLabel } from '../utils/verdict'
+import { volumeStats, volumeCompliance } from '../utils/volumeStats'
 Chart.register(...registerables)
 
 // ─── Color palette ────────────────────────────────────────────────────────────
@@ -37,7 +38,10 @@ function fmtDate(d) {
   try {
     const dt = d instanceof Date ? d : new Date(d)
     if (isNaN(dt.getTime())) return String(d)
-    return dt.toLocaleDateString(_locStr, { day: '2-digit', month: '2-digit', year: '2-digit' })
+    // 'YYYY-MM-DD' is a calendar day (POC period, daily series): new Date() reads it as
+    // UTC midnight, so format it in UTC — local time would show the previous day west of UTC.
+    const calendarDay = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+    return dt.toLocaleDateString(_locStr, { day: '2-digit', month: '2-digit', year: '2-digit', ...(calendarDay ? { timeZone: 'UTC' } : {}) })
   } catch { return String(d) }
 }
 function fmtNum(n) {
@@ -221,6 +225,79 @@ function tableCompact(doc, head, body, y, opts) {
     didDrawPage: () => { _pageNum += 1; addChrome(doc) },
   }, o))
   return doc.lastAutoTable.finalY + 5
+}
+
+// ─── License compliance block (7.3 assets / 7.4 volume) ─────────────────────
+// Draws the recommendation, the compliance table of the three 7.0 levels for the
+// recommended license and the licensing scenarios. `lic` comes from
+// assetCompliance() / volumeCompliance(); `fmt` formats a value in its unit;
+// `txt` holds the unit-specific sentences (recommendation, limit, descriptions).
+function drawLicenseCompliance(doc, y, lic, { fmt, fmtDay, txt }) {
+  const s = _s
+  const l = fmt(lic.recommended), t = fmt(lic.limit)
+  const fill = str => str.replace(/\{l\}/g, l).replace(/\{t\}/g, t)
+  const runText = run => !run
+    ? (s.licRunNone || '0 days')
+    : run.days === 1
+      ? (s.licRunOneDay || '1 day ({from})').replace('{from}', fmtDay(run.from))
+      : (s.licRunDays || '{n} days ({from} — {to})').replace('{n}', run.days).replace('{from}', fmtDay(run.from)).replace('{to}', fmtDay(run.to))
+  const levelLabel = { none: s.licLevelNone || 'None', warning: s.licWarning || 'Warning', violation: s.licViolation || 'Violation', ooc: s.licOoc || 'Out of Compliance' }
+  const levelRule  = { warning: s.licRuleWarning || 'Above 110% of the limit on each of 3 consecutive days', violation: s.licRuleViolation || 'Above 110% of the limit on each of 7 consecutive days', ooc: s.licRuleOoc || 'Above 110% of the limit for 21 consecutive days (7 to enter Violation + 14 in Violation)' }
+  const levelRes   = { warning: s.licResWarning || 'Removable banner in the UI. Clears after 3 consecutive days at or below 110%.', violation: s.licResViolation || 'Non-removable banner and email to the account admin. Clears after 7 consecutive days at or below 110%.', ooc: s.licResOoc || 'Services cease and a prorated invoice covers the gap between average usage since the first Violation and the license.' }
+
+  if (lic.stats.days < 30) {
+    y = infoNote(doc, txt.shortPeriod.replace('{n}', lic.stats.days), y)
+    y += 2
+  }
+
+  // Recommendation
+  y = needsPage(doc, y, 30)
+  y = bodyText(doc, fill(txt.recommended), y, { bold: true, fontSize: 9.5, color: C.navy })
+  y = bodyText(doc, txt.recommendedNote.replace('{from}', fmtDay(lic.recommendedWindow.from)).replace('{to}', fmtDay(lic.recommendedWindow.to)), y, { fontSize: 7.5, color: C.muted })
+  y = bodyText(doc, fill(txt.limitLine), y, { fontSize: 8 })
+  y += 3
+
+  // Compliance with the recommended license
+  y = needsPage(doc, y, 40)
+  y = bodyText(doc, s.licTableTitle || 'Compliance with the recommended license', y, { bold: true, color: C.midBlue })
+  const res = lic.result
+  y = tableBase(doc,
+    [s.licColLevel || 'Level', s.licColRule || 'Rule', (s.licColRun || 'Longest run above {t}').replace('{t}', t), s.licColOutcome || 'Result', s.licColResult || 'Description'],
+    res.levels.map(lv => [
+      levelLabel[lv.key],
+      levelRule[lv.key],
+      runText(res.longestRun),
+      lv.reached ? (s.licReached || 'Reached') : (s.licNotReached || 'Not reached'),
+      levelRes[lv.key],
+    ]), y,
+    {
+      columnStyles: { 0: { cellWidth: 22, fontStyle: 'bold' }, 2: { cellWidth: 30, halign: 'center' }, 3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' } },
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 3) d.cell.styles.textColor = res.levels[d.row.index].reached ? C.red : C.green },
+    },
+  )
+
+  // Licensing scenarios
+  y = needsPage(doc, y, 40)
+  y = bodyText(doc, s.licScenarioTitle || 'Licensing scenarios', y, { bold: true, color: C.midBlue })
+  const scenLabel = { average: s.licScenAverage || 'Period average', recommended: s.licScenRecommended || 'Recommended', peak: s.licScenPeak || 'Period peak' }
+  y = tableBase(doc,
+    [s.licColScenario || 'Scenario', txt.licenseCol, s.licColLimit || 'Limit/day (110%)', s.licColDaysAbove || 'Days above limit', s.licColLongest || 'Longest run', s.licColLevelReached || 'Level reached'],
+    lic.scenarios.map(sc => [scenLabel[sc.key], fmt(sc.license), fmt(sc.limit), String(sc.daysAbove), runText(sc.longestRun), levelLabel[sc.level]]),
+    y,
+    {
+      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
+      didParseCell: d => {
+        if (d.section !== 'body') return
+        if (lic.scenarios[d.row.index].key === 'recommended') d.cell.styles.fontStyle = 'bold'
+        if (d.column.index === 5) d.cell.styles.textColor = lic.scenarios[d.row.index].level === 'none' ? C.green : C.red
+      },
+    },
+  )
+
+  // Descriptive thresholds for the recommended license
+  y = needsPage(doc, y, 36)
+  for (const line of txt.desc) y = bodyText(doc, fill(line), y)
+  return y
 }
 
 // ─── Chart rendering ──────────────────────────────────────────────────────────
@@ -635,6 +712,7 @@ export function generatePDFReport({
   recommendations = [],
   ingestionBySensor = [],
   ingestionByConnector = [],
+  dailyVolume = [],
   caseTactics = null,
   generatedAt = new Date(),
   pocMeta = {},
@@ -715,8 +793,11 @@ export function generatePDFReport({
   const verdict      = verdictKey ? verdictLabel(verdictKey, locale) : (pocMeta.verdict || '')
   const verdictColor = verdictKey === 'approved' ? C.green : verdictKey === 'conditional' ? C.orange : C.red
 
-  // Ingestion total — uses bytesIngested (mapped from API total_ingestion)
-  const totalIngest = ingestionBySensor.reduce((sum, r) => sum + (r.bytesIngested || r.bytes || r.size || 0), 0)
+  // Total ingested = sum of the daily volume over the whole selected period
+  // (/storage-usages, same source as section 7.4). '—' when the API has no data.
+  const vol            = volumeStats(dailyVolume)
+  const fmtVol         = n => `${Number(n).toLocaleString(_locStr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB`
+  const totalIngestStr = vol ? fmtVol(vol.total) : '—'
 
   // ── Create PDF ──────────────────────────────────────────────────────────────
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -1093,7 +1174,7 @@ export function generatePDFReport({
   const statCards = [
     { label: s.statTotalSources  || 'Total Sources',  value: fmtNum(connectors.length),       color: C.navy    },
     { label: s.statActiveSources || 'Active Sources', value: fmtNum(activeConn.length),       color: C.green   },
-    { label: s.statTotalIngested || 'Total Ingested', value: fmtGB(totalIngest),              color: C.blue    },
+    { label: s.statTotalIngested || 'Total Ingested', value: totalIngestStr,                  color: C.blue    },
     { label: s.statSensorTypes   || 'Sensor Types',   value: fmtNum(ingestionBySensor.length),color: C.midBlue },
   ]
   for (let k = 0; k < statCards.length; k++) {
@@ -1502,7 +1583,7 @@ export function generatePDFReport({
     [s.kpiMinEntities || 'Minimum assets/day', minEntities || '—', s.minEntitiesNote || 'Lowest daily count in the period'],
     [s.kpiMaxEntities || 'Maximum assets/day', maxEntities || '—', s.maxEntitiesNote || 'Highest daily count in the period (peak)'],
     [s.metActiveSources  || 'Active Sources',        fmtNum(activeConn.length),                   `${s.of || 'of'} ${fmtNum(connectors.length)}`],
-    [s.metTotalIngested  || 'Total Data Ingested',   fmtGB(totalIngest),                          s.ingestedNote || 'Total do período'],
+    [s.metTotalIngested  || 'Total Data Ingested',   totalIngestStr,                              s.ingestedNote || 'Total do período'],
   ]
   y = tableBase(doc,
     [s.roiMetric || 'Metric', s.roiValue || 'Value', s.roiContext || 'Context'],
@@ -1531,82 +1612,80 @@ export function generatePDFReport({
   y = subTitle(doc, s.sub7_3 || '7.3 License Compliance', y)
   y = bodyText(doc, s.licHowCounted || 'Official license count: the platform counts assets of these types: unique devices (internal IPs) and unique users (emails) observed daily.', y)
   y += 2
-
   const lic = assetCompliance(assets)
   if (!lic.stats) {
     y = infoNote(doc, s.licNoData || 'No asset data in the PoC period.', y)
   } else if (lic.recommended == null) {
     y = infoNote(doc, (s.licInsufficient || 'Insufficient period to recommend ({n} of {d} days)').replace('{n}', lic.stats.days).replace('{d}', 3), y)
   } else {
-    const l = fmtLoc(lic.recommended), t = fmtLoc(lic.limit)
-    const runText = run => run
-      ? (s.licRunDays || '{n} days ({from} — {to})').replace('{n}', run.days).replace('{from}', fmtDay(run.from)).replace('{to}', fmtDay(run.to))
-      : (s.licRunNone || '0 days')
-    const levelLabel = { none: s.licLevelNone || 'None', warning: s.licWarning || 'Warning', violation: s.licViolation || 'Violation', ooc: s.licOoc || 'Out of Compliance' }
-    const levelRule  = { warning: s.licRuleWarning || 'Above 110% of the limit on each of 3 consecutive days', violation: s.licRuleViolation || 'Above 110% of the limit on each of 7 consecutive days', ooc: s.licRuleOoc || 'Above 110% of the limit for 21 consecutive days (7 to enter Violation + 14 in Violation)' }
-    const levelRes   = { warning: s.licResWarning || 'Removable banner in the UI. Clears after 3 consecutive days at or below 110%.', violation: s.licResViolation || 'Non-removable banner and email to the account admin. Clears after 7 consecutive days at or below 110%.', ooc: s.licResOoc || 'Services cease and a prorated invoice covers the gap between average usage since the first Violation and the license.' }
+    y = drawLicenseCompliance(doc, y, lic, {
+      fmt: fmtLoc,
+      fmtDay,
+      txt: {
+        recommended:     s.licRecommended     || 'Recommended license quantity: {l} assets',
+        recommendedNote: s.licRecommendedNote || 'Highest number of assets present on each of 3 consecutive days ({from} — {to}). With this quantity no notification level is reached in the observed period.',
+        limitLine:       s.licLimitLine       || 'Tolerance limit (110%): {t} assets per day.',
+        shortPeriod:     s.licShortPeriod     || 'Recommendation based on {n} days of data. 30 days of asset discovery are recommended.',
+        licenseCol:      s.licColLicense      || 'Licenses',
+        desc: [
+          s.licDescIntro     || 'With {l} asset licenses, the platform tolerates up to {t} assets per day (110%). Beyond that:',
+          s.licDescWarning   || '• If the daily count stays above {t} assets on 3 consecutive days, the platform issues a Warning: a removable banner appears in the UI.',
+          s.licDescViolation || '• If it stays above {t} assets for 7 consecutive days, it enters Violation: the banner can no longer be removed and the account admin receives an email.',
+          s.licDescOoc       || '• If it stays above {t} assets for 21 consecutive days (7 to enter Violation + 14 in Violation), the license is Out of Compliance: services cease and a prorated invoice is issued.',
+          s.licDescBreak     || 'A single day with {t} assets or fewer — including a day with count 0 — breaks the run, and the consecutive-day count starts over.',
+        ],
+      },
+    })
+  }
+  y += 4
 
-    if (lic.stats.days < 30) {
-      y = infoNote(doc, (s.licShortPeriod || 'Recommendation based on {n} days of data. 30 days of asset discovery are recommended.').replace('{n}', lic.stats.days), y)
-      y += 2
-    }
-
-    // Recommendation
-    y = needsPage(doc, y, 30)
-    y = bodyText(doc, (s.licRecommended || 'Recommended license quantity: {n} assets').replace('{n}', l), y, { bold: true, fontSize: 9.5, color: C.navy })
-    y = bodyText(doc, (s.licRecommendedNote || 'Highest number of assets present on each of 3 consecutive days ({from} — {to}). With this quantity no notification level is reached in the observed period.')
-      .replace('{from}', fmtDay(lic.recommendedWindow.from)).replace('{to}', fmtDay(lic.recommendedWindow.to)), y, { fontSize: 7.5, color: C.muted })
-    y = bodyText(doc, (s.licLimitLine || 'Tolerance limit (110%): {t} assets per day.').replace('{t}', t), y, { fontSize: 8 })
+  // ── 7.4 Data ingestion (daily volume) ──────────────────────────────────────
+  // /storage-usages daily volume per tenant (GB, stored after enrichment and
+  // compression). Last 31 complete UTC days; the current day is never included.
+  // Daily statistics + the same 7.0 compliance logic as 7.3 (volume licenses).
+  y = needsPage(doc, y, 50)
+  y = subTitle(doc, s.sub7_4 || '7.4 Data Ingestion', y)
+  y = bodyText(doc, s.volIntro || 'Daily data volume of the tenant in the period, as recorded by the platform for volume licensing (data stored after enrichment and compression). The current day is not included, since it only closes after 24 hours.', y)
+  y += 2
+  if (!vol) {
+    y = infoNote(doc, s.volNoData || 'No volume data in the period (the API provides the last 31 days).', y)
+  } else {
+    y = tableBase(doc,
+      [s.roiMetric || 'Metric', s.roiValue || 'Value', s.roiContext || 'Context'],
+      [
+        [s.volAvg || 'Daily average', fmtVol(vol.avg),
+          (s.volPeriodNote || '{days} days ({from} — {to})').replace('{days}', vol.days).replace('{from}', fmtDate(vol.from)).replace('{to}', fmtDate(vol.to))
+            + ' · ' + (s.volZeroNote || '{zero} days with volume 0').replace('{zero}', vol.zeroDays)],
+        [s.volMin || 'Daily minimum', fmtVol(vol.min), fmtDate(vol.minDate)],
+        [s.volMax || 'Daily maximum', fmtVol(vol.max), fmtDate(vol.maxDate)],
+      ], y,
+      { columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' } } },
+    )
+    y = bodyText(doc, s.volNote || 'Values may differ from the per-sensor and per-connector ingestion tables (section 3), which measure data before enrichment and compression.', y, { fontSize: 7.5, color: C.muted })
     y += 3
 
-    // Table 1 — compliance with the recommended license
-    y = needsPage(doc, y, 40)
-    y = bodyText(doc, s.licTableTitle || 'Compliance with the recommended license', y, { bold: true, color: C.midBlue })
-    const res = lic.result
-    y = tableBase(doc,
-      [s.licColLevel || 'Level', s.licColRule || 'Rule', (s.licColRun || 'Longest run above {t}').replace('{t}', t), s.licColOutcome || 'Result', s.licColResult || 'Description'],
-      res.levels.map(lv => [
-        levelLabel[lv.key],
-        levelRule[lv.key],
-        runText(res.longestRun),
-        lv.reached ? (s.licReached || 'Reached') : (s.licNotReached || 'Not reached'),
-        levelRes[lv.key],
-      ]), y,
-      {
-        columnStyles: { 0: { cellWidth: 22, fontStyle: 'bold' }, 2: { cellWidth: 30, halign: 'center' }, 3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' } },
-        didParseCell: d => { if (d.section === 'body' && d.column.index === 3) d.cell.styles.textColor = res.levels[d.row.index].reached ? C.red : C.green },
-      },
-    )
-
-    // Table 2 — licensing scenarios
-    y = needsPage(doc, y, 40)
-    y = bodyText(doc, s.licScenarioTitle || 'Licensing scenarios', y, { bold: true, color: C.midBlue })
-    const scenLabel = { average: s.licScenAverage || 'Period average', recommended: s.licScenRecommended || 'Recommended', peak: s.licScenPeak || 'Period peak' }
-    y = tableBase(doc,
-      [s.licColScenario || 'Scenario', s.licColLicense || 'Licenses', s.licColLimit || 'Limit/day (110%)', s.licColDaysAbove || 'Days above limit', s.licColLongest || 'Longest run', s.licColLevelReached || 'Level reached'],
-      lic.scenarios.map(sc => [scenLabel[sc.key], fmtLoc(sc.license), fmtLoc(sc.limit), fmtLoc(sc.daysAbove), runText(sc.longestRun), levelLabel[sc.level]]),
-      y,
-      {
-        columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
-        didParseCell: d => {
-          if (d.section !== 'body') return
-          if (lic.scenarios[d.row.index].key === 'recommended') d.cell.styles.fontStyle = 'bold'
-          if (d.column.index === 5) d.cell.styles.textColor = lic.scenarios[d.row.index].level === 'none' ? C.green : C.red
+    const volLic = volumeCompliance(dailyVolume)
+    if (volLic.recommended == null) {
+      y = infoNote(doc, (s.licInsufficient || 'Insufficient period to recommend ({n} of {d} days)').replace('{n}', vol.days).replace('{d}', 3), y)
+    } else {
+      y = drawLicenseCompliance(doc, y, volLic, {
+        fmt: fmtVol,
+        fmtDay,
+        txt: {
+          recommended:     s.volRecommended     || 'Recommended volume license: {l} per day',
+          recommendedNote: s.volRecommendedNote || 'Highest daily volume present on each of 3 consecutive days ({from} — {to}). With this volume no notification level is reached in the observed period.',
+          limitLine:       s.volLimitLine       || 'Tolerance limit (110%): {t} per day.',
+          shortPeriod:     s.volShortPeriod     || 'Recommendation based on {n} days of data. 30 days of data are recommended.',
+          licenseCol:      s.volColLicense      || 'License (GB/day)',
+          desc: [
+            s.volDescIntro     || 'With a {l}/day volume license, the platform tolerates up to {t} per day (110%). Beyond that:',
+            s.volDescWarning   || '• If the daily volume stays above {t} on 3 consecutive days, the platform issues a Warning: a removable banner appears in the UI.',
+            s.volDescViolation || '• If it stays above {t} for 7 consecutive days, it enters Violation: the banner can no longer be removed and the account admin receives an email.',
+            s.volDescOoc       || '• If it stays above {t} for 21 consecutive days (7 to enter Violation + 14 in Violation), the license is Out of Compliance: services cease and a prorated invoice is issued.',
+            s.volDescBreak     || 'A single day at {t} or less — including a day with volume 0 — breaks the run, and the consecutive-day count starts over.',
+          ],
         },
-      },
-    )
-
-    // Descriptive thresholds for the recommended license
-    y = needsPage(doc, y, 36)
-    for (const key of ['licDescIntro', 'licDescWarning', 'licDescViolation', 'licDescOoc', 'licDescBreak']) {
-      const fallback = {
-        licDescIntro:     'With {l} asset licenses, the platform tolerates up to {t} assets per day (110%). Beyond that:',
-        licDescWarning:   '• If the daily count stays above {t} assets on 3 consecutive days, the platform issues a Warning: a removable banner appears in the UI.',
-        licDescViolation: '• If it stays above {t} assets for 7 consecutive days, it enters Violation: the banner can no longer be removed and the account admin receives an email.',
-        licDescOoc:       '• If it stays above {t} assets for 21 consecutive days (7 to enter Violation + 14 in Violation), the license is Out of Compliance: services cease and a prorated invoice is issued.',
-        licDescBreak:     'A single day with {t} assets or fewer — including a day with count 0 — breaks the run, and the consecutive-day count starts over.',
-      }[key]
-      y = bodyText(doc, (s[key] || fallback).replace(/\{l\}/g, l).replace(/\{t\}/g, t), y)
+      })
     }
   }
   y += 4

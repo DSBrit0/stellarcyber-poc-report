@@ -230,6 +230,36 @@ export async function fetchDataSensors(auth) {
   }
 }
 
+// ─── Daily data volume ────────────────────────────────────────────────────────
+// GET /connect/api/v1/storage-usages?aggr_type=tenant&cust_id=<tenant>
+// Daily volume per tenant (the Licensing | Volume Usage figures: data stored after
+// enrichment and compression, reported in GB). The API returns the last 31 complete
+// UTC days — the current day is not included — with 0 on days without data.
+// Returns: [{ date: 'YYYY-MM-DD', gb }] within the POC period.
+
+export async function fetchDailyVolume(auth, { pocStartDate, pocEndDate } = {}) {
+  try {
+    const params = { aggr_type: 'tenant', ...(auth.tenant ? { cust_id: auth.tenant } : {}) }
+    debug('api', `GET ${ENDPOINTS.STORAGE_USAGES}`, params)
+
+    const res   = await createApiClient(auth).get(ENDPOINTS.STORAGE_USAGES, { params })
+    const items = Array.isArray(res.data?.data) ? res.data.data : []
+    const today = new Date().toISOString().slice(0, 10)
+    const result = items
+      .map(d => ({
+        date: String(d.time || '').slice(0, 10),
+        gb:   (d.usages || []).reduce((sum, u) => sum + (Number(u.usage) || 0), 0),
+      }))
+      .filter(d => d.date && d.date < today)
+      .filter(d => (!pocStartDate || d.date >= pocStartDate) && (!pocEndDate || d.date <= pocEndDate))
+      .sort((a, b) => a.date.localeCompare(b.date))
+    info('api', `fetchDailyVolume ✅ ${result.length} days in POC window`)
+    return result
+  } catch (err) {
+    handleError(err, ENDPOINTS.STORAGE_USAGES)
+  }
+}
+
 // ─── Tenants ──────────────────────────────────────────────────────────────────
 // GET /connect/api/v1/tenants?fields=cust_id,cust_name,tgrp_name  (Swagger: listTenants, jwt)
 // Lists the tenants visible to the authenticated user (scoped by its tenancy).

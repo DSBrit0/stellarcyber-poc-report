@@ -27,7 +27,7 @@ function sortedCounts(assets) {
 }
 
 // Min / average / max over every day of the period (0 days included).
-export function assetStats(assets) {
+export function assetStats(assets, { integer = true } = {}) {
   const days = sortedCounts(assets)
   if (days.length === 0) return null
   const counts = days.map(d => d.count)
@@ -35,7 +35,7 @@ export function assetStats(assets) {
     days:     days.length,
     zeroDays: counts.filter(c => c === 0).length,
     min:      Math.min(...counts),
-    avg:      Math.round(counts.reduce((s, c) => s + c, 0) / counts.length),
+    avg:      (sum => (integer ? Math.round(sum / counts.length) : sum / counts.length))(counts.reduce((s, c) => s + c, 0)),
     max:      Math.max(...counts),
   }
 }
@@ -57,18 +57,19 @@ export function sustainedLevel(assets, n) {
   return best
 }
 
-// Daily count above which a license of `license` assets is exceeded (> 110%).
-// Counts are integers, so "more than 110%" means more than floor(110%).
-export function toleranceLimit(license) {
-  return Math.floor(license * LICENSE_TOLERANCE + 1e-9)
+// Daily value above which a license is exceeded (> 110%). Asset counts are
+// integers, so "more than 110%" means more than floor(110%); volume (GB) is continuous.
+export function toleranceLimit(license, { integer = true } = {}) {
+  const limit = license * LICENSE_TOLERANCE
+  return integer ? Math.floor(limit + 1e-9) : limit
 }
 
 // Applies the 7.0 rule day by day to a candidate license: a day counts as exceeded
 // when its count is above 110% of the license; a level is reached when the longest
 // run of exceeded days is at least that level's number of days.
-export function simulateLicense(assets, license) {
+export function simulateLicense(assets, license, { integer = true } = {}) {
   const days  = sortedCounts(assets)
-  const limit = toleranceLimit(license)
+  const limit = toleranceLimit(license, { integer })
   let run = 0, start = 0, longest = null, daysAbove = 0
   days.forEach((d, i) => {
     if (d.count > limit) {
@@ -96,22 +97,24 @@ export function simulateLicense(assets, license) {
 //   3-day run can exceed 110%, so no level is reached in the observed period.
 //   scenarios   = the 7.0 rule simulated for the period average, the recommendation
 //   and the period peak.
-export function assetCompliance(assets) {
-  const stats     = assetStats(assets)
+// The 7.0 rules apply to both asset and volume licenses: `integer: false` runs the
+// same logic on a daily volume series (entity_count = GB per day).
+export function assetCompliance(assets, { integer = true } = {}) {
+  const stats     = assetStats(assets, { integer })
   const sustained = sustainedLevel(assets, COMPLIANCE_LEVELS[0].days)
   const recommended = sustained ? sustained.level : null
   const scenarios = stats && recommended != null
     ? [
-        { key: 'average',     ...simulateLicense(assets, stats.avg) },
-        { key: 'recommended', ...simulateLicense(assets, recommended) },
-        { key: 'peak',        ...simulateLicense(assets, stats.max) },
+        { key: 'average',     ...simulateLicense(assets, stats.avg, { integer }) },
+        { key: 'recommended', ...simulateLicense(assets, recommended, { integer }) },
+        { key: 'peak',        ...simulateLicense(assets, stats.max, { integer }) },
       ]
     : []
   return {
     stats,
     recommended,
     recommendedWindow: sustained ? { from: sustained.from, to: sustained.to } : null,
-    limit:             recommended != null ? toleranceLimit(recommended) : null,
+    limit:             recommended != null ? toleranceLimit(recommended, { integer }) : null,
     result:            scenarios.find(sc => sc.key === 'recommended') || null,
     scenarios,
   }

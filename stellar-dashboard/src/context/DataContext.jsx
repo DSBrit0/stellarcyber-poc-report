@@ -8,6 +8,7 @@ import {
   fetchIngestionBySensor,
   fetchIngestionByConnector,
   fetchDataSensors,
+  fetchDailyVolume,
   fetchCaseTactics,
   emptyTactics,
 } from '../services/api'
@@ -28,6 +29,7 @@ const EMPTY_DATA = {
   ingestionBySensor:    [],
   ingestionByConnector: [],
   dataSensors:          [],
+  dailyVolume:          [],
   caseTactics:          null,
 }
 
@@ -65,10 +67,11 @@ export function DataProvider({ children }) {
       fetchIngestionBySensor(auth, dates),  // 5
       fetchIngestionByConnector(auth, dates), // 6
       fetchDataSensors(auth),               // 7
+      fetchDailyVolume(auth, dates),        // 8
     ])
 
     // index 0 = fetchCases → returns { cases, lowCount, mediumTotal }
-    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector', 'dataSensors']
+    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector', 'dataSensors', 'dailyVolume']
 
     // Fetch MITRE + Stellar XDR tactic data for cases in the POC period.
     // Runs after cases are available; each case pages through /cases/{id}/alerts.
