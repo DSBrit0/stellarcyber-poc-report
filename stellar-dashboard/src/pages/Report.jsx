@@ -11,6 +11,7 @@ import { useLocale, getPdfStrings } from '../i18n'
 import { generateRecommendations } from '../utils/recommendations'
 import { downloadPDFReport } from '../services/pdfReport'
 import { formatRelative } from '../utils/formatters'
+import { VERDICTS, verdictCode, verdictLabelKey } from '../utils/verdict'
 
 const INPUT = {
   background: 'rgba(255,255,255,0.05)',
@@ -426,11 +427,12 @@ export default function Report() {
           </div>
 
           <Field label={t('report.verdict')} onHelp={() => setShowVerdictGuide(true)}>
-            <select style={{ ...INPUT, cursor: 'pointer' }} value={pocMeta.verdict} onChange={setField('verdict')}>
-              <option value="">— selecione —</option>
-              <option value={t('report.verdictApproved')}>{t('report.verdictApproved')}</option>
-              <option value={t('report.verdictCond')}>{t('report.verdictCond')}</option>
-              <option value={t('report.verdictRejected')}>{t('report.verdictRejected')}</option>
+            {/* Salva o código (approved/conditional/rejected); o texto vem no idioma da tela/PDF */}
+            <select style={{ ...INPUT, cursor: 'pointer' }} value={verdictCode(pocMeta.verdict)} onChange={setField('verdict')}>
+              <option value="">{t('report.verdictSelect')}</option>
+              {VERDICTS.map(code => (
+                <option key={code} value={code}>{t(verdictLabelKey(code))}</option>
+              ))}
             </select>
           </Field>
 

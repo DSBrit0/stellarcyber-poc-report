@@ -95,7 +95,9 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 
 - The implementation is custom. `useLocale()` returns `t(key, vars)`, which supports `{var}` interpolation. The default locale is `pt`.
 - `src/i18n/locales/{pt,en,es}.js` share the same key tree. **Any string change has to be made in all three files.** PDF text lives under the `pdf` key and is fetched with `getPdfStrings(locale)`.
-- Operational recommendations in `utils/recommendations.js` are hardcoded (mixed PT/EN) and not localized. MITRE mitigations come from `utils/mitreMapping.js`, in all three languages.
+- Non-React modules translate with `translate(key, vars, locale?)` from `i18n/messages.js` (same locale files; default locale = the one stored by `useLocale`). `logger.js` user-facing messages live under `errors.*` — every HTTP message keeps the code in parentheses, because `DataContext` detects `(401)` in the message. Operational recommendations live under `recOps.*` and use the `locale` passed to `generateRecommendations`. MITRE mitigations come from `utils/mitreMapping.js`, in all three languages.
+- The PoC verdict is stored as a code (`approved` / `conditional` / `rejected`, `utils/verdict.js`); labels saved by older versions in any language are mapped back to the code.
+- The PDF formats numbers and dates with the report locale (`_locStr`: pt-BR / en-US / es-MX). Case severity/status, MITRE tactic names and API data (case, connector, technique names) are shown as the API returns them.
 
 ### Build
 

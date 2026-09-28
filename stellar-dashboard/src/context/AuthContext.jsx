@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 import { authenticate, AUTH_METHODS } from '../services/auth'
 import { fetchTenants } from '../services/api'
 import { info, warn } from '../utils/logger'
+import { translate } from '../i18n/messages'
 
 const SESSION_KEY = 'stellar_session'
 
@@ -130,7 +131,7 @@ export function AuthProvider({ children }) {
       })
       return { success: true }
     } catch (err) {
-      setAuthError(err.message || 'Falha na conexão')
+      setAuthError(err.message || translate('errors.connectFailed'))
       return { success: false }
     } finally {
       setConnecting(false)

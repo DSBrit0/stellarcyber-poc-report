@@ -134,6 +134,7 @@ const LEVEL_COLORS = {
 }
 
 function CopyButton({ entry }) {
+  const { t } = useLocale()
   const [copied, setCopied] = useState(false)
 
   function handleCopy(e) {
@@ -152,7 +153,7 @@ function CopyButton({ entry }) {
   return (
     <button
       onClick={handleCopy}
-      title="Copiar log"
+      title={t('settings.copyLog')}
       className="flex-shrink-0 p-1 rounded transition-all opacity-0 group-hover:opacity-100"
       style={{
         color: copied ? '#22c55e' : '#475569',

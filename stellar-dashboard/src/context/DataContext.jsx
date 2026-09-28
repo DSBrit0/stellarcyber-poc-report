@@ -13,6 +13,7 @@ import {
 } from '../services/api'
 import { useAuth } from './AuthContext'
 import { warn } from '../utils/logger'
+import { translate } from '../i18n/messages'
 
 const DataContext = createContext(null)
 
@@ -124,7 +125,7 @@ export function DataProvider({ children }) {
             disconnect()
             return prev
           }
-          newErrors[keys[i]] = err?.message || 'Falha ao buscar dados'
+          newErrors[keys[i]] = err?.message || translate('errors.fetchFailed')
           // keep previous data on error
         }
       }

@@ -11,6 +11,8 @@
  *   - Export como JSON ou texto
  */
 
+import { translate } from '../i18n/messages'
+
 // ─── Configuração ─────────────────────────────────────────────────────────────
 
 const CONFIG = {
@@ -114,19 +116,19 @@ export const error = (ctx, msg, data) => log(Level.ERROR, ctx, msg, data)
 
 function validateUrlField(url, errors) {
   if (!url || !url.trim()) {
-    errors.push('URL da instância é obrigatória.')
+    errors.push(translate('errors.urlRequired'))
     warn('validation', 'Campo URL vazio')
   } else {
     try {
       const parsed = new URL(url.trim())
       if (!['http:', 'https:'].includes(parsed.protocol)) {
-        errors.push('URL deve usar protocolo HTTP ou HTTPS.')
+        errors.push(translate('errors.urlProtocol'))
         warn('validation', 'URL com protocolo inválido', { protocol: parsed.protocol })
       } else {
         debug('validation', 'URL válida', { host: parsed.host })
       }
     } catch {
-      errors.push('URL inválida — verifique o formato (ex: https://poc.stellarcyber.cloud).')
+      errors.push(translate('errors.urlInvalid'))
       warn('validation', 'URL com formato inválido', { url })
     }
   }
@@ -148,10 +150,10 @@ export function validateLoginFields({ url, username, password }) {
 
   // Usuário
   if (!username || !username.trim()) {
-    errors.push('Usuário é obrigatório.')
+    errors.push(translate('errors.userRequired'))
     warn('validation', 'Campo usuário vazio')
   } else if (username.trim().length < 3) {
-    errors.push('Usuário deve ter ao menos 3 caracteres.')
+    errors.push(translate('errors.userShort'))
     warn('validation', 'Usuário muito curto', { length: username.trim().length })
   } else {
     debug('validation', 'Usuário válido', { username: username.trim() })
@@ -159,10 +161,10 @@ export function validateLoginFields({ url, username, password }) {
 
   // Senha
   if (!password) {
-    errors.push('Senha / API Key é obrigatória.')
+    errors.push(translate('errors.passwordRequired'))
     warn('validation', 'Campo senha vazio')
   } else if (password.length < 6) {
-    errors.push('Senha deve ter ao menos 6 caracteres.')
+    errors.push(translate('errors.passwordShort'))
     warn('validation', 'Senha muito curta', { length: password.length })
   } else {
     debug('validation', 'Senha válida', { length: password.length })
@@ -192,10 +194,10 @@ export function validateApiKeyFields({ url, apiKey }) {
   validateUrlField(url, errors)
 
   if (!apiKey || !apiKey.trim()) {
-    errors.push('API Key é obrigatória.')
+    errors.push(translate('errors.apiKeyRequired'))
     warn('validation', 'Campo API Key vazio')
   } else if (/\s/.test(apiKey.trim())) {
-    errors.push('API Key inválida — contém espaços ou quebras de linha.')
+    errors.push(translate('errors.apiKeySpaces'))
     warn('validation', 'API Key com espaços internos')
   }
 
@@ -226,7 +228,7 @@ export function validateAuthResponse(responseData, httpStatus = 200) {
 
   // Status HTTP inesperado
   if (httpStatus !== 200) {
-    const msg = `Resposta inesperada do servidor: HTTP ${httpStatus}`
+    const msg = translate('errors.unexpectedStatus', { status: httpStatus })
     error('auth', msg, { httpStatus, body: responseData })
     throw new Error(msg)
   }
@@ -234,7 +236,7 @@ export function validateAuthResponse(responseData, httpStatus = 200) {
   // access_token ausente
   const token = responseData?.access_token
   if (!token || typeof token !== 'string' || !token.trim()) {
-    const msg = 'Resposta inválida: access_token ausente ou vazio.'
+    const msg = translate('errors.tokenMissing')
     error('auth', msg, { responseData })
     throw new Error(msg)
   }
@@ -242,7 +244,7 @@ export function validateAuthResponse(responseData, httpStatus = 200) {
   // Validar estrutura JWT (3 partes separadas por ".")
   const parts = token.split('.')
   if (parts.length !== 3) {
-    const msg = 'access_token não parece ser um JWT válido (esperado 3 segmentos).'
+    const msg = translate('errors.tokenNotJwt')
     error('auth', msg, { tokenParts: parts.length })
     throw new Error(msg)
   }
@@ -268,7 +270,7 @@ export function validateAuthResponse(responseData, httpStatus = 200) {
     const expiresInMs = (exp * 1000) - Date.now()
     if (expiresInMs <= 0) {
       error('auth', 'Token recebido já está expirado', { exp: new Date(exp * 1000).toISOString() })
-      throw new Error('O token recebido já está expirado.')
+      throw new Error(translate('errors.tokenExpired'))
     }
     info('auth', `Token válido por ${Math.round(expiresInMs / 60000)} minutos ✅`, {
       expiresAt: new Date(exp * 1000).toISOString(),
@@ -315,24 +317,17 @@ export function logApiError(err, context = 'api') {
       response: err.response.data,
     })
 
-    const friendly = {
-      400: `Requisição inválida (400): ${msg}`,
-      401: 'Sessão expirada ou credenciais inválidas (401).',
-      403: 'Acesso negado — permissões insuficientes (403).',
-      404: `Recurso não encontrado: ${err.config?.url || context} (404).`,
-      422: `Dados inválidos enviados ao servidor (422): ${msg}`,
-      429: 'Limite de requisições atingido — aguarde e tente novamente (429).',
-      500: 'Erro interno do servidor (500) — tente novamente em instantes.',
-      502: 'Gateway inválido (502) — instância pode estar inacessível.',
-      503: 'Serviço indisponível (503) — instância pode estar em manutenção.',
-    }
-    return friendly[s] || `Erro do servidor (${s}): ${msg}`
+    // Mensagens mantêm o código HTTP entre parênteses — DataContext detecta '(401)'.
+    const known = [400, 401, 403, 404, 422, 429, 500, 502, 503]
+    return known.includes(s)
+      ? translate(`errors.http${s}`, { msg, url: err.config?.url || context })
+      : translate('errors.httpOther', { status: s, msg })
   }
 
   // Timeout
   if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
     error(context, 'Timeout na requisição', { code: err.code, url: err.config?.url })
-    return 'Tempo limite excedido — verifique a URL e a conectividade.'
+    return translate('errors.timeout')
   }
 
   // Sem rede / CORS / recusado
@@ -341,7 +336,7 @@ export function logApiError(err, context = 'api') {
     error(context, 'Erro de rede', { code: err.code, url, method: err.config?.method })
 
     // Tentar extrair o host da URL para feedback mais específico
-    let host = 'desconhecido'
+    let host = translate('errors.unknownHost')
     try {
       const parsed = new URL(url)
       host = parsed.hostname
@@ -349,12 +344,12 @@ export function logApiError(err, context = 'api') {
       // ignore
     }
 
-    return `Não foi possível conectar a ${host}. Verifique:\n1. URL está correta?\n2. Instância está acessível?\n3. Há bloqueio de firewall/VPN?`
+    return translate('errors.network', { host })
   }
 
   // Erro genérico
   error(context, err?.message || 'Erro desconhecido', { err })
-  return err?.message || 'Ocorreu um erro inesperado.'
+  return err?.message || translate('errors.unexpected')
 }
 
 // ─── Consulta ao histórico ────────────────────────────────────────────────────

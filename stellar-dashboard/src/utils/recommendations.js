@@ -1,4 +1,5 @@
 import { correlateMitre, getMitreById } from './mitreMapping'
+import { translate } from '../i18n/messages'
 
 export function generateRecommendations({ cases, connectors, sensors, tenants, assets, ingestionTimeline, mitreTechniques = [], locale = 'pt' }) {
   const recs = []
@@ -13,15 +14,9 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
     recs.push({
       id: 'connector-coverage',
       priority: offlinePct > 50 ? 'critical' : 'warning',
-      title: 'Conectores Inativos Detectados',
-      description: `${offlineConnectors} de ${totalConnectors} conectores (${offlinePct.toFixed(0)}%) estão inativos, reduzindo a cobertura de visibilidade.`,
-      steps: [
-        'Identifique os conectores inativos na página de Sensores',
-        'Verifique a conectividade de rede dos conectores afetados',
-        'Confirme as credenciais e permissões de cada conector',
-        'Revise as regras de firewall para portas de comunicação',
-        'Contate o suporte Stellar Cyber se os conectores permanecerem offline por mais de 30 minutos',
-      ],
+      title:       translate('recOps.connectorCoverage.title', { offline: offlineConnectors, total: totalConnectors, pct: offlinePct.toFixed(0) }, locale),
+      description: translate('recOps.connectorCoverage.description', { offline: offlineConnectors, total: totalConnectors, pct: offlinePct.toFixed(0) }, locale),
+      steps:       translate('recOps.connectorCoverage.steps', { offline: offlineConnectors, total: totalConnectors, pct: offlinePct.toFixed(0) }, locale),
       impact:   Math.min(100, offlinePct * 1.5),
       category: 'Infrastructure',
     })
@@ -35,15 +30,9 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
       recs.push({
         id: 'data-gap',
         priority: hrsAgo > 6 ? 'critical' : 'warning',
-        title: 'Potential Data Ingestion Gap',
-        description: `Last data received ${hrsAgo.toFixed(1)} hours ago. Gaps longer than 2 hours may indicate an ingestion pipeline issue.`,
-        steps: [
-          'Check the Data Reception Timeline for the last known source',
-          'Verify data connectors are running in the Stellar Cyber UI',
-          'Check source system logs for export failures',
-          'Review disk space and queue depth on ingestion nodes',
-          'Restart the ingestion service if necessary',
-        ],
+        title:       translate('recOps.dataGap.title', { hours: hrsAgo.toFixed(1) }, locale),
+        description: translate('recOps.dataGap.description', { hours: hrsAgo.toFixed(1) }, locale),
+        steps:       translate('recOps.dataGap.steps', { hours: hrsAgo.toFixed(1) }, locale),
         impact:   Math.min(100, hrsAgo * 10),
         category: 'Data Pipeline',
       })
@@ -56,15 +45,9 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
     recs.push({
       id: 'case-backlog',
       priority: openCases > 100 ? 'critical' : 'warning',
-      title: 'High Case Backlog Detected',
-      description: `${openCases} open cases detected. A backlog above 50 cases risks analyst fatigue and delayed response times.`,
-      steps: [
-        'Sort cases by severity — address Critical and High first',
-        'Enable auto-triage rules in Cases > Settings',
-        'Assign cases to available analysts via the team queue',
-        'Close or merge duplicate/low-confidence cases',
-        'Review alert tuning to reduce false positives',
-      ],
+      title:       translate('recOps.caseBacklog.title', { open: openCases }, locale),
+      description: translate('recOps.caseBacklog.description', { open: openCases }, locale),
+      steps:       translate('recOps.caseBacklog.steps', { open: openCases }, locale),
       impact:   Math.min(100, openCases * 0.8),
       category: 'Operations',
     })
@@ -81,15 +64,9 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
     recs.push({
       id: 'stale-critical',
       priority: 'critical',
-      title: `${staleCritical.length} Critical Case(s) Open Over 24 Hours`,
-      description: 'Unresolved critical cases older than 24 hours indicate a potential escalation risk and SLA breach.',
-      steps: [
-        'Immediately review the listed critical cases in the Cases page',
-        'Escalate to senior SOC analyst or incident commander',
-        'Initiate incident response playbook if not already done',
-        'Document all response actions taken',
-        'Notify stakeholders per your escalation matrix',
-      ],
+      title:       translate('recOps.staleCritical.title', { n: staleCritical.length }, locale),
+      description: translate('recOps.staleCritical.description', { n: staleCritical.length }, locale),
+      steps:       translate('recOps.staleCritical.steps', { n: staleCritical.length }, locale),
       impact:   95,
       category: 'Incident Response',
     })
@@ -107,14 +84,9 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
     recs.push({
       id: 'stale-connectors',
       priority: Number(pct) > 30 ? 'warning' : 'info',
-      title: `${staleConnectors.length} Conectores Sem Dados Recentes`,
-      description: `${pct}% dos conectores não reportaram atividade nas últimas 48 horas — possível ponto cego de visibilidade.`,
-      steps: [
-        'Revise a lista de conectores na página de Sensores',
-        'Verifique credenciais e status de cada conector afetado',
-        'Cheque se a fonte de log ainda está ativa e exportando dados',
-        'Ative o monitoramento automático de conectores inativos',
-      ],
+      title:       translate('recOps.staleConnectors.title', { n: staleConnectors.length, pct }, locale),
+      description: translate('recOps.staleConnectors.description', { n: staleConnectors.length, pct }, locale),
+      steps:       translate('recOps.staleConnectors.steps', { n: staleConnectors.length, pct }, locale),
       impact:   Math.min(85, staleConnectors.length * 2),
       category: 'Data Coverage',
     })
@@ -129,13 +101,9 @@ export function generateRecommendations({ cases, connectors, sensors, tenants, a
     recs.push({
       id: 'all-good',
       priority: 'info',
-      title: 'All Systems Nominal',
-      description: 'No critical recommendations at this time. Your security posture looks healthy.',
-      steps: [
-        'Continue monitoring sensor and ingestion health',
-        'Review weekly case trends for emerging patterns',
-        'Schedule a quarterly security posture review',
-      ],
+      title:       translate('recOps.allGood.title', {}, locale),
+      description: translate('recOps.allGood.description', {}, locale),
+      steps:       translate('recOps.allGood.steps', {}, locale),
       impact:   5,
       category: 'General',
     })

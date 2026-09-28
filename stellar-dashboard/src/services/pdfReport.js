@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable'
 import { Chart, registerables } from 'chart.js'
 import { getMitreMitigation } from '../utils/mitreMapping'
 import { assetStats, assetCompliance } from '../utils/assetCompliance'
+import { verdictCode, verdictLabel } from '../utils/verdict'
 Chart.register(...registerables)
 
 // ─── Color palette ────────────────────────────────────────────────────────────
@@ -27,19 +28,23 @@ let _pageNum = 0, _meta = {}, _s = {}
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 function i(doc, arr) { doc.setFillColor(...arr) }
+// Locale of the PDF being generated (set at the top of generatePDFReport).
+let _locStr = 'pt-BR'
+const LOC_STR = { pt: 'pt-BR', en: 'en-US', es: 'es-MX' }
+
 function fmtDate(d) {
   if (!d) return '—'
   try {
     const dt = d instanceof Date ? d : new Date(d)
     if (isNaN(dt.getTime())) return String(d)
-    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    return dt.toLocaleDateString(_locStr, { day: '2-digit', month: '2-digit', year: '2-digit' })
   } catch { return String(d) }
 }
 function fmtNum(n) {
   if (n == null || n === '') return '—'
   const num = Number(n)
   if (isNaN(num)) return String(n)
-  return num.toLocaleString('pt-BR')
+  return num.toLocaleString(_locStr)
 }
 function fmtGB(bytes) {
   if (!bytes || bytes === 0) return '0 GB'
@@ -636,8 +641,9 @@ export function generatePDFReport({
   locale = 'pt',
   s = {},
 }) {
-  _meta = pocMeta
-  _s    = s
+  _meta   = pocMeta
+  _s      = s
+  _locStr = LOC_STR[locale] || LOC_STR.pt
 
   // ── Derived counts ──────────────────────────────────────────────────────────
   const critCases  = cases.filter(c => (c.severity || '').toLowerCase() === 'critical')
@@ -656,7 +662,7 @@ export function generatePDFReport({
 
   // Asset stats from assets[] shape: [{ date, entity_count }] — the official daily
   // license count. Every day counts, 0 included (see utils/assetCompliance).
-  const locStr      = locale === 'pt' ? 'pt-BR' : locale === 'es' ? 'es-MX' : 'en-US'
+  const locStr      = _locStr
   const fmtLoc      = n => (n == null ? null : Number(n).toLocaleString(locStr))
   const fmtDay      = d => new Date(`${d}T00:00:00Z`).toLocaleDateString(locStr, { timeZone: 'UTC' })
   const entStats    = assetStats(assets)
@@ -704,13 +710,10 @@ export function generatePDFReport({
   const mitrRecs = recommendations.filter(r => r.category === 'MITRE ATT&CK')
 
   // Verdict
-  const verdict = pocMeta.verdict || ''
-  const verdictColor = (() => {
-    const v = verdict.toLowerCase()
-    if (v === 'approved' || v === 'aprovado' || v === 'go') return C.green
-    if (v === 'conditional' || v === 'condicional') return C.orange
-    return C.red
-  })()
+  // Stored as a code (older values: a label in any language) → label in the PDF locale
+  const verdictKey   = verdictCode(pocMeta.verdict)
+  const verdict      = verdictKey ? verdictLabel(verdictKey, locale) : (pocMeta.verdict || '')
+  const verdictColor = verdictKey === 'approved' ? C.green : verdictKey === 'conditional' ? C.orange : C.red
 
   // Ingestion total — uses bytesIngested (mapped from API total_ingestion)
   const totalIngest = ingestionBySensor.reduce((sum, r) => sum + (r.bytesIngested || r.bytes || r.size || 0), 0)
@@ -1586,7 +1589,7 @@ export function generatePDFReport({
   } else {
     const opRecRows = opRecs.map(r => [
       trunc(r.title || r.name || '—', 40),
-      r.priority || r.severity || '—',
+      ({ critical: s.recPrioCritical, warning: s.recPrioWarning, info: s.recPrioInfo }[r.priority]) || r.priority || r.severity || '—',
       trunc(r.description || r.details || '—', 80),
     ])
     y = tableCompact(doc,
