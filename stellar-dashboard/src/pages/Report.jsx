@@ -12,6 +12,7 @@ import { generateRecommendations } from '../utils/recommendations'
 import { downloadPDFReport } from '../services/pdfReport'
 import { formatRelative } from '../utils/formatters'
 import { VERDICTS, verdictCode, verdictLabelKey } from '../utils/verdict'
+import { normalizeImageFile } from '../utils/image'
 
 const INPUT = {
   background: 'rgba(255,255,255,0.05)',
@@ -151,9 +152,16 @@ export default function Report() {
   const [showVerdictGuide, setShowVerdictGuide]          = useState(false)
   const archImageRef                                     = useRef(null)
 
-  function handleArchImageUpload(e) {
+  async function handleArchImageUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    e.target.value = ''
+    // Upright pixels + real size, so the PDF shows the image as it was loaded
+    try {
+      const { dataUrl, w, h } = await normalizeImageFile(file)
+      setPocMeta({ architectureImage: dataUrl, architectureImageDims: { w, h } })
+      return
+    } catch { /* createImageBitmap unavailable or failed — fall back to the original file */ }
     const reader = new FileReader()
     reader.onload = ev => {
       const dataUrl = ev.target.result
@@ -167,7 +175,6 @@ export default function Report() {
       img.src = dataUrl
     }
     reader.readAsDataURL(file)
-    e.target.value = ''
   }
 
   const hasDates = !!(pocMeta.pocStartDate && pocMeta.pocEndDate)

@@ -92,7 +92,7 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 
 ### PDF export
 
-`src/services/pdfReport.js` builds the PDF with jsPDF + jspdf-autotable; it does not render a page. Charts are Chart.js drawn to an offscreen canvas and embedded as PNGs. Layout moves top to bottom with a running `y` cursor, and `needsPage(doc, y, h)` handles page breaks. The document is a cover page plus sections 1–10. Report-level metrics (totals, MITRE coverage %, avg assets/day, scorecard) are derived at the top of `generatePDFReport`.
+`src/services/pdfReport.js` builds the PDF with jsPDF + jspdf-autotable; it does not render a page. The architecture image is normalized on upload (`utils/image.js`: `createImageBitmap(file, { imageOrientation: 'from-image' })` → canvas → JPEG/PNG), because jsPDF ignores EXIF orientation and phone photos came out rotated and squeezed; the PDF sizes it from the embedded pixels (`doc.getImageProperties`), not from the stored size. Charts are Chart.js drawn to an offscreen canvas and embedded as PNGs. Layout moves top to bottom with a running `y` cursor, and `needsPage(doc, y, h)` handles page breaks. The document is a cover page plus sections 1–10. Report-level metrics (totals, MITRE coverage %, avg assets/day, scorecard) are derived at the top of `generatePDFReport`.
 
 ### i18n
 

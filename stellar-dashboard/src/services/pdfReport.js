@@ -1137,7 +1137,10 @@ export function generatePDFReport({
       const imgData = pocMeta.architectureImage
       const maxW = CW
       const maxH = 160
-      const dims = pocMeta.architectureImageDims
+      // Size from the pixels actually embedded (not the stored on-screen size), so the
+      // aspect ratio always matches the image — older uploads could carry a rotated size.
+      const props = (() => { try { return doc.getImageProperties(imgData) } catch { return null } })()
+      const dims  = props?.width && props?.height ? { w: props.width, h: props.height } : pocMeta.architectureImageDims
       const PX_TO_MM = 25.4 / 96
       const imgW = dims ? dims.w * PX_TO_MM : maxW
       const imgH = dims ? dims.h * PX_TO_MM : maxH
