@@ -664,7 +664,7 @@ export function generatePDFReport({
   // license count. Every day counts, 0 included (see utils/assetCompliance).
   const locStr      = _locStr
   const fmtLoc      = n => (n == null ? null : Number(n).toLocaleString(locStr))
-  const fmtDay      = d => new Date(`${d}T00:00:00Z`).toLocaleDateString(locStr, { timeZone: 'UTC' })
+  const fmtDay      = d => new Date(`${d}T00:00:00Z`).toLocaleDateString(locStr, { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: '2-digit' })
   const entStats    = assetStats(assets)
   const avgEntities = entStats ? fmtLoc(entStats.avg) : null
   const minEntities = entStats ? fmtLoc(entStats.min) : null
@@ -1523,9 +1523,10 @@ export function generatePDFReport({
   }
   y += 4
 
-  // ── 7.3 Asset license compliance (informative) ─────────────────────────────
-  // Rules: Stellar Cyber 7.0 "Understanding Asset-Based Licensing" / "Understanding
-  // License Compliance". "Observed" = highest count present on EACH day of a run.
+  // ── 7.3 License compliance (assets) ────────────────────────────────────────
+  // Stellar Cyber 7.0: a level is reached when the daily count is above 110% of the
+  // license on each of N consecutive days (Warning 3, Violation 7, Out of Compliance
+  // 21). The rule is simulated day by day over the discovery period (utils/assetCompliance).
   y = needsPage(doc, y, 60)
   y = subTitle(doc, s.sub7_3 || '7.3 License Compliance', y)
   y = bodyText(doc, s.licHowCounted || 'Official license count: the platform counts assets of these types: unique devices (internal IPs) and unique users (emails) observed daily.', y)
@@ -1534,41 +1535,78 @@ export function generatePDFReport({
   const lic = assetCompliance(assets)
   if (!lic.stats) {
     y = infoNote(doc, s.licNoData || 'No asset data in the PoC period.', y)
+  } else if (lic.recommended == null) {
+    y = infoNote(doc, (s.licInsufficient || 'Insufficient period to recommend ({n} of {d} days)').replace('{n}', lic.stats.days).replace('{d}', 3), y)
   } else {
-    const levelLabel = { warning: s.licWarning || 'Warning', violation: s.licViolation || 'Violation', ooc: s.licOoc || 'Out of Compliance' }
+    const l = fmtLoc(lic.recommended), t = fmtLoc(lic.limit)
+    const runText = run => run
+      ? (s.licRunDays || '{n} days ({from} — {to})').replace('{n}', run.days).replace('{from}', fmtDay(run.from)).replace('{to}', fmtDay(run.to))
+      : (s.licRunNone || '0 days')
+    const levelLabel = { none: s.licLevelNone || 'None', warning: s.licWarning || 'Warning', violation: s.licViolation || 'Violation', ooc: s.licOoc || 'Out of Compliance' }
     const levelRule  = { warning: s.licRuleWarning || 'Above 110% of the limit on each of 3 consecutive days', violation: s.licRuleViolation || 'Above 110% of the limit on each of 7 consecutive days', ooc: s.licRuleOoc || 'Above 110% of the limit for 21 consecutive days (7 to enter Violation + 14 in Violation)' }
     const levelRes   = { warning: s.licResWarning || 'Removable banner in the UI. Clears after 3 consecutive days at or below 110%.', violation: s.licResViolation || 'Non-removable banner and email to the account admin. Clears after 7 consecutive days at or below 110%.', ooc: s.licResOoc || 'Services cease and a prorated invoice covers the gap between average usage since the first Violation and the license.' }
-    const licRows = lic.levels.map(lv => [
-      levelLabel[lv.key],
-      levelRule[lv.key],
-      lv.sustained ? fmtLoc(lv.sustained.level) : (s.licInsufficient || 'Insufficient period ({n} of {d} days)').replace('{n}', lic.stats.days).replace('{d}', lv.days),
-      lv.sustained ? `${fmtDay(lv.sustained.from)} — ${fmtDay(lv.sustained.to)}` : '—',  // helvetica has no '→'
-      levelRes[lv.key],
-    ])
-    y = tableBase(doc,
-      [s.licColLevel || 'Level', s.licColRule || 'Rule', s.licColObserved || 'Assets observed', s.licColPeriod || 'Run', s.licColResult || 'Description'],
-      licRows, y,
-      { columnStyles: { 0: { cellWidth: 24, fontStyle: 'bold' }, 2: { cellWidth: 26, halign: 'center', fontStyle: 'bold' }, 3: { cellWidth: 30, halign: 'center' } } },
-    )
-    y = bodyText(doc, s.licObservedNote || '"Assets observed" is the highest number of assets present on every day of a run. An isolated peak does not sustain a notification.', y, { fontSize: 7.5, color: C.muted })
+
+    if (lic.stats.days < 30) {
+      y = infoNote(doc, (s.licShortPeriod || 'Recommendation based on {n} days of data. 30 days of asset discovery are recommended.').replace('{n}', lic.stats.days), y)
+      y += 2
+    }
+
+    // Recommendation
+    y = needsPage(doc, y, 30)
+    y = bodyText(doc, (s.licRecommended || 'Recommended license quantity: {n} assets').replace('{n}', l), y, { bold: true, fontSize: 9.5, color: C.navy })
+    y = bodyText(doc, (s.licRecommendedNote || 'Highest number of assets present on each of 3 consecutive days ({from} — {to}). With this quantity no notification level is reached in the observed period.')
+      .replace('{from}', fmtDay(lic.recommendedWindow.from)).replace('{to}', fmtDay(lic.recommendedWindow.to)), y, { fontSize: 7.5, color: C.muted })
+    y = bodyText(doc, (s.licLimitLine || 'Tolerance limit (110%): {t} assets per day.').replace('{t}', t), y, { fontSize: 8 })
     y += 3
 
-    if (lic.recommended != null) {
-      const l = fmtLoc(lic.recommended), t = fmtLoc(lic.limit)
-      y = needsPage(doc, y, 40)
-      y = bodyText(doc, (s.licRecommended || 'Recommended license quantity: {n} assets').replace('{n}', l), y, { bold: true, fontSize: 9.5, color: C.navy })
-      y = bodyText(doc, s.licRecommendedNote || 'Highest level sustained for 3 consecutive days — with this quantity no notification level would be reached in the observed period.', y, { fontSize: 7.5, color: C.muted })
-      y += 2
-      for (const key of ['licDescIntro', 'licDescWarning', 'licDescViolation', 'licDescOoc', 'licDescBreak']) {
-        const fallback = {
-          licDescIntro:     'With {l} asset licenses, the platform tolerates up to {t} assets per day (110%). Beyond that:',
-          licDescWarning:   '• If the daily count stays above {t} assets on 3 consecutive days, the platform issues a Warning: a removable banner appears in the UI.',
-          licDescViolation: '• If it stays above {t} assets for 7 consecutive days, it enters Violation: the banner can no longer be removed and the account admin receives an email.',
-          licDescOoc:       '• If it stays above {t} assets for 21 consecutive days (7 to enter Violation + 14 in Violation), the license is Out of Compliance: services cease and a prorated invoice is issued.',
-          licDescBreak:     'A single day with {t} assets or fewer — including a day with count 0 — breaks the run, and the consecutive-day count starts over.',
-        }[key]
-        y = bodyText(doc, (s[key] || fallback).replace(/\{l\}/g, l).replace(/\{t\}/g, t), y)
-      }
+    // Table 1 — compliance with the recommended license
+    y = needsPage(doc, y, 40)
+    y = bodyText(doc, s.licTableTitle || 'Compliance with the recommended license', y, { bold: true, color: C.midBlue })
+    const res = lic.result
+    y = tableBase(doc,
+      [s.licColLevel || 'Level', s.licColRule || 'Rule', (s.licColRun || 'Longest run above {t}').replace('{t}', t), s.licColOutcome || 'Result', s.licColResult || 'Description'],
+      res.levels.map(lv => [
+        levelLabel[lv.key],
+        levelRule[lv.key],
+        runText(res.longestRun),
+        lv.reached ? (s.licReached || 'Reached') : (s.licNotReached || 'Not reached'),
+        levelRes[lv.key],
+      ]), y,
+      {
+        columnStyles: { 0: { cellWidth: 22, fontStyle: 'bold' }, 2: { cellWidth: 30, halign: 'center' }, 3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' } },
+        didParseCell: d => { if (d.section === 'body' && d.column.index === 3) d.cell.styles.textColor = res.levels[d.row.index].reached ? C.red : C.green },
+      },
+    )
+
+    // Table 2 — licensing scenarios
+    y = needsPage(doc, y, 40)
+    y = bodyText(doc, s.licScenarioTitle || 'Licensing scenarios', y, { bold: true, color: C.midBlue })
+    const scenLabel = { average: s.licScenAverage || 'Period average', recommended: s.licScenRecommended || 'Recommended', peak: s.licScenPeak || 'Period peak' }
+    y = tableBase(doc,
+      [s.licColScenario || 'Scenario', s.licColLicense || 'Licenses', s.licColLimit || 'Limit/day (110%)', s.licColDaysAbove || 'Days above limit', s.licColLongest || 'Longest run', s.licColLevelReached || 'Level reached'],
+      lic.scenarios.map(sc => [scenLabel[sc.key], fmtLoc(sc.license), fmtLoc(sc.limit), fmtLoc(sc.daysAbove), runText(sc.longestRun), levelLabel[sc.level]]),
+      y,
+      {
+        columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
+        didParseCell: d => {
+          if (d.section !== 'body') return
+          if (lic.scenarios[d.row.index].key === 'recommended') d.cell.styles.fontStyle = 'bold'
+          if (d.column.index === 5) d.cell.styles.textColor = lic.scenarios[d.row.index].level === 'none' ? C.green : C.red
+        },
+      },
+    )
+
+    // Descriptive thresholds for the recommended license
+    y = needsPage(doc, y, 36)
+    for (const key of ['licDescIntro', 'licDescWarning', 'licDescViolation', 'licDescOoc', 'licDescBreak']) {
+      const fallback = {
+        licDescIntro:     'With {l} asset licenses, the platform tolerates up to {t} assets per day (110%). Beyond that:',
+        licDescWarning:   '• If the daily count stays above {t} assets on 3 consecutive days, the platform issues a Warning: a removable banner appears in the UI.',
+        licDescViolation: '• If it stays above {t} assets for 7 consecutive days, it enters Violation: the banner can no longer be removed and the account admin receives an email.',
+        licDescOoc:       '• If it stays above {t} assets for 21 consecutive days (7 to enter Violation + 14 in Violation), the license is Out of Compliance: services cease and a prorated invoice is issued.',
+        licDescBreak:     'A single day with {t} assets or fewer — including a day with count 0 — breaks the run, and the consecutive-day count starts over.',
+      }[key]
+      y = bodyText(doc, (s[key] || fallback).replace(/\{l\}/g, l).replace(/\{t\}/g, t), y)
     }
   }
   y += 4

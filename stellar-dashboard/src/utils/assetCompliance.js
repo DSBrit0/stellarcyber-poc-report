@@ -63,17 +63,56 @@ export function toleranceLimit(license) {
   return Math.floor(license * LICENSE_TOLERANCE + 1e-9)
 }
 
-// One row per compliance level + the recommended license quantity, which is the
-// highest sustained level (the 3-day one): licensing it avoids every notification.
+// Applies the 7.0 rule day by day to a candidate license: a day counts as exceeded
+// when its count is above 110% of the license; a level is reached when the longest
+// run of exceeded days is at least that level's number of days.
+export function simulateLicense(assets, license) {
+  const days  = sortedCounts(assets)
+  const limit = toleranceLimit(license)
+  let run = 0, start = 0, longest = null, daysAbove = 0
+  days.forEach((d, i) => {
+    if (d.count > limit) {
+      daysAbove++
+      if (run === 0) start = i
+      run++
+      if (!longest || run > longest.days) longest = { days: run, from: days[start].date, to: d.date }
+    } else {
+      run = 0
+    }
+  })
+  const reached = [...COMPLIANCE_LEVELS].reverse().find(lv => (longest?.days || 0) >= lv.days)
+  return {
+    license,
+    limit,
+    daysAbove,
+    longestRun: longest,                       // null when no day was above the limit
+    level:      reached ? reached.key : 'none',
+    levels:     COMPLIANCE_LEVELS.map(lv => ({ ...lv, reached: (longest?.days || 0) >= lv.days })),
+  }
+}
+
+// License recommendation after the asset discovery period.
+//   recommended = highest count present on each of 3 consecutive days — with it no
+//   3-day run can exceed 110%, so no level is reached in the observed period.
+//   scenarios   = the 7.0 rule simulated for the period average, the recommendation
+//   and the period peak.
 export function assetCompliance(assets) {
-  const stats  = assetStats(assets)
-  const levels = COMPLIANCE_LEVELS.map(lv => ({ ...lv, sustained: sustainedLevel(assets, lv.days) }))
-  const known  = levels.filter(lv => lv.sustained).map(lv => lv.sustained.level)
-  const recommended = known.length ? Math.max(...known) : null
+  const stats     = assetStats(assets)
+  const sustained = sustainedLevel(assets, COMPLIANCE_LEVELS[0].days)
+  const recommended = sustained ? sustained.level : null
+  const scenarios = stats && recommended != null
+    ? [
+        { key: 'average',     ...simulateLicense(assets, stats.avg) },
+        { key: 'recommended', ...simulateLicense(assets, recommended) },
+        { key: 'peak',        ...simulateLicense(assets, stats.max) },
+      ]
+    : []
   return {
     stats,
-    levels,
     recommended,
-    limit: recommended != null ? toleranceLimit(recommended) : null,
+    recommendedWindow: sustained ? { from: sustained.from, to: sustained.to } : null,
+    limit:             recommended != null ? toleranceLimit(recommended) : null,
+    result:            scenarios.find(sc => sc.key === 'recommended') || null,
+    scenarios,
   }
 }
