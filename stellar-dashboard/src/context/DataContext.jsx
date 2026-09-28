@@ -10,6 +10,7 @@ import {
   fetchDataSensors,
   fetchDailyVolume,
   fetchCaseTactics,
+  fetchCaseStats,
   caseAlertPages,
   emptyTactics,
 } from '../services/api'
@@ -32,6 +33,7 @@ const EMPTY_DATA = {
   dataSensors:          [],
   dailyVolume:          [],
   caseTactics:          null,
+  caseStats:            null,
 }
 
 export function DataProvider({ children }) {
@@ -42,7 +44,7 @@ export function DataProvider({ children }) {
   const [errors, setErrors]         = useState({})
   const [syncedAt, setSyncedAt]     = useState(null)
   const [syncConfig, setSyncConfig] = useState({ pocStartDate: '', pocEndDate: '' })
-  // Sync progress 0–100: the 9 data fetches + (on Sync) every alert page of the cases.
+  // Sync progress 0–100: the 10 data fetches + (on Sync) every alert page of the cases.
   const [progress, setProgress]     = useState(null)
 
   const intervalRef  = useRef(null)
@@ -74,7 +76,7 @@ export function DataProvider({ children }) {
 
     // Progress: the total is known once the cases arrive (their alert pages);
     // until then it stays at 0%, and it never goes backwards.
-    const FETCHES = 9
+    const FETCHES = 10
     let done = 0, total = null
     const report = () => { if (total && current()) setProgress(Math.min(100, Math.floor((done / total) * 100))) }
     const step   = (n = 1) => { done += n; report() }
@@ -108,10 +110,11 @@ export function DataProvider({ children }) {
       track(fetchIngestionByConnector(auth, dates)), // 6
       track(fetchDataSensors(auth)),               // 7
       track(fetchDailyVolume(auth, dates)),        // 8
+      track(fetchCaseStats(auth, dates)),          // 9
     ])
 
     // index 0 = fetchCases → returns { cases, lowCount, mediumTotal }
-    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector', 'dataSensors', 'dailyVolume']
+    const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector', 'dataSensors', 'dailyVolume', 'caseStats']
 
     const caseTactics = await tacticsP
 

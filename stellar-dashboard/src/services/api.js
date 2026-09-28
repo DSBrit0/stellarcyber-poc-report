@@ -89,6 +89,76 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
   }
 }
 
+// ─── Case statistics (all cases of the period) ─────────────────────────────────
+// fetchCases keeps only Critical/High + the 100 most recent Medium, so ratios over
+// those cases are biased. This pages through EVERY case of the POC period (all
+// severities, light list, cap PAGING.CASE_STATS_MAX) and returns aggregates only:
+//   cases, alerts (sum of `size`), byStatus, byResolution, handled (status ≠ New),
+//   closed + median hours created_at → closed, acknowledged + median minutes.
+// Returns null when the API has no case in the period.
+
+function median(values) {
+  if (!values.length) return null
+  const v = [...values].sort((a, b) => a - b)
+  const m = Math.floor(v.length / 2)
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2
+}
+
+export async function fetchCaseStats(auth, { pocStartDate, pocEndDate } = {}) {
+  try {
+    const client = createApiClient(auth)
+    const base   = {
+      tenantid: auth.tenant,
+      sort:     'created_at',
+      order:    'desc',
+      limit:    PAGING.CASES_PAGE,
+      ...(pocStartDate ? { 'FROM~created_at': dayStart(pocStartDate) } : {}),
+      ...(pocEndDate   ? { 'TO~created_at':   dayEnd(pocEndDate) }     : {}),
+    }
+    const page = skip => client.get(ENDPOINTS.CASES, { params: { ...base, skip }, timeout: 90_000 })
+      .then(res => ({ cases: res.data?.data?.cases ?? [], total: res.data?.data?.total ?? 0 }))
+
+    const first = await page(0)
+    const want  = Math.min(first.total, PAGING.CASE_STATS_MAX)
+    const skips = []
+    for (let skip = PAGING.CASES_PAGE; skip < want; skip += PAGING.CASES_PAGE) skips.push(skip)
+    const rest  = []
+    for (let i = 0; i < skips.length; i += 4) {           // 4 pages at a time
+      rest.push(...(await Promise.all(skips.slice(i, i + 4).map(page))))
+    }
+    const all = [first, ...rest].flatMap(p => p.cases)
+    if (all.length === 0) return null
+
+    const byStatus = {}, byResolution = {}
+    const closeH = [], ackMin = []
+    let alerts = 0
+    for (const c of all) {
+      alerts += Number(c.size) || 0
+      const st = c.status || 'New'
+      byStatus[st] = (byStatus[st] || 0) + 1
+      if (c.resolution) byResolution[c.resolution] = (byResolution[c.resolution] || 0) + 1
+      if (c.closed > 0 && c.created_at > 0 && c.closed >= c.created_at) closeH.push((c.closed - c.created_at) / 3_600_000)
+      if (c.acknowledged > 0 && c.created_at > 0 && c.acknowledged >= c.created_at) ackMin.push((c.acknowledged - c.created_at) / 60_000)
+    }
+    const stats = {
+      cases:           all.length,
+      total:           first.total,               // > cases when the cap was reached
+      alerts,
+      byStatus,
+      byResolution,
+      handled:         all.length - (byStatus.New || 0),
+      closed:          closeH.length,
+      medianCloseHours: median(closeH),
+      acknowledged:    ackMin.length,
+      medianAckMinutes: median(ackMin),
+    }
+    info('api', `fetchCaseStats ✅ ${stats.cases}/${stats.total} cases | ${alerts} alerts | handled ${stats.handled}`)
+    return stats
+  } catch (err) {
+    handleError(err, ENDPOINTS.CASES)
+  }
+}
+
 // ─── Entity Usage (daily count) ──────────────────────────────────────────────
 // GET /connect/api/v1/entity_usages/daily_count/all?days=30&cust_id=<tenant>
 // Response: { data: [ { date, entity_count }, ... ] }

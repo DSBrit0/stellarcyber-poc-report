@@ -1326,8 +1326,9 @@ function t2DetectionCharts(doc, y, s, d) {
   d.cases.forEach(c => { if (typeof c.score === 'number') bins[Math.max(0, Math.min(9, Math.floor(c.score / 10)))]++ })
   t2Chart(doc, b, () => t2VBar(bins.map((_, k) => `${k * 10}–${k * 10 + 9}`), bins, bins.map((_, k) => (k >= 8 ? C.red : k >= 6 ? C.orange : k >= 4 ? C.yellow : C.green)),
     { showValues: true, xTitle: s.t2ScoreAxis || 'Risk score', yTitle: s.t2CasesAxis || 'Cases' }))
-  const e = t2Card(doc, ML + w2 + 4, y, w2, h3, s.t2ChartStatus || 'Cases by status', s.t2StatusNote || 'Number of cases in each status, as returned by the API; % of the loaded cases.')
-  const st = Object.entries(d.cases.reduce((m, c) => { const k = c.status || '—'; m[k] = (m[k] || 0) + 1; return m }, {})).sort((p, q) => q[1] - p[1])
+  const e = t2Card(doc, ML + w2 + 4, y, w2, h3, s.t2ChartStatus || 'Cases by status', s.t2StatusNote || 'Number of cases of the period in each status, as returned by the API; % of the total.')
+  // Every case of the period (caseStats.byStatus); falls back to the loaded cases
+  const st = Object.entries(d.byStatus || d.cases.reduce((m, c) => { const k = c.status || '—'; m[k] = (m[k] || 0) + 1; return m }, {})).sort((p, q) => q[1] - p[1])
   if (st.length) {
     t2Chart(doc, e, () => t2PieChart(st.map(x => x[0]), st.map(x => x[1]), st.map(x => statusColor(x[0])).map((c, k) => (c === C.muted ? T2_PALETTE[k % T2_PALETTE.length] : c)), { cutout: 58 }))
   }
@@ -1443,6 +1444,7 @@ export function generatePDFReport({
   ingestionByConnector = [],
   dailyVolume = [],
   caseTactics = null,
+  caseStats = null,
   generatedAt = new Date(),
   pocMeta = {},
   locale = 'pt',
@@ -1466,6 +1468,41 @@ export function generatePDFReport({
     const st = (c.status || '').toLowerCase()
     return st !== 'open' && st !== 'new'
   })
+  // Investigation efficiency — every case of the period (caseStats, fetchCaseStats):
+  // analysts investigate cases, not alerts, so the share of alerts the platform
+  // correlated into cases is the investigation work it saved:
+  //   pct = 1 − cases ÷ alerts   (alerts = sum of the case `size`)
+  // The note adds what the team actually did in the platform: cases handled
+  // (status other than New) and the median time from creation to closing.
+  // Without caseStats (older data) it falls back to resolved ÷ loaded cases.
+  const invEff = (() => {
+    const st = caseStats
+    if (!st || !st.alerts || !st.cases) {
+      const p = cases.length > 0 ? Math.round(cases.filter(c => !['open', 'new'].includes((c.status || '').toLowerCase())).length / cases.length * 100) : 0
+      return { pct: p, note: null }
+    }
+    const pct   = Math.max(0, Math.min(100, Math.round((1 - st.cases / st.alerts) * 100)))
+    const ratio = (st.alerts / st.cases).toLocaleString(_locStr, { maximumFractionDigits: 1 })
+    const parts = [
+      (s.sc_invAlerts || '{a} alerts correlated into {c} cases ({r}:1)').replace('{a}', fmtNum(st.alerts)).replace('{c}', fmtNum(st.cases)).replace('{r}', ratio),
+      (s.sc_invHandled || '{n} handled by the team ({p}%)').replace('{n}', fmtNum(st.handled)).replace('{p}', Math.round(st.handled / st.cases * 100)),
+    ]
+    if (st.medianCloseHours != null) {
+      const h = st.medianCloseHours
+      const dur = h < 1
+        ? `${Math.round(h * 60)} min`
+        : `${h.toLocaleString(_locStr, { maximumFractionDigits: 1 })} h`
+      parts.push((s.sc_invClose || 'median of {t} to close').replace('{t}', dur))
+    }
+    return { pct, note: parts.join(' · ') }
+  })()
+
+  // Open / resolved over EVERY case of the period (caseStats); the loaded cases are
+  // only Critical/High + the 100 most recent Medium, so their counts are biased.
+  // "Open" keeps the existing meaning: status New (or Open); everything else is resolved.
+  const openCount     = caseStats ? (caseStats.byStatus.New || 0) + (caseStats.byStatus.Open || 0) : openCases.length
+  const resolvedCount = caseStats ? caseStats.cases - openCount : resolvedCases.length
+
   const activeConn = connectors.filter(c =>
     c.status === 'active' || c.enabled === true || c.active === true
   )
@@ -1490,6 +1527,8 @@ export function generatePDFReport({
 
   // Total displayed (crit + high + mediumTotal + lowNum)
   const totalCasesCount = critCases.length + highCases.length + mediumTotal + lowNum
+  // Base for the open-case percentages: every case of the period when caseStats is there
+  const statusBase      = caseStats ? caseStats.cases : totalCasesCount
   const totalCasesStr   = typeof lowCount === 'string'
     ? fmtNum(totalCasesCount) + '+'
     : fmtNum(totalCasesCount)
@@ -1589,7 +1628,7 @@ export function generatePDFReport({
       tacticsDetected: detectedTactics.size,
       scorecard: [
         { label: s.sc10_1 || 'Detection Capability',     pct: validSc.length ? Math.round(validSc.reduce((t, c) => t + c.score, 0) / validSc.length) : 0 },
-        { label: s.sc10_2 || 'Investigation Efficiency', pct: cases.length ? Math.round(resolvedCases.length / cases.length * 100) : 0 },
+        { label: s.sc10_2 || 'Investigation Efficiency', pct: invEff.pct },
         { label: s.sc10_4 || 'Integration Coverage',     pct: connectors.length ? Math.round(activeConn.length / connectors.length * 100) : 0 },
         { label: s.sc10_6 || 'MITRE Coverage',           pct: mitreCovPct },
       ],
@@ -1678,8 +1717,8 @@ export function generatePDFReport({
     ],
     [
       s.kpiOpenCases || 'Open Cases',
-      String(openCases.length),
-      pct(openCases.length, totalCasesCount) + ` ${s.ofTotal || 'of total'}`,
+      fmtNum(openCount),
+      pct(openCount, statusBase) + ` ${s.ofTotal || 'of total'}`,
     ],
   ]
   y = tableBase(doc,
@@ -1702,8 +1741,8 @@ export function generatePDFReport({
     const kpiCards = [
       { label: s.kpiCasesDetected  || 'Casos Detectados',      value: totalCasesStr,                               color: C.blue    },
       { label: s.kpiCritCases      || 'Críticos',              value: String(critCases.length),                    color: C.red     },
-      { label: s.kpiOpenCases      || 'Casos Abertos',         value: String(openCases.length),                    color: C.orange  },
-      { label: s.kpiResolvedCases  || 'Casos Resolvidos',      value: String(resolvedCases.length),                color: C.green   },
+      { label: s.kpiOpenCases      || 'Casos Abertos',         value: fmtNum(openCount),                           color: C.orange  },
+      { label: s.kpiResolvedCases  || 'Casos Resolvidos',      value: fmtNum(resolvedCount),                       color: C.green   },
       { label: s.kpiAvgEntities    || 'Média Assets monitorado/Dia',  value: avgEntities || '—',                     color: C.navy    },
       { label: s.kpiActiveConn     || 'Conectores',            value: `${activeConn.length}/${connectors.length}`, color: C.midBlue },
       { label: s.kpiMitreCov       || 'MITRE ATT&CK',          value: `${mitreCovPct}%`,                           color: C.blue    },
@@ -1755,16 +1794,16 @@ export function generatePDFReport({
       }
     }
 
-    // Status donut — uses cases.length (crit+high+top100med displayed), NOT totalCasesCount
+    // Status donut — every case of the period (caseStats); falls back to the loaded cases
     const c2x = ML + chartW + 6
     const c2y = y + 5
     drawChartTitle(doc, s.chartStatus || 'Case Status', c2x, c2y - 1, chartW)
-    if (cases.length > 0) {
-      const closedCount = cases.length - openCases.length
+    if (openCount + resolvedCount > 0) {
+      const closedCount = resolvedCount
       const statusPng = renderChartPNG(
         () => donutChart(
           [s.statusOpen || 'Open', s.statusClosed || 'Analyzed'],
-          [openCases.length, closedCount],
+          [openCount, closedCount],
           [C.orange, C.midBlue]
         ),
         chartW, chartH
@@ -1773,11 +1812,11 @@ export function generatePDFReport({
         doc.addImage(statusPng, 'PNG', c2x, c2y, chartW, chartH, undefined, IMG_COMPRESSION)
         const cx2 = c2x + chartW / 2
         const cy2 = c2y + chartH * 0.37
-        const openPct2 = cases.length > 0 ? Math.round((openCases.length / cases.length) * 100) : 0
+        const openPct2 = openCount + closedCount > 0 ? Math.round((openCount / (openCount + closedCount)) * 100) : 0
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(9)
         doc.setTextColor(...C.orange)
-        doc.text(fmtNum(openCases.length), cx2, cy2, { align: 'center' })
+        doc.text(fmtNum(openCount), cx2, cy2, { align: 'center' })
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(6.5)
         doc.setTextColor(...C.muted)
@@ -1876,12 +1915,14 @@ export function generatePDFReport({
   })()
 
   // Alert noise reduction: total raw alerts across cases vs number of cases
-  const scTotalAlerts = cases.reduce((sum, c) => sum + (c.alertCount || 1), 0)
-  const scNoiseRedPct = scTotalAlerts > cases.length
-    ? Math.round((1 - cases.length / scTotalAlerts) * 100)
+  // Every case of the period when caseStats is there (same numbers as Investigation Efficiency)
+  const scCases       = caseStats ? caseStats.cases : cases.length
+  const scTotalAlerts = caseStats ? caseStats.alerts : cases.reduce((sum, c) => sum + (c.alertCount || 1), 0)
+  const scNoiseRedPct = scTotalAlerts > scCases
+    ? Math.round((1 - scCases / scTotalAlerts) * 100)
     : 0
-  const scCorrRatio = cases.length > 0 ? Math.round(scTotalAlerts / cases.length) : 0
-  const noiseStr    = cases.length > 0 ? `${scNoiseRedPct}% (${scCorrRatio}:1)` : '—'
+  const scCorrRatio = scCases > 0 ? Math.round(scTotalAlerts / scCases) : 0
+  const noiseStr    = scCases > 0 ? `${scNoiseRedPct}% (${scCorrRatio}:1)` : '—'
 
   // Integration coverage: active connectors vs total configured
   const integPct = connectors.length > 0 ? Math.round(activeConn.length / connectors.length * 100) : 0
@@ -2079,7 +2120,7 @@ export function generatePDFReport({
       [s.metHigh      || 'High Cases',     fmtNum(highCases.length),                    pct(highCases.length, totalCasesCount)],
       [s.metMedium    || 'Medium Cases',   fmtNum(mediumTotal),                         pct(mediumTotal, totalCasesCount)],
       [s.metLow       || 'Low Cases',      fmtNum(lowCount),                            pct(lowNum, totalCasesCount)],
-      [s.metOpen      || 'Open Cases',     fmtNum(openCases.length),                    pct(openCases.length, totalCasesCount)],
+      [s.metOpen      || 'Open Cases',     fmtNum(openCount),                           pct(openCount, statusBase)],
       [s.metAvgScore  || 'Average Score',  String(avgScore),                            ''],
     ]
     y = tableBase(doc,
@@ -2111,7 +2152,7 @@ export function generatePDFReport({
     // Template 2 replaces it with the trend lines, the weekday × hour heatmap,
     // the score histogram and the status donut.
     if (T2) {
-      y = t2DetectionCharts(doc, y, s, { days: t2Period, daily: t2Daily, cases, critHigh: [...critCases, ...highCases] })
+      y = t2DetectionCharts(doc, y, s, { days: t2Period, daily: t2Daily, cases, critHigh: [...critCases, ...highCases], byStatus: caseStats?.byStatus || null })
     }
     const tlData = T2 ? { labels: [] } : buildTimelineData(cases, pocMeta.pocStartDate, pocMeta.pocEndDate)
     if (tlData.labels.length > 0) {
@@ -2640,8 +2681,8 @@ export function generatePDFReport({
   const closedPct = totalCasesForPct > 0
     ? Math.round(resolvedCases.length / totalCasesForPct * 100)
     : 0
-  const investigScore = scoreLabel(closedPct)
-  const investigNote  = `${fmtNum(resolvedCases.length)} ${s.sc_of || 'de'} ${fmtNum(totalCasesForPct)} ${s.sc_closed || 'casos resolvidos'} (${closedPct}%)`
+  const investigScore = scoreLabel(invEff.note ? invEff.pct : closedPct)
+  const investigNote  = invEff.note || `${fmtNum(resolvedCases.length)} ${s.sc_of || 'de'} ${fmtNum(totalCasesForPct)} ${s.sc_closed || 'casos resolvidos'} (${closedPct}%)`
 
   // Automação de Resposta: NDR (Modular Sensor connected) + EDR connector
   const hasNDR = dataSensors.some(ds =>

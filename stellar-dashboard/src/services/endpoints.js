@@ -32,6 +32,7 @@ export const PAGING = {
   CASES_PAGE:      500,
   CASES_MAX:       5_000,  // teto por severidade (10 páginas)
   MEDIUM_TOP:      100,
+  CASE_STATS_MAX:   10000, // todos os cases do período para as estatísticas (fetchCaseStats)
   CASE_ALERTS_PAGE: 50,
   CASE_ALERTS_MAX:  500,   // teto por case (10 páginas)
   CASE_ALERTS_CONCURRENCY:    6,   // páginas de alerts em paralelo com HTTP/1.1 (limite do navegador por host)
