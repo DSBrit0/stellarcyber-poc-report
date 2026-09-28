@@ -298,7 +298,16 @@ export function emptyTactics() {
   }
 }
 
-export async function fetchCaseTactics(auth, cases) {
+// Alert pages fetchCaseTactics will request for these cases (limit 50, up to
+// PAGING.CASE_ALERTS_MAX per case) — used to report Sync progress.
+export function caseAlertPages(cases) {
+  return (cases || []).filter(c => c.id).reduce((n, c) =>
+    n + Math.ceil(Math.min(c.alertCount || PAGING.CASE_ALERTS_PAGE, PAGING.CASE_ALERTS_MAX) / PAGING.CASE_ALERTS_PAGE), 0)
+}
+
+// onProgress(n): called with the number of alert pages completed (or skipped), so
+// the pages add up to caseAlertPages(cases).
+export async function fetchCaseTactics(auth, cases, onProgress) {
   if (!cases || cases.length === 0) return emptyTactics()
 
   const client   = createApiClient(auth)
@@ -345,6 +354,8 @@ export async function fetchCaseTactics(auth, cases) {
       if (!caseId) return
       // A API trunca `limit` em 50 — pagina com skip até o size do case (teto CASE_ALERTS_MAX)
       const wanted = Math.min(c.alertCount || PAGING.CASE_ALERTS_PAGE, PAGING.CASE_ALERTS_MAX)
+      const pages  = Math.ceil(wanted / PAGING.CASE_ALERTS_PAGE)
+      let done = 0
       try {
         for (let skip = 0; skip < wanted; skip += PAGING.CASE_ALERTS_PAGE) {
           const res  = await client.get(`${API_PREFIX}/cases/${caseId}/alerts`, {
@@ -353,10 +364,13 @@ export async function fetchCaseTactics(auth, cases) {
           })
           const docs = res.data?.data?.docs ?? []
           processAlerts(docs, caseId)
+          done++
+          onProgress?.(1)
           if (docs.length < PAGING.CASE_ALERTS_PAGE) break
         }
         fetched++
       } catch { /* individual case failure is non-fatal */ }
+      if (done < pages) onProgress?.(pages - done)  // pages not needed (last page reached early) or failed
     }))
   }
 

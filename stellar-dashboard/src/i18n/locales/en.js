@@ -121,6 +121,7 @@ export default {
     syncStatus: {
       waiting: 'Set dates and sync',
       syncing: 'Syncing…',
+      syncingPct: 'Syncing… {pct}%',
       synced:  'Synced',
       stale:   'Period changed — sync again',
     },

@@ -10,6 +10,7 @@ import {
   fetchDataSensors,
   fetchDailyVolume,
   fetchCaseTactics,
+  caseAlertPages,
   emptyTactics,
 } from '../services/api'
 import { useAuth } from './AuthContext'
@@ -41,6 +42,8 @@ export function DataProvider({ children }) {
   const [errors, setErrors]         = useState({})
   const [syncedAt, setSyncedAt]     = useState(null)
   const [syncConfig, setSyncConfig] = useState({ pocStartDate: '', pocEndDate: '' })
+  // Sync progress 0–100: the 9 data fetches + (on Sync) every alert page of the cases.
+  const [progress, setProgress]     = useState(null)
 
   const intervalRef  = useRef(null)
   const syncDatesRef = useRef({ pocStartDate: '', pocEndDate: '' })
@@ -55,19 +58,32 @@ export function DataProvider({ children }) {
     const auth = authRef.current
     if (!auth) return
     setLoading(true)
+    setProgress(0)
     const newErrors = {}
     const dates = syncDatesRef.current
 
+    // Progress: the total is known once the cases arrive (their alert pages);
+    // until then it stays at 0%, and it never goes backwards.
+    const FETCHES = 9
+    let done = 0, total = null
+    const report = () => { if (total) setProgress(Math.min(100, Math.floor((done / total) * 100))) }
+    const step   = (n = 1) => { done += n; report() }
+    const track  = p => p.finally(() => step())
+    const casesP = fetchCases(auth, dates).then(
+      v => { total = FETCHES + (withTactics ? caseAlertPages(v?.cases) : 0); report(); return v },
+      e => { total = FETCHES; report(); throw e },
+    )
+
     const results = await Promise.allSettled([
-      fetchCases(auth, dates),              // 0
-      fetchEntityUsage(auth, dates),        // 1
-      fetchConnectors(auth),                // 2
-      fetchIngestionStats(auth),            // 3
-      fetchIngestionTimeline(auth),         // 4
-      fetchIngestionBySensor(auth, dates),  // 5
-      fetchIngestionByConnector(auth, dates), // 6
-      fetchDataSensors(auth),               // 7
-      fetchDailyVolume(auth, dates),        // 8
+      track(casesP),                               // 0
+      track(fetchEntityUsage(auth, dates)),        // 1
+      track(fetchConnectors(auth)),                // 2
+      track(fetchIngestionStats(auth)),            // 3
+      track(fetchIngestionTimeline(auth)),         // 4
+      track(fetchIngestionBySensor(auth, dates)),  // 5
+      track(fetchIngestionByConnector(auth, dates)), // 6
+      track(fetchDataSensors(auth)),               // 7
+      track(fetchDailyVolume(auth, dates)),        // 8
     ])
 
     // index 0 = fetchCases → returns { cases, lowCount, mediumTotal }
@@ -79,7 +95,7 @@ export function DataProvider({ children }) {
     const casesResult = results[0]
     if (withTactics && casesResult.status === 'fulfilled' && casesResult.value?.cases?.length > 0) {
       try {
-        caseTactics = await fetchCaseTactics(auth, casesResult.value.cases)
+        caseTactics = await fetchCaseTactics(auth, casesResult.value.cases, step)
       } catch (err) {
         warn('DataContext', 'fetchCaseTactics fallback', { error: err.message })
         caseTactics = emptyTactics()
@@ -138,6 +154,8 @@ export function DataProvider({ children }) {
     })
 
     setErrors(newErrors)
+    setProgress(100)
+    await new Promise(r => setTimeout(r, 500))  // data is already set; lets "100%" show before "Synced"
     setSyncedAt(new Date())
     setLoading(false)
   }, [disconnect])
@@ -165,6 +183,7 @@ export function DataProvider({ children }) {
     setSyncConfig({ pocStartDate: '', pocEndDate: '' })
     setData(EMPTY_DATA)
     setErrors({})
+    setProgress(null)
   }, [])
 
   // Reset all state when user disconnects
@@ -190,6 +209,7 @@ export function DataProvider({ children }) {
       errors,
       syncedAt,
       syncConfig,
+      progress,
       sync,
       resetData,
       // backward compat aliases used by Header and Recommendations

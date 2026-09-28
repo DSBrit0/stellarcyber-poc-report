@@ -68,6 +68,7 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
   - Every data call then uses `Authorization: Bearer <jwt>`.
 - `DataContext` is mounted inside `ProtectedLayout`, so it exists only while the user is authenticated.
 - **Nothing is fetched until the user clicks Sync** on the Report page. `sync({pocStartDate, pocEndDate})` stores the dates in a ref, runs `fetchAll` and starts the interval.
+- Sync progress (`DataContext.progress`, 0–100, shown as "Syncing… N%" next to the Sync button): 9 data fetches + every alert page of the cases (`caseAlertPages`); the total is known once the cases arrive, so it stays at 0% until then and never goes backwards. 100% is held for 500 ms before "Synced".
 - Case alerts (MITRE/XDR, the heaviest step) are fetched only on Sync (`fetchAll({ withTactics: true })`); the 5-min polling keeps the previous `caseTactics`. `fetchAll` reads `auth` through a ref so the interval always uses the current (renewed) JWT.
 - The POC period is capped at 30 days in the UI (`SyncBar`).
 - The POC dates are never persisted. Logout wipes all POC metadata from `localStorage`.

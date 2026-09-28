@@ -121,6 +121,7 @@ export default {
     syncStatus: {
       waiting: 'Configure las fechas y sincronice',
       syncing: 'Sincronizando…',
+      syncingPct: 'Sincronizando… {pct}%',
       synced:  'Sincronizado',
       stale:   'Período modificado — sincronice nuevamente',
     },

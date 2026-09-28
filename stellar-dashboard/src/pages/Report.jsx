@@ -142,7 +142,7 @@ function AnalystsList({ analysts, setPocMeta, t }) {
 
 export default function Report() {
   const { auth, tenants, setTenant }                     = useAuth()
-  const { data, loading, errors, syncedAt, syncConfig, sync, resetData } = useData()
+  const { data, loading, errors, syncedAt, syncConfig, sync, resetData, progress } = useData()
   const { t, locale }                                    = useLocale()
   const { pocMeta, setPocMeta }                          = usePocMeta()
   const [generating, setGenerating]                      = useState(false)
@@ -307,6 +307,7 @@ export default function Report() {
         isSynced={isSynced}
         hasDates={hasDates}
         loading={loading}
+        progress={progress}
         onSync={sync}
         t={t}
       />
@@ -624,7 +625,7 @@ function dateDiffDays(startStr, endStr) {
   return Math.ceil((new Date(endStr) - new Date(startStr)) / 86400000)
 }
 
-function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, onSync, t }) {
+function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, progress, onSync, t }) {
   const syncPending = hasDates && !isSynced
 
   function handleStartChange(e) {
@@ -704,7 +705,7 @@ function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, o
         {t('report.sync')}
       </button>
 
-      <SyncStatusPill syncedAt={syncedAt} isSynced={isSynced} loading={loading} hasDates={hasDates} t={t} />
+      <SyncStatusPill syncedAt={syncedAt} isSynced={isSynced} loading={loading} progress={progress} hasDates={hasDates} t={t} />
 
       {/* Disclaimer — max 30 days */}
       <div className="w-full flex items-center gap-1.5" style={{ marginTop: '-2px' }}>
@@ -717,11 +718,11 @@ function SyncBar({ pocMeta, setPocMeta, syncedAt, isSynced, hasDates, loading, o
   )
 }
 
-function SyncStatusPill({ syncedAt, isSynced, loading, hasDates, t }) {
+function SyncStatusPill({ syncedAt, isSynced, loading, progress, hasDates, t }) {
   if (loading) return (
-    <div className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: '#64748b' }}>
+    <div className="flex items-center gap-1.5 text-xs flex-shrink-0" style={{ color: '#64748b' }} aria-live="polite">
       <Loader size={11} className="animate-spin" />
-      {t('report.syncStatus.syncing')}
+      {t('report.syncStatus.syncingPct', { pct: progress ?? 0 })}
     </div>
   )
   if (!syncedAt) return (
