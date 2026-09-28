@@ -1527,8 +1527,8 @@ export function generatePDFReport({
   // Rules: Stellar Cyber 7.0 "Understanding Asset-Based Licensing" / "Understanding
   // License Compliance". "Observed" = highest count present on EACH day of a run.
   y = needsPage(doc, y, 60)
-  y = subTitle(doc, s.sub7_3 || '7.3 License Compliance (Assets)', y)
-  y = bodyText(doc, s.licHowCounted || 'Official license count: every day at 11:59 PM UTC the platform adds up, per tenant, the unique devices (internal IPs) and unique users (emails) observed that day. Every day has a count, including 0.', y)
+  y = subTitle(doc, s.sub7_3 || '7.3 License Compliance', y)
+  y = bodyText(doc, s.licHowCounted || 'Official license count: the platform counts assets of these types: unique devices (internal IPs) and unique users (emails) observed daily.', y)
   y += 2
 
   const lic = assetCompliance(assets)
@@ -1546,7 +1546,7 @@ export function generatePDFReport({
       levelRes[lv.key],
     ])
     y = tableBase(doc,
-      [s.licColLevel || 'Level', s.licColRule || 'Official rule (7.0)', s.licColObserved || 'Assets observed on every day', s.licColPeriod || 'Run', s.licColResult || 'Consequence'],
+      [s.licColLevel || 'Level', s.licColRule || 'Rule', s.licColObserved || 'Assets observed', s.licColPeriod || 'Run', s.licColResult || 'Description'],
       licRows, y,
       { columnStyles: { 0: { cellWidth: 24, fontStyle: 'bold' }, 2: { cellWidth: 26, halign: 'center', fontStyle: 'bold' }, 3: { cellWidth: 30, halign: 'center' } } },
     )
@@ -1570,8 +1570,6 @@ export function generatePDFReport({
         y = bodyText(doc, (s[key] || fallback).replace(/\{l\}/g, l).replace(/\{t\}/g, t), y)
       }
     }
-    y += 2
-    y = bodyText(doc, s.licReference || 'Reference: Stellar Cyber 7.0 official documentation — Understanding Asset-Based Licensing and Understanding License Compliance.', y, { fontSize: 7, color: C.muted })
   }
   y += 4
 
