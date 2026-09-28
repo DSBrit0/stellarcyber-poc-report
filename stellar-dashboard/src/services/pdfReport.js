@@ -2,6 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { Chart, registerables } from 'chart.js'
 import { getMitreMitigation } from '../utils/mitreMapping'
+import { assetStats, assetCompliance } from '../utils/assetCompliance'
 Chart.register(...registerables)
 
 // ─── Color palette ────────────────────────────────────────────────────────────
@@ -653,16 +654,19 @@ export function generatePDFReport({
     c.status === 'active' || c.enabled === true || c.active === true
   )
 
-  // Avg entities/day from assets[] shape: [{ date, entity_count }]
-  // entity_count = daily active entities (hosts/users/devices), NOT alerts
-  const avgEntities = (() => {
-    if (!assets || assets.length === 0) return null
-    const valid = assets.filter(a => a.entity_count != null && a.entity_count > 0)
-    if (!valid.length) return null
-    const avg = valid.reduce((sum, a) => sum + Number(a.entity_count), 0) / valid.length
-    const locStr = locale === 'pt' ? 'pt-BR' : locale === 'es' ? 'es-MX' : 'en-US'
-    return Math.round(avg).toLocaleString(locStr)
-  })()
+  // Asset stats from assets[] shape: [{ date, entity_count }] — the official daily
+  // license count. Every day counts, 0 included (see utils/assetCompliance).
+  const locStr      = locale === 'pt' ? 'pt-BR' : locale === 'es' ? 'es-MX' : 'en-US'
+  const fmtLoc      = n => (n == null ? null : Number(n).toLocaleString(locStr))
+  const fmtDay      = d => new Date(`${d}T00:00:00Z`).toLocaleDateString(locStr, { timeZone: 'UTC' })
+  const entStats    = assetStats(assets)
+  const avgEntities = entStats ? fmtLoc(entStats.avg) : null
+  const minEntities = entStats ? fmtLoc(entStats.min) : null
+  const maxEntities = entStats ? fmtLoc(entStats.max) : null
+  const entDaysNote = entStats
+    ? (s.entitiesDaysNote || '{days} days in period · {zero} with count 0')
+        .replace('{days}', entStats.days).replace('{zero}', entStats.zeroDays)
+    : ''
 
   // lowCount may be the string '500+' when the API capped at 500.
   // Use lowNum (always a number) for arithmetic; keep lowCount for display where the '+' matters.
@@ -786,8 +790,10 @@ export function generatePDFReport({
     [
       s.kpiAvgEntities || 'Média Assets monitorado/Dia',
       avgEntities || '—',
-      s.kpiEntitiesNote || 'Média de assets ativos por dia (hosts / usuários / dispositivos)',
+      [s.kpiEntitiesNote || 'Média de assets ativos por dia (hosts / usuários / dispositivos)', entDaysNote].filter(Boolean).join(' · '),
     ],
+    [s.kpiMinEntities || 'Minimum assets/day', minEntities || '—', s.minEntitiesNote || 'Lowest daily count in the period'],
+    [s.kpiMaxEntities || 'Maximum assets/day', maxEntities || '—', s.maxEntitiesNote || 'Highest daily count in the period (peak)'],
     [
       s.kpiActiveConn || 'Active Sources',
       `${activeConn.length} / ${connectors.length}`,
@@ -1488,8 +1494,10 @@ export function generatePDFReport({
     [
       s.metAvgEntitiesDay || 'Média Ativos/Dia',
       avgEntities || '—',
-      s.entitiesNote || 'Assets diários',
+      [s.entitiesNote || 'Assets diários', entDaysNote].filter(Boolean).join(' · '),
     ],
+    [s.kpiMinEntities || 'Minimum assets/day', minEntities || '—', s.minEntitiesNote || 'Lowest daily count in the period'],
+    [s.kpiMaxEntities || 'Maximum assets/day', maxEntities || '—', s.maxEntitiesNote || 'Highest daily count in the period (peak)'],
     [s.metActiveSources  || 'Active Sources',        fmtNum(activeConn.length),                   `${s.of || 'of'} ${fmtNum(connectors.length)}`],
     [s.metTotalIngested  || 'Total Data Ingested',   fmtGB(totalIngest),                          s.ingestedNote || 'Total do período'],
   ]
@@ -1509,6 +1517,58 @@ export function generatePDFReport({
   ]
   for (const benefit of qualBenefits) {
     y = bodyText(doc, benefit, y)
+  }
+  y += 4
+
+  // ── 7.3 Asset license compliance (informative) ─────────────────────────────
+  // Rules: Stellar Cyber 7.0 "Understanding Asset-Based Licensing" / "Understanding
+  // License Compliance". "Observed" = highest count present on EACH day of a run.
+  y = needsPage(doc, y, 60)
+  y = subTitle(doc, s.sub7_3 || '7.3 License Compliance (Assets)', y)
+  y = bodyText(doc, s.licHowCounted || 'Official license count: every day at 11:59 PM UTC the platform adds up, per tenant, the unique devices (internal IPs) and unique users (emails) observed that day. Every day has a count, including 0.', y)
+  y += 2
+
+  const lic = assetCompliance(assets)
+  if (!lic.stats) {
+    y = infoNote(doc, s.licNoData || 'No asset data in the PoC period.', y)
+  } else {
+    const levelLabel = { warning: s.licWarning || 'Warning', violation: s.licViolation || 'Violation', ooc: s.licOoc || 'Out of Compliance' }
+    const levelRule  = { warning: s.licRuleWarning || 'Above 110% of the limit on each of 3 consecutive days', violation: s.licRuleViolation || 'Above 110% of the limit on each of 7 consecutive days', ooc: s.licRuleOoc || 'Above 110% of the limit for 21 consecutive days (7 to enter Violation + 14 in Violation)' }
+    const levelRes   = { warning: s.licResWarning || 'Removable banner in the UI. Clears after 3 consecutive days at or below 110%.', violation: s.licResViolation || 'Non-removable banner and email to the account admin. Clears after 7 consecutive days at or below 110%.', ooc: s.licResOoc || 'Services cease and a prorated invoice covers the gap between average usage since the first Violation and the license.' }
+    const licRows = lic.levels.map(lv => [
+      levelLabel[lv.key],
+      levelRule[lv.key],
+      lv.sustained ? fmtLoc(lv.sustained.level) : (s.licInsufficient || 'Insufficient period ({n} of {d} days)').replace('{n}', lic.stats.days).replace('{d}', lv.days),
+      lv.sustained ? `${fmtDay(lv.sustained.from)} — ${fmtDay(lv.sustained.to)}` : '—',  // helvetica has no '→'
+      levelRes[lv.key],
+    ])
+    y = tableBase(doc,
+      [s.licColLevel || 'Level', s.licColRule || 'Official rule (7.0)', s.licColObserved || 'Assets observed on every day', s.licColPeriod || 'Run', s.licColResult || 'Consequence'],
+      licRows, y,
+      { columnStyles: { 0: { cellWidth: 24, fontStyle: 'bold' }, 2: { cellWidth: 26, halign: 'center', fontStyle: 'bold' }, 3: { cellWidth: 30, halign: 'center' } } },
+    )
+    y = bodyText(doc, s.licObservedNote || '"Assets observed" is the highest number of assets present on every day of a run. An isolated peak does not sustain a notification.', y, { fontSize: 7.5, color: C.muted })
+    y += 3
+
+    if (lic.recommended != null) {
+      const l = fmtLoc(lic.recommended), t = fmtLoc(lic.limit)
+      y = needsPage(doc, y, 40)
+      y = bodyText(doc, (s.licRecommended || 'Recommended license quantity: {n} assets').replace('{n}', l), y, { bold: true, fontSize: 9.5, color: C.navy })
+      y = bodyText(doc, s.licRecommendedNote || 'Highest level sustained for 3 consecutive days — with this quantity no notification level would be reached in the observed period.', y, { fontSize: 7.5, color: C.muted })
+      y += 2
+      for (const key of ['licDescIntro', 'licDescWarning', 'licDescViolation', 'licDescOoc', 'licDescBreak']) {
+        const fallback = {
+          licDescIntro:     'With {l} asset licenses, the platform tolerates up to {t} assets per day (110%). Beyond that:',
+          licDescWarning:   '• If the daily count stays above {t} assets on 3 consecutive days, the platform issues a Warning: a removable banner appears in the UI.',
+          licDescViolation: '• If it stays above {t} assets for 7 consecutive days, it enters Violation: the banner can no longer be removed and the account admin receives an email.',
+          licDescOoc:       '• If it stays above {t} assets for 21 consecutive days (7 to enter Violation + 14 in Violation), the license is Out of Compliance: services cease and a prorated invoice is issued.',
+          licDescBreak:     'A single day with {t} assets or fewer — including a day with count 0 — breaks the run, and the consecutive-day count starts over.',
+        }[key]
+        y = bodyText(doc, (s[key] || fallback).replace(/\{l\}/g, l).replace(/\{t\}/g, t), y)
+      }
+    }
+    y += 2
+    y = bodyText(doc, s.licReference || 'Reference: Stellar Cyber 7.0 official documentation — Understanding Asset-Based Licensing and Understanding License Compliance.', y, { fontSize: 7, color: C.muted })
   }
   y += 4
 

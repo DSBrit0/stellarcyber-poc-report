@@ -84,6 +84,7 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 - **MITRE / XDR:** `fetchCaseTactics` calls `/cases/{id}/alerts` for each kept case (batches of 15). The API caps `limit` at 50, so it pages with `skip` up to the case `size` (cap `PAGING.CASE_ALERTS_MAX`). Tactics starting with `TA` count as MITRE; `XTA`/`XT` count as Stellar XDR proprietary.
 - **Sensors:** `/ingestion-stats/sensor` returns only UUIDs. They are joined with `/data_sensors` in `fetchAll` to get hostname, type and version.
 - `entity_usages/daily_count` supports only `days` (1–31, 422 otherwise); the series ends on the previous day. For POCs that ended more than 31 days ago, asset data comes back empty.
+- **Assets / license compliance:** `daily_count` is the official daily license count (checked equal, day by day, to the size of `/entity_usages/entity_list/tenant?date=`). `utils/assetCompliance.js` computes min / average / max over every day of the period (days with 0 included, as the docs count every day) and the sustained level for 3 / 7 / 21 consecutive days (highest count present on each day of a run). The PDF shows min/avg/max in the Section 1 KPI table and 7.1, and section **7.3 License Compliance (Assets)** with the Stellar Cyber 7.0 rules: exceeded means above 110% of the license on each consecutive day (Warning 3, Violation 7, Out of Compliance 21 = 7 + 14). The recommended license is the 3-day sustained level.
 - The POC date boundaries (`dayStart`/`dayEnd`) are 00:00:00.000–23:59:59.999 UTC.
 
 ### PDF export
