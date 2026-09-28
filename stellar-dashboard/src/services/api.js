@@ -305,7 +305,20 @@ export function caseAlertPages(cases) {
     n + Math.ceil(Math.min(c.alertCount || PAGING.CASE_ALERTS_PAGE, PAGING.CASE_ALERTS_MAX) / PAGING.CASE_ALERTS_PAGE), 0)
 }
 
-// onProgress(n): called with the number of alert pages completed (or skipped), so
+// Requests in flight for the case alerts. Over HTTP/1.1 the browser opens at most 6
+// connections per host (more requests only queue, and the queue time counts against the
+// timeout); over HTTP/2 they share one connection, so more can run at once. The Stellar
+// API was measured at 6 → 172 s, 12 → 104 s, 24 → 68 s for 639 pages, with no errors.
+function alertConcurrency() {
+  try {
+    const proto = performance.getEntriesByType('navigation')[0]?.nextHopProtocol || ''
+    return /^h[23]$/.test(proto) ? PAGING.CASE_ALERTS_CONCURRENCY_H2 : PAGING.CASE_ALERTS_CONCURRENCY
+  } catch {
+    return PAGING.CASE_ALERTS_CONCURRENCY
+  }
+}
+
+// onProgress(n): called with the number of alert pages completed (or failed), so
 // the pages add up to caseAlertPages(cases).
 export async function fetchCaseTactics(auth, cases, onProgress) {
   if (!cases || cases.length === 0) return emptyTactics()
@@ -345,34 +358,41 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
     }
   }
 
-  const BATCH = 15
-  let fetched = 0
-  for (let i = 0; i < cases.length; i += BATCH) {
-    const batch = cases.slice(i, i + BATCH)
-    await Promise.allSettled(batch.map(async (c) => {
-      const caseId = c.id
-      if (!caseId) return
-      // A API trunca `limit` em 50 — pagina com skip até o size do case (teto CASE_ALERTS_MAX)
-      const wanted = Math.min(c.alertCount || PAGING.CASE_ALERTS_PAGE, PAGING.CASE_ALERTS_MAX)
-      const pages  = Math.ceil(wanted / PAGING.CASE_ALERTS_PAGE)
-      let done = 0
+  // One queue with every alert page of every case (the case `size` gives the page count
+  // up front), worked by a small pool. Pages of the same case run in parallel, so one
+  // big case no longer holds a slot for 10 sequential requests. Pool size: see
+  // alertConcurrency(). A failed page is retried once and never drops the rest of the case.
+  const pages = cases.filter(c => c?.id).flatMap(c => {
+    const wanted = Math.min(c.alertCount || PAGING.CASE_ALERTS_PAGE, PAGING.CASE_ALERTS_MAX)
+    return Array.from({ length: Math.ceil(wanted / PAGING.CASE_ALERTS_PAGE) }, (_, k) => ({ caseId: c.id, skip: k * PAGING.CASE_ALERTS_PAGE }))
+  })
+  let failed = 0
+  async function fetchPage({ caseId, skip }) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        for (let skip = 0; skip < wanted; skip += PAGING.CASE_ALERTS_PAGE) {
-          const res  = await client.get(`${API_PREFIX}/cases/${caseId}/alerts`, {
-            params:  { limit: PAGING.CASE_ALERTS_PAGE, skip },
-            timeout: 15_000,
-          })
-          const docs = res.data?.data?.docs ?? []
-          processAlerts(docs, caseId)
-          done++
-          onProgress?.(1)
-          if (docs.length < PAGING.CASE_ALERTS_PAGE) break
+        const res = await client.get(`${API_PREFIX}/cases/${caseId}/alerts`, {
+          params:  { limit: PAGING.CASE_ALERTS_PAGE, skip },
+          timeout: 15_000,
+        })
+        processAlerts(res.data?.data?.docs ?? [], caseId)
+        return
+      } catch (err) {
+        if (attempt === 1) {
+          failed++
+          warn('api', `case ${caseId} alerts (skip ${skip}) failed`, { error: err.message })
         }
-        fetched++
-      } catch { /* individual case failure is non-fatal */ }
-      if (done < pages) onProgress?.(pages - done)  // pages not needed (last page reached early) or failed
-    }))
+      }
+    }
   }
+  const queue = [...pages]
+  const workers = Array.from({ length: Math.min(alertConcurrency(), queue.length) }, async () => {
+    while (queue.length) {
+      await fetchPage(queue.shift())
+      onProgress?.(1)
+    }
+  })
+  await Promise.all(workers)
+  const fetched = `${pages.length - failed}/${pages.length} pages`
 
   function toArray(map) {
     return Array.from(map.values())
@@ -381,7 +401,7 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
   }
 
   const detectedTacticIds = new Set(mitreT.keys())
-  info('api', `fetchCaseTactics ✅ ${fetched}/${cases.length} cases | MITRE tactics: ${detectedTacticIds.size} | Stellar tactics: ${stellarT.size}`)
+  info('api', `fetchCaseTactics ✅ ${cases.length} cases, ${fetched} | MITRE tactics: ${detectedTacticIds.size} | Stellar tactics: ${stellarT.size}`)
   return {
     mitre: {
       detectedTacticIds,

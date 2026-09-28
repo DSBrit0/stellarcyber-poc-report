@@ -51,12 +51,22 @@ export function DataProvider({ children }) {
   // cada ciclo usa o JWT atual (renovado a cada ~9 min) em vez do token do Sync.
   const authRef = useRef(auth)
   useEffect(() => { authRef.current = auth }, [auth])
+  // A Sync with case alerts can take longer than the 5-min polling interval. runRef
+  // numbers each run: a polling tick is skipped while a run is in flight (it would
+  // otherwise finish first and mark the data "Synced" before the MITRE tactics
+  // arrive), and a run superseded by resetData / logout / a new Sync is discarded.
+  const runRef  = useRef(0)
+  const busyRef = useRef(false)
 
   // withTactics: busca os alerts dos cases (MITRE/XDR). Só no Sync — é a etapa mais
   // pesada (paginação de alerts); no polling o resultado anterior é mantido.
   const fetchAll = useCallback(async ({ withTactics = false } = {}) => {
     const auth = authRef.current
     if (!auth) return
+    if (!withTactics && busyRef.current) return   // polling tick during a Sync
+    const run = ++runRef.current
+    const current = () => run === runRef.current
+    busyRef.current = true
     setLoading(true)
     setProgress(0)
     const newErrors = {}
@@ -66,13 +76,27 @@ export function DataProvider({ children }) {
     // until then it stays at 0%, and it never goes backwards.
     const FETCHES = 9
     let done = 0, total = null
-    const report = () => { if (total) setProgress(Math.min(100, Math.floor((done / total) * 100))) }
+    const report = () => { if (total && current()) setProgress(Math.min(100, Math.floor((done / total) * 100))) }
     const step   = (n = 1) => { done += n; report() }
     const track  = p => p.finally(() => step())
     const casesP = fetchCases(auth, dates).then(
       v => { total = FETCHES + (withTactics ? caseAlertPages(v?.cases) : 0); report(); return v },
       e => { total = FETCHES; report(); throw e },
     )
+
+    // MITRE + Stellar XDR tactics: each case pages through /cases/{id}/alerts. Starts as
+    // soon as the cases arrive, in parallel with the other data fetches.
+    const tacticsP = withTactics
+      ? casesP.then(
+          v => (v?.cases?.length > 0
+            ? fetchCaseTactics(auth, v.cases, step).catch(err => {
+                warn('DataContext', 'fetchCaseTactics fallback', { error: err.message })
+                return emptyTactics()
+              })
+            : null),
+          () => null,
+        )
+      : Promise.resolve(null)
 
     const results = await Promise.allSettled([
       track(casesP),                               // 0
@@ -89,18 +113,9 @@ export function DataProvider({ children }) {
     // index 0 = fetchCases → returns { cases, lowCount, mediumTotal }
     const keys = ['cases', 'assets', 'connectors', 'ingestionStats', 'ingestionTimeline', 'ingestionBySensor', 'ingestionByConnector', 'dataSensors', 'dailyVolume']
 
-    // Fetch MITRE + Stellar XDR tactic data for cases in the POC period.
-    // Runs after cases are available; each case pages through /cases/{id}/alerts.
-    let caseTactics = null
-    const casesResult = results[0]
-    if (withTactics && casesResult.status === 'fulfilled' && casesResult.value?.cases?.length > 0) {
-      try {
-        caseTactics = await fetchCaseTactics(auth, casesResult.value.cases, step)
-      } catch (err) {
-        warn('DataContext', 'fetchCaseTactics fallback', { error: err.message })
-        caseTactics = emptyTactics()
-      }
-    }
+    const caseTactics = await tacticsP
+
+    if (!current()) return   // superseded (tenant switch, logout or a newer Sync)
 
     // Enrich ingestionBySensor: /ingestion-stats/sensor returns only UUIDs (entry_identifier).
     // Cross-reference with /data_sensors (sensor_id) to get hostname, type, and version.
@@ -156,8 +171,10 @@ export function DataProvider({ children }) {
     setErrors(newErrors)
     setProgress(100)
     await new Promise(r => setTimeout(r, 500))  // data is already set; lets "100%" show before "Synced"
+    if (!current()) return
     setSyncedAt(new Date())
     setLoading(false)
+    busyRef.current = false
   }, [disconnect])
 
   // sync(dates) — manual trigger from UI; updates dates + fetches + restarts 5-min interval
@@ -178,6 +195,9 @@ export function DataProvider({ children }) {
   const resetData = useCallback(() => {
     clearInterval(intervalRef.current)
     intervalRef.current = null
+    runRef.current++          // discard any run still in flight
+    busyRef.current = false
+    setLoading(false)
     syncDatesRef.current = { pocStartDate: '', pocEndDate: '' }
     setSyncedAt(null)
     setSyncConfig({ pocStartDate: '', pocEndDate: '' })
@@ -191,6 +211,9 @@ export function DataProvider({ children }) {
     if (!auth) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
+      runRef.current++
+      busyRef.current = false
+      setLoading(false)
       setSyncedAt(null)
       setSyncConfig({ pocStartDate: '', pocEndDate: '' })
       syncDatesRef.current = { pocStartDate: '', pocEndDate: '' }

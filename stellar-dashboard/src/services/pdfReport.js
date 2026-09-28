@@ -312,6 +312,9 @@ function drawLicenseCompliance(doc, y, lic, { fmt, fmtDay, txt, hideShortPeriod 
 }
 
 // ─── Chart rendering ──────────────────────────────────────────────────────────
+// jsPDF stores PNG pixels uncompressed by default (a 30-day report reached tens of
+// MB); every addImage passes this Flate level instead. Lossless: the image is identical.
+const IMG_COMPRESSION = 'FAST'
 const PX_PER_MM = 8
 const pxpt = n => Math.round(n * PX_PER_MM * 0.353)
 
@@ -795,7 +798,7 @@ function t2Card(doc, x, y, w, h, title, note) {
 function t2Chart(doc, area, factory) {
   if (!area || area.w <= 0 || area.h <= 0) return
   const png = renderChartPNG(() => { const cfg = factory(); cfg.options = { ...(cfg.options || {}), locale: _locStr }; return cfg }, area.w, area.h)
-  if (png) doc.addImage(png, 'PNG', area.x, area.y, area.w, area.h)
+  if (png) doc.addImage(png, 'PNG', area.x, area.y, area.w, area.h, undefined, IMG_COMPRESSION)
 }
 
 // ─── Template 2 chart configs ────────────────────────────────────────────────
@@ -1738,7 +1741,7 @@ export function generatePDFReport({
         chartW, chartH
       )
       if (sevPng) {
-        doc.addImage(sevPng, 'PNG', c1x, c1y, chartW, chartH)
+        doc.addImage(sevPng, 'PNG', c1x, c1y, chartW, chartH, undefined, IMG_COMPRESSION)
         const cx1 = c1x + chartW / 2
         const cy1 = c1y + chartH * 0.37
         doc.setFont('helvetica', 'bold')
@@ -1767,7 +1770,7 @@ export function generatePDFReport({
         chartW, chartH
       )
       if (statusPng) {
-        doc.addImage(statusPng, 'PNG', c2x, c2y, chartW, chartH)
+        doc.addImage(statusPng, 'PNG', c2x, c2y, chartW, chartH, undefined, IMG_COMPRESSION)
         const cx2 = c2x + chartW / 2
         const cy2 = c2y + chartH * 0.37
         const openPct2 = cases.length > 0 ? Math.round((openCases.length / cases.length) * 100) : 0
@@ -1792,7 +1795,7 @@ export function generatePDFReport({
       chartW, chartH
     )
     if (gaugePng) {
-      doc.addImage(gaugePng, 'PNG', c3x, c3y, chartW, chartH)
+      doc.addImage(gaugePng, 'PNG', c3x, c3y, chartW, chartH, undefined, IMG_COMPRESSION)
       const cx3 = c3x + chartW / 2
       const cy3 = c3y + chartH * 0.45
       doc.setFont('helvetica', 'bold')
@@ -1817,7 +1820,7 @@ export function generatePDFReport({
         chartW, chartH
       )
       if (srcPng) {
-        doc.addImage(srcPng, 'PNG', c4x, c4y, chartW, chartH)
+        doc.addImage(srcPng, 'PNG', c4x, c4y, chartW, chartH, undefined, IMG_COMPRESSION)
         const cx4 = c4x + chartW / 2
         const cy4 = c4y + chartH * 0.37
         doc.setFont('helvetica', 'bold')
@@ -1938,7 +1941,7 @@ export function generatePDFReport({
       const drawW = imgW * ratio
       const drawH = imgH * ratio
       const drawX = ML + (CW - drawW) / 2
-      doc.addImage(imgData, 'PNG', drawX, y, drawW, drawH)
+      doc.addImage(imgData, 'PNG', drawX, y, drawW, drawH, undefined, IMG_COMPRESSION)
       y += drawH + 6
     } catch (_e) {
       y = infoNote(doc, s.archImageError || 'Architecture image could not be rendered.', y)
@@ -2096,7 +2099,7 @@ export function generatePDFReport({
         CW, 50
       )
       if (dtPng) {
-        doc.addImage(dtPng, 'PNG', ML, y + 5, CW, 50)
+        doc.addImage(dtPng, 'PNG', ML, y + 5, CW, 50, undefined, IMG_COMPRESSION)
         y += 57
       }
     }
@@ -2116,7 +2119,7 @@ export function generatePDFReport({
         CW, 45
       )
       if (tlPng) {
-        doc.addImage(tlPng, 'PNG', ML, y + 5, CW, 45)
+        doc.addImage(tlPng, 'PNG', ML, y + 5, CW, 45, undefined, IMG_COMPRESSION)
         y += 52
       }
     }
@@ -2274,7 +2277,7 @@ export function generatePDFReport({
       CW, 55
     )
     if (techPng) {
-      doc.addImage(techPng, 'PNG', ML, y + 5, CW, 55)
+      doc.addImage(techPng, 'PNG', ML, y + 5, CW, 55, undefined, IMG_COMPRESSION)
       y += 62
     }
   }

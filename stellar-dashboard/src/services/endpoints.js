@@ -34,6 +34,8 @@ export const PAGING = {
   MEDIUM_TOP:      100,
   CASE_ALERTS_PAGE: 50,
   CASE_ALERTS_MAX:  500,   // teto por case (10 páginas)
+  CASE_ALERTS_CONCURRENCY:    6,   // páginas de alerts em paralelo com HTTP/1.1 (limite do navegador por host)
+  CASE_ALERTS_CONCURRENCY_H2: 16,  // com HTTP/2 (uma conexão multiplexada)
 }
 
 // HTTP status codes that warrant an automatic retry

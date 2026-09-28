@@ -22,8 +22,11 @@ server {
 
 # HTTPS — bloco principal
 server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
+    # http2: the browser multiplexes every request on one connection instead of the
+    # 6-per-host limit of HTTP/1.1 — the Sync fetches hundreds of case-alert pages.
+    # (nginx 1.24 syntax; from 1.25.1 the equivalent is a separate "http2 on;")
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name {{DOMAIN}};
 
     # Certificados gerenciados pelo Certbot — NÃO editar manualmente
