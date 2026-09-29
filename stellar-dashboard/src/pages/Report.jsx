@@ -449,28 +449,6 @@ export default function Report() {
             </select>
           </Field>
 
-          {/* Executive report premises (4.1, question 5) */}
-          {reportTemplate === 2 && (
-            <>
-              <SubSection label={t('report.effortSection')} icon={Clock} />
-              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{t('report.effortHint')}</p>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-                {[
-                  ['effortAlertMin',    EFFORT_DEFAULTS.alertMin],
-                  ['effortCritHighMin', EFFORT_DEFAULTS.critHighMin],
-                  ['effortMediumMin',   EFFORT_DEFAULTS.mediumMin],
-                  ['effortLowMin',      EFFORT_DEFAULTS.lowMin],
-                  ['effortMonthHours',  EFFORT_DEFAULTS.monthHours],
-                ].map(([key, def]) => (
-                  <Field key={key} label={t(`report.${key}`)}>
-                    <input style={INPUT} type="number" min={key === 'effortMonthHours' ? 1 : 0} step="any" inputMode="decimal"
-                      placeholder={String(def)} value={pocMeta[key] ?? ''} onChange={setField(key)} />
-                  </Field>
-                ))}
-              </div>
-            </>
-          )}
-
           {/* Comments */}
           <Field label={t('report.comments')}>
             <div style={{ position: 'relative' }}>
@@ -492,55 +470,80 @@ export default function Report() {
             </div>
           </Field>
 
-          {/* ── Arquitetura Mínima Sugerida ── */}
-          <SubSection label={t('report.archSection')} icon={Layers} />
-
-          <input
-            ref={archImageRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleArchImageUpload}
-          />
-
-          {pocMeta.architectureImage ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <img
-                src={pocMeta.architectureImage}
-                alt="architecture"
-                style={{
-                  width: '100%', borderRadius: '8px', objectFit: 'contain',
-                  border: '1px solid rgba(0,212,255,0.18)', maxHeight: '320px',
-                  background: 'rgba(0,0,0,0.2)',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setPocMeta({ architectureImage: '', architectureImageDims: null })}
-                style={{
-                  alignSelf: 'flex-start',
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
-                  background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-                  color: '#fca5a5', cursor: 'pointer',
-                }}
-              >
-                <Trash2 size={12} />{t('report.archRemove')}
-              </button>
-            </div>
+          {/* Executive report: premises of 4.1 question 5 (it has no architecture page).
+              Technical report: minimum suggested architecture. */}
+          {reportTemplate === 2 ? (
+            <>
+              <SubSection label={t('report.effortSection')} icon={Clock} />
+              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{t('report.effortHint')}</p>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+                {[
+                  ['effortAlertMin',    EFFORT_DEFAULTS.alertMin],
+                  ['effortCritHighMin', EFFORT_DEFAULTS.critHighMin],
+                  ['effortMediumMin',   EFFORT_DEFAULTS.mediumMin],
+                  ['effortLowMin',      EFFORT_DEFAULTS.lowMin],
+                  ['effortMonthHours',  EFFORT_DEFAULTS.monthHours],
+                ].map(([key, def]) => (
+                  <Field key={key} label={t(`report.${key}`)}>
+                    <input style={INPUT} type="number" min={key === 'effortMonthHours' ? 1 : 0} step="any" inputMode="decimal"
+                      placeholder={String(def)} value={pocMeta[key] ?? ''} onChange={setField(key)} />
+                  </Field>
+                ))}
+              </div>
+            </>
           ) : (
-            <button
-              type="button"
-              onClick={() => archImageRef.current?.click()}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '10px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                background: 'rgba(0,212,255,0.06)', border: '1px dashed rgba(0,212,255,0.3)',
-                color: '#00d4ff', cursor: 'pointer', width: '100%', justifyContent: 'center',
-              }}
-            >
-              <Upload size={14} />{t('report.archUpload')}
-            </button>
+            <>
+              {/* ── Arquitetura Mínima Sugerida ── */}
+              <SubSection label={t('report.archSection')} icon={Layers} />
+
+              <input
+                ref={archImageRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleArchImageUpload}
+              />
+
+              {pocMeta.architectureImage ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <img
+                    src={pocMeta.architectureImage}
+                    alt="architecture"
+                    style={{
+                      width: '100%', borderRadius: '8px', objectFit: 'contain',
+                      border: '1px solid rgba(0,212,255,0.18)', maxHeight: '320px',
+                      background: 'rgba(0,0,0,0.2)',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPocMeta({ architectureImage: '', architectureImageDims: null })}
+                    style={{
+                      alignSelf: 'flex-start',
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+                      background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                      color: '#fca5a5', cursor: 'pointer',
+                    }}
+                  >
+                    <Trash2 size={12} />{t('report.archRemove')}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => archImageRef.current?.click()}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '10px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                    background: 'rgba(0,212,255,0.06)', border: '1px dashed rgba(0,212,255,0.3)',
+                    color: '#00d4ff', cursor: 'pointer', width: '100%', justifyContent: 'center',
+                  }}
+                >
+                  <Upload size={14} />{t('report.archUpload')}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
