@@ -13,6 +13,7 @@ import { downloadPDFReport } from '../services/pdfReport'
 import { formatRelative } from '../utils/formatters'
 import { VERDICTS, verdictCode, verdictLabelKey } from '../utils/verdict'
 import { normalizeImageFile } from '../utils/image'
+import { EFFORT_DEFAULTS } from '../utils/caseStory'
 
 const INPUT = {
   background: 'rgba(255,255,255,0.05)',
@@ -447,6 +448,28 @@ export default function Report() {
               ))}
             </select>
           </Field>
+
+          {/* Executive report premises (4.1, question 5) */}
+          {reportTemplate === 2 && (
+            <>
+              <SubSection label={t('report.effortSection')} icon={Clock} />
+              <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>{t('report.effortHint')}</p>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+                {[
+                  ['effortAlertMin',    EFFORT_DEFAULTS.alertMin],
+                  ['effortCritHighMin', EFFORT_DEFAULTS.critHighMin],
+                  ['effortMediumMin',   EFFORT_DEFAULTS.mediumMin],
+                  ['effortLowMin',      EFFORT_DEFAULTS.lowMin],
+                  ['effortMonthHours',  EFFORT_DEFAULTS.monthHours],
+                ].map(([key, def]) => (
+                  <Field key={key} label={t(`report.${key}`)}>
+                    <input style={INPUT} type="number" min={key === 'effortMonthHours' ? 1 : 0} step="any" inputMode="decimal"
+                      placeholder={String(def)} value={pocMeta[key] ?? ''} onChange={setField(key)} />
+                  </Field>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Comments */}
           <Field label={t('report.comments')}>

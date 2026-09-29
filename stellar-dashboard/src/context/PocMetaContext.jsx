@@ -23,6 +23,12 @@ const DEFAULTS = {
   version:              '1.0',
   verdict:              '',
   comments:             '',
+  // Executive report 4.1, question 5 (utils/caseStory EFFORT_DEFAULTS when empty)
+  effortAlertMin:       '',
+  effortCritHighMin:    '',
+  effortMediumMin:      '',
+  effortLowMin:         '',
+  effortMonthHours:     '',
   architectureImageDims: null,
 }
 

@@ -5,6 +5,7 @@ import { getMitreMitigation } from '../utils/mitreMapping'
 import { assetStats, assetCompliance } from '../utils/assetCompliance'
 import { verdictCode, verdictLabel } from '../utils/verdict'
 import { volumeStats, volumeCompliance } from '../utils/volumeStats'
+import { signalFunnel, topThreats, priorityMatrix, responseScorecard, effortEstimate, effortPremises, SOC_TARGETS } from '../utils/caseStory'
 Chart.register(...registerables)
 
 // ─── Color palette ────────────────────────────────────────────────────────────
@@ -1330,9 +1331,482 @@ function t2DetectionCharts(doc, y, s, d) {
   // Every case of the period (caseStats.byStatus); falls back to the loaded cases
   const st = Object.entries(d.byStatus || d.cases.reduce((m, c) => { const k = c.status || '—'; m[k] = (m[k] || 0) + 1; return m }, {})).sort((p, q) => q[1] - p[1])
   if (st.length) {
-    t2Chart(doc, e, () => t2PieChart(st.map(x => x[0]), st.map(x => x[1]), st.map(x => statusColor(x[0])).map((c, k) => (c === C.muted ? T2_PALETTE[k % T2_PALETTE.length] : c)), { cutout: 58 }))
+    t2Chart(doc, e, () => t2PieChart(st.map(x => t2Status(x[0])), st.map(x => x[1]), st.map(x => statusColor(x[0])).map((c, k) => (c === C.muted ? T2_PALETTE[k % T2_PALETTE.length] : c)), { cutout: 58 }))
   }
   return y + h3 + 8
+}
+
+// ─── Template 2 section 4.1: the detection story (five questions) ────────────
+// Data from utils/caseStory.js; each block opens with its question and a one-line
+// answer so a reader who skips the charts still gets the conclusion.
+const T2_LAMP = { green: C.green, yellow: [232, 160, 0], red: C.red, none: [190, 196, 205], info: C.blue }
+const fmtDec = (n, d = 1) => Number(n).toLocaleString(_locStr, { maximumFractionDigits: d })
+function fmtDur(min) {
+  if (min == null) return '—'
+  if (min < 60) return `${Math.round(min)} min`
+  return `${fmtDec(min / 60, 1)} h`
+}
+// 'dd/mm hh:mm UTC' from epoch ms
+function fmtDayTimeUTC(ms) {
+  if (!Number.isFinite(ms)) return '—'
+  const d = new Date(ms)
+  return `${d.toLocaleDateString(_locStr, { day: '2-digit', month: '2-digit', timeZone: 'UTC' })} ${d.toLocaleTimeString(_locStr, { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })} UTC`
+}
+const fill = (s, vars) => Object.entries(vars).reduce((t, [k, v]) => t.split(`{${k}}`).join(String(v)), String(s || ''))
+
+// "QUESTION n OF t" chip, the question and its answer. `need` = height of the block
+// that follows, so the question never ends a page alone.
+function t2Question(doc, y, s, n, total, question, answer, need) {
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  const ans = doc.splitTextToSize(answer || '', CW)
+  y = needsPage(doc, y, 16 + ans.length * 4.2 + (need || 0))
+  const chip = fill(s.t2StoryStep || 'QUESTION {n} OF {t}', { n, t: total })
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.5)
+  const cw = doc.getTextWidth(chip) + 5
+  i(doc, C.blue)
+  doc.roundedRect(ML, y, cw, 5, 1, 1, 'F')
+  doc.setTextColor(...C.white)
+  doc.text(chip, ML + 2.5, y + 3.5)
+  doc.setFontSize(12)
+  doc.setTextColor(...C.navy)
+  doc.text(question, ML, y + 11.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...C.text)
+  doc.text(ans, ML, y + 17)
+  return y + 17 + ans.length * 4.2 + 1.5
+}
+
+function t2StoryNote(doc, y, text) {
+  if (!text) return y
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.2)
+  doc.setTextColor(...C.muted)
+  const lines = doc.splitTextToSize(text, CW)
+  doc.text(lines, ML, y + 2)
+  return y + 2 + lines.length * 2.7 + 5
+}
+
+// Filled polygon from absolute points (jsPDF lines() takes relative segments)
+function t2Poly(doc, pts) {
+  const segs = pts.slice(1).map((p, k) => [p[0] - pts[k][0], p[1] - pts[k][1]])
+  doc.lines(segs, pts[0][0], pts[0][1], [1, 1], 'F', true)
+}
+
+// Q1 — signal funnel: data → alerts → cases → Critical/High → pending.
+function t2Funnel(doc, y, s, f, fmtVol) {
+  const stages = [
+    f.volumeGB != null && { v: fmtVol(f.volumeGB), l: s.t2FunVolume || 'Data analyzed', sub: s.t2FunVolumeSub || 'daily volume summed over the period', c: [143, 163, 191] },
+    { v: fmtNum(f.alerts), l: s.t2FunAlerts || 'Correlated alerts', sub: s.t2FunAlertsSub || 'grouped into cases automatically', c: C.midBlue },
+    { v: fmtNum(f.cases), l: s.t2FunCases || 'Cases created', sub: fill(s.t2FunCasesSub || '{r} alerts per case on average', { r: fmtDec(f.alertsPerCase) }), c: C.blue },
+    { v: fmtNum(f.critHigh), l: s.t2FunCritHigh || 'Critical + High', sub: fill(s.t2FunCritHighSub || '{p}% of the cases; need immediate action', { p: fmtDec(f.critHighShare * 100) }), c: C.navy },
+    { v: fmtNum(f.pending), l: s.t2FunPending || 'Still pending', sub: f.pending
+      ? fill(s.t2FunPendingSub || '{c} Critical · {h} High not resolved', { c: f.pendingCritical, h: f.pendingHigh })
+      : (s.t2FunPendingNone || 'all resolved'), c: f.pending ? C.red : C.green },
+  ].filter(Boolean)
+  const barW = 116, bh = 10, gap = 1.8, minW = barW * 0.3
+  const step = stages.length > 1 ? (barW - minW) / (stages.length - 1) : 0
+  const cx = ML + barW / 2
+  stages.forEach((st, k) => {
+    const wTop = barW - k * step, wBot = Math.max(minW * 0.9, wTop - step * 0.55), by = y + k * (bh + gap)
+    i(doc, st.c)
+    t2Poly(doc, [[cx - wTop / 2, by], [cx + wTop / 2, by], [cx + wBot / 2, by + bh], [cx - wBot / 2, by + bh]])
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.setTextColor(...C.white)
+    doc.text(st.v, cx, by + bh / 2 + 1.5, { align: 'center' })
+    doc.setFontSize(8)
+    doc.setTextColor(...C.navy)
+    doc.text(st.l, ML + barW + 6, by + 4)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.6)
+    doc.setTextColor(...T2C.slate)
+    doc.text(trunc(st.sub, 58), ML + barW + 6, by + 7.8)
+  })
+  y += stages.length * (bh + gap) + 3
+
+  const tiles = [
+    [`${fmtDec(f.critHighAlertShare * 100)}%`, fill(s.t2FunTileShare || 'of the alerts are in the {n} Critical/High cases', { n: fmtNum(f.critHigh) })],
+    [`${fmtDec(f.alertsPerCase)} : 1`, s.t2FunTileRatio || 'alerts per case: what the team no longer triages one by one'],
+    [fmtNum(f.pending), s.t2FunTilePending || 'Critical/High cases pending at the end of the period'],
+  ]
+  const tw = (CW - 6) / 3, th = 15
+  tiles.forEach(([v, l], k) => {
+    const tx = ML + k * (tw + 3)
+    i(doc, T2C.tile)
+    doc.setDrawColor(...T2C.border)
+    doc.setLineWidth(0.25)
+    doc.roundedRect(tx, y, tw, th, 1.5, 1.5, 'FD')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.setTextColor(...(k === 2 && f.pending ? C.red : C.navy))
+    doc.text(v, tx + 3, y + 6.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.3)
+    doc.setTextColor(...T2C.slate)
+    doc.text(doc.splitTextToSize(l, tw - 6).slice(0, 2), tx + 3, y + 10.3)
+  })
+  return y + th + 1
+}
+
+// Case status in the report language (Template 2 only; unknown statuses as the API returns them)
+function t2Status(status) {
+  const st = String(status || 'New')
+  return (_s.t2StatusNames || {})[st.toLowerCase().replace(/[\s_-]+/g, '')] || st
+}
+
+function t2StatusPill(doc, x, y, status, pending, alignRight) {
+  const raw = String(status || 'New')
+  const st = t2Status(raw)
+  const col = !pending ? C.green : /new|open/i.test(raw) ? C.red : C.orange
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5.8)
+  const w = doc.getTextWidth(st) + 4
+  const px = alignRight ? x - w : x
+  i(doc, tint(col, 0.16))
+  doc.roundedRect(px, y - 3, w, 4.2, 2.1, 2.1, 'F')
+  doc.setTextColor(...col)
+  doc.text(st, px + 2, y)
+}
+
+// Q2 — top threats: the first case as a headline card, the next four as cards.
+function t2ThreatCards(doc, y, s, top) {
+  const H = 70, hw = 76, g = 3
+  const sevTxt = c => `${(c.critical ? (s.sevCritical || 'Critical') : (s.sevHigh || 'High')).toUpperCase()}${c.score != null ? ` · SCORE ${c.score}` : ''}`
+  const tacLine = c => (c.tactics.length ? `MITRE: ${c.tactics.join(' · ')}` : c.xdr.length ? `XDR: ${c.xdr.join(' · ')}` : '')
+  // headline card
+  const h = top[0], x = ML
+  i(doc, T2C.deep)
+  doc.roundedRect(x, y, hw, H, 2, 2, 'F')
+  i(doc, h.critical ? C.red : C.orange)
+  doc.rect(x, y + 2, 1.4, H - 4, 'F')
+  let cy = y + 7
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.6)
+  doc.setTextColor(...(h.critical ? [255, 138, 138] : [255, 184, 108]))
+  doc.text(`#1  ${sevTxt(h)}`, x + 5, cy)
+  t2StatusPill(doc, x + hw - 4, cy, h.status, h.pending, true)
+  cy += 6
+  doc.setFontSize(10.5)
+  doc.setTextColor(...C.white)
+  const nm = doc.splitTextToSize(h.name, hw - 10).slice(0, 3)
+  doc.text(nm, x + 5, cy)
+  cy += nm.length * 4.6 + 1.5
+  if (tacLine(h)) {
+    doc.setFontSize(6.8)
+    doc.setTextColor(...T2C.cyan)
+    const tl = doc.splitTextToSize(tacLine(h), hw - 10).slice(0, 2)
+    doc.text(tl, x + 5, cy)
+    cy += tl.length * 3.2 + 0.8
+  }
+  if (h.techniques.length) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.3)
+    doc.setTextColor(...T2C.light)
+    const tq = doc.splitTextToSize(`${s.t2Techniques || 'Techniques'}: ${h.techniques.join(', ')}`, hw - 10).slice(0, 3)
+    doc.text(tq, x + 5, cy)
+  }
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(20)
+  doc.setTextColor(...C.white)
+  doc.text(fmtNum(h.alerts), x + 5, y + H - 20)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.3)
+  doc.setTextColor(...T2C.light)
+  doc.text(s.t2CardAlertsBig || 'alerts correlated in this single case', x + 5, y + H - 15.5)
+  const facts = [fill(s.t2CardCreated || 'Case created {d}', { d: fmtDayTimeUTC(h.detectedAt) })]
+  if (h.similar) facts.push(fill(s.t2CardSimilar || '+{n} similar cases', { n: fmtNum(h.similar) }))
+  if (h.leadMin != null) facts.push(fill(s.t2CardLead || 'first alert to case: {t}', { t: fmtDur(h.leadMin) }))
+  doc.text(doc.splitTextToSize(facts.join(' · '), hw - 10).slice(0, 2), x + 5, y + H - 9.5)
+
+  // four smaller cards, 2 × 2
+  const cw = (CW - hw - g - g) / 2, ch = (H - g) / 2
+  top.slice(1, 5).forEach((c, k) => {
+    const cx = ML + hw + g + (k % 2) * (cw + g), yy = y + Math.floor(k / 2) * (ch + g)
+    doc.setDrawColor(...T2C.border)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(cx, yy, cw, ch, 1.8, 1.8, 'D')
+    i(doc, c.critical ? C.red : C.orange)
+    doc.rect(cx, yy + 1.5, 1.2, ch - 3, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6)
+    doc.setTextColor(...(c.critical ? C.red : C.orange))
+    doc.text(`#${c.rank}  ${sevTxt(c)}`, cx + 4, yy + 5.5)
+    t2StatusPill(doc, cx + cw - 3, yy + 5.5, c.status, c.pending, true)
+    doc.setFontSize(7.8)
+    doc.setTextColor(...C.navy)
+    const n2 = doc.splitTextToSize(c.name, cw - 7).slice(0, 3)
+    doc.text(n2, cx + 4, yy + 11)
+    let ty = yy + 11 + n2.length * 3.4 + 0.6
+    if (tacLine(c)) {
+      doc.setFontSize(6)
+      doc.setTextColor(...C.blue)
+      doc.text(trunc(tacLine(c), Math.floor(cw / 1.25)), cx + 4, ty)
+    }
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.2)
+    doc.setTextColor(...T2C.slate)
+    if (c.similar) doc.text(fill(s.t2CardSimilar || '+{n} similar cases', { n: fmtNum(c.similar) }), cx + 4, yy + ch - 6.6)
+    doc.text(`${fill(s.t2CardAlerts || '{n} alerts', { n: fmtNum(c.alerts) })} · ${fmtDayTimeUTC(c.detectedAt)}`, cx + 4, yy + ch - 3.3)
+  })
+  return y + H + 2
+}
+
+// Q3 — priority matrix: risk score × alerts (log), four named quadrants.
+function t2PriorityMatrix(doc, y, s, m) {
+  const x0 = ML + 12, x1 = ML + CW - 2, y0 = y + 2, y1 = y + 80
+  const scores = m.points.map(p => p.score)
+  const xMin = Math.max(0, Math.min(m.scoreCut - 20, Math.floor(Math.min(...scores) / 10) * 10))
+  const xTop = Math.max(100, Math.ceil(Math.max(...scores) / 10) * 10)
+  const xMax = xTop + 4                     // room for the points at the maximum score
+  const dec = Math.max(1, Math.ceil(Math.log10(m.maxAlerts * 1.05)))
+  const X = v => x0 + (v - xMin) / (xMax - xMin) * (x1 - x0)
+  const Y = v => y1 - Math.log10(Math.max(1, v)) / dec * (y1 - y0)
+  const qx = X(m.scoreCut), qy = Y(m.alertCut)
+  const Q = [
+    ['act',         qx, y0, x1 - qx, qy - y0, tint(C.red, 0.10),    [160, 0, 0],  s.t2QuadAct || 'ACT NOW',          'left',  'top'],
+    ['investigate', qx, qy, x1 - qx, y1 - qy, tint(C.orange, 0.10), [163, 90, 0], s.t2QuadInvestigate || 'INVESTIGATE', 'right', 'bottom'],
+    ['monitor',     x0, y0, qx - x0, qy - y0, tint(C.blue, 0.07),   C.navy,       s.t2QuadMonitor || 'MONITOR',          'left',  'top'],
+    ['noise',       x0, qy, qx - x0, y1 - qy, T2C.tile,             T2C.slate,    s.t2QuadNoise || 'CONTROLLED NOISE',   'left',  'bottom'],
+  ]
+  for (const [, qx0, qy0, w, h, bg] of Q) { i(doc, bg); doc.rect(qx0, qy0, w, h, 'F') }
+  // grid + axes
+  doc.setLineWidth(0.15)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(5.8)
+  for (let e = 0; e <= dec; e++) {
+    const v = 10 ** e
+    doc.setDrawColor(215, 222, 232)
+    doc.line(x0, Y(v), x1, Y(v))
+    doc.setTextColor(...C.muted)
+    doc.text(fmtNum(v), x0 - 1.5, Y(v) + 1, { align: 'right' })
+  }
+  for (let v = xMin; v <= xTop; v += 10) doc.text(String(v), X(v), y1 + 3.5, { align: 'center' })
+  doc.setDrawColor(143, 163, 191)
+  doc.setLineWidth(0.3)
+  doc.setLineDashPattern([1.2, 1], 0)
+  doc.line(qx, y0, qx, y1)
+  doc.line(x0, qy, x1, qy)
+  doc.setLineDashPattern([], 0)
+  // quadrant labels with counts
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.8)
+  for (const [key, qx0, qy0, w, h, , fg, label, ha, va] of Q) {
+    if (w <= 8 || h <= 5) continue
+    doc.setTextColor(...fg)
+    const tx = ha === 'right' ? qx0 + w - 2 : qx0 + 2
+    const ty = va === 'top' ? qy0 + 4 : qy0 + h - 2
+    doc.text(`${label} · ${fmtNum(m.counts[key])}`, tx, ty, { align: ha })
+  }
+  // points: Medium under High under Critical
+  const style = { medium: [C.yellow, 0.75], high: [C.orange, 1.0], critical: [C.red, 1.3] }
+  for (const sev of ['medium', 'high', 'critical']) {
+    for (const p of m.points.filter(pt => pt.sev === sev)) {
+      doc.setDrawColor(...C.white)
+      doc.setLineWidth(0.2)
+      i(doc, style[sev][0])
+      doc.circle(X(p.score), Y(p.alerts), style[sev][1], 'FD')
+    }
+  }
+  // ranks of the Q2 cards
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6)
+  doc.setTextColor(...C.navy)
+  // points closer than 3 mm share one label ("#1 #3"); labels near the right edge go left
+  const labels = []
+  m.points.filter(p => p.rank).sort((a, b) => a.rank - b.rank).forEach(p => {
+    const px = X(p.score), py = Y(p.alerts)
+    const near = labels.find(l => Math.hypot(l.x - px, l.y - py) < 3)
+    if (near) near.ranks.push(p.rank)
+    else labels.push({ x: px, y: py, ranks: [p.rank] })
+  })
+  labels.forEach(l => {
+    const t = l.ranks.map(r => `#${r}`).join(' ')
+    const left = l.x + 2 + doc.getTextWidth(t) > x1
+    doc.text(t, left ? l.x - 2 : l.x + 2, l.y - 1.2, { align: left ? 'right' : 'left' })
+  })
+  // axis titles
+  doc.setFontSize(6.5)
+  doc.text(s.t2AxisScore || 'Case risk score', (x0 + x1) / 2, y1 + 8, { align: 'center' })
+  doc.text(s.t2AxisAlerts || 'Alerts in the case', ML + 2, (y0 + y1) / 2, { angle: 90, align: 'center' })
+  // legend
+  let lx = x0, ly = y1 + 13
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.2)
+  ;[[C.red, s.sevCritical || 'Critical'], [C.orange, s.sevHigh || 'High'], [C.yellow, s.t2LegendMedium100 || 'Medium (100 most recent)']].forEach(([c, t]) => {
+    i(doc, c)
+    doc.circle(lx + 1, ly - 0.9, 1, 'F')
+    doc.setTextColor(...C.text)
+    doc.text(t, lx + 3, ly)
+    lx += doc.getTextWidth(t) + 9
+  })
+  doc.setTextColor(...C.muted)
+  doc.text(s.t2LegendRank || '#n = card of question 2', lx, ly)
+  return ly + 1.5
+}
+
+// Q4 — response scorecard: six tiles with a lamp, then the verdict bar.
+function t2ResponsePanel(doc, y, s, r) {
+  const tw = (CW - 6) / 3, th = 22
+  const val = t => {
+    if (t.value == null) return '—'
+    if (t.key === 'handled') return `${fmtDec(t.value, 0)}%`
+    if (t.key === 'close') return fmtDur(t.value * 60)
+    if (t.key === 'ack' || t.key === 'lead') return fmtDur(t.value)
+    return fmtNum(t.value)
+  }
+  const sub = t => {
+    if (t.lamp === 'none') return s.t2RespNoData || 'No data returned by the API'
+    return fill({
+      critOpen: s.t2RespCritOpenT || 'Target: 0',
+      highOpen: s.t2RespHighOpenT || 'Target: 0 (yellow up to {y})',
+      handled:  s.t2RespHandledT  || 'Target: {t}% or more · {h} of {c} cases',
+      ack:      s.t2RespAckT      || 'Target: up to {t} min · median of {n} cases',
+      close:    s.t2RespCloseT    || 'Target: up to {t} h · median of {n} cases',
+      lead:     s.t2RespLeadT     || 'No target · median of {n} Critical/High cases',
+    }[t.key], { t: t.target ?? '', y: SOC_TARGETS.highOpenYellow, h: fmtNum(t.handled), c: fmtNum(t.cases), n: fmtNum(t.n) })
+  }
+  const label = {
+    critOpen: s.t2RespCritOpen || 'Critical cases pending',
+    highOpen: s.t2RespHighOpen || 'High cases pending',
+    handled:  s.t2RespHandled  || 'Cases handled by the team',
+    ack:      s.t2RespAck      || 'Median time to acknowledge',
+    close:    s.t2RespClose    || 'Median time to resolve',
+    lead:     s.t2RespLead     || 'First alert to case',
+  }
+  r.tiles.forEach((t, k) => {
+    const tx = ML + (k % 3) * (tw + 3), ty = y + Math.floor(k / 3) * (th + 3)
+    doc.setDrawColor(...T2C.border)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(tx, ty, tw, th, 1.8, 1.8, 'D')
+    i(doc, T2_LAMP[t.lamp])
+    doc.circle(tx + 4.5, ty + 5, 1.7, 'F')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.8)
+    doc.setTextColor(...T2C.slate)
+    doc.text(trunc(label[t.key], 40), tx + 8, ty + 6)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(15)
+    doc.setTextColor(...C.navy)
+    doc.text(val(t), tx + 4, ty + 14.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(5.9)
+    doc.setTextColor(...C.muted)
+    doc.text(doc.splitTextToSize(sub(t), tw - 7).slice(0, 2), tx + 4, ty + 18.5)
+  })
+  y += 2 * (th + 3) + 1
+  // verdict bar
+  const vh = 14
+  i(doc, T2C.deep)
+  doc.roundedRect(ML, y, CW, vh, 1.8, 1.8, 'F')
+  const rated = r.tiles.filter(t => ['green', 'yellow', 'red'].includes(t.lamp))
+  rated.forEach((t, k) => { i(doc, T2_LAMP[t.lamp]); doc.circle(ML + 5 + k * 4.2, y + vh / 2, 1.5, 'F') })
+  const tx = ML + 7 + rated.length * 4.2
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...C.white)
+  doc.text(fill(s.t2RespVerdict || '{g} of {n} indicators within target', { g: r.inTarget, n: r.rated }), tx, y + 5.8)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.6)
+  doc.setTextColor(...T2C.light)
+  const att = r.attention.length
+    ? fill(s.t2RespAttention || 'Needs attention: {l}.', { l: r.attention.map(k => label[k]).join(', ') })
+    : (s.t2RespAllGood || 'Every indicator is within target.')
+  doc.text(trunc(att, 130), tx, y + 10.2)
+  return y + vh + 1
+}
+
+// Q5 — effort avoided: alert-by-alert triage versus case-based work.
+function t2EffortBlock(doc, y, s, e) {
+  const cw = (CW - 4) / 2, ch = 30
+  const cols = [
+    { x: ML, dark: false, h: s.t2EffWithout || 'WITHOUT CORRELATION', big: fill(s.t2EffAlerts || '{n} alerts', { n: fmtNum(e.alerts) }),
+      sub: s.t2EffWithoutSub || 'each alert triaged on its own', hrs: e.withoutH, fte: e.withoutFte },
+    { x: ML + cw + 4, dark: true, h: s.t2EffWith || 'WITH STELLAR CYBER', big: fill(s.t2EffCases || '{n} cases', { n: fmtNum(e.cases) }),
+      sub: fill(s.t2EffWithSub || '{n} need immediate action', { n: fmtNum(e.critHigh) }), hrs: e.withH, fte: e.withFte },
+  ]
+  for (const c of cols) {
+    i(doc, c.dark ? T2C.deep : T2C.tile)
+    doc.roundedRect(c.x, y, cw, ch, 1.8, 1.8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...(c.dark ? T2C.cyan : T2C.slate))
+    doc.text(c.h, c.x + 4, y + 5.5)
+    doc.setFontSize(13)
+    doc.setTextColor(...(c.dark ? C.white : C.navy))
+    doc.text(c.big, c.x + 4, y + 12.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...(c.dark ? T2C.light : T2C.slate))
+    doc.text(c.sub, c.x + 4, y + 17)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.setTextColor(...(c.dark ? C.white : C.navy))
+    doc.text(fill(s.t2EffHours || '~{h} h', { h: fmtNum(Math.round(c.hrs)) }), c.x + 4, y + 24)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...(c.dark ? T2C.light : T2C.slate))
+    doc.text(fill(s.t2EffFte || '{f} analyst-months', { f: fmtDec(c.fte) }), c.x + 4, y + 27.5)
+  }
+  y += ch + 4
+  // bars to scale
+  const lw = 30, bw = CW - lw, max = Math.max(e.withoutH, e.withH, 1)
+  ;[[s.t2EffWithoutShort || 'Without correlation', e.withoutH, [143, 163, 191]], [s.t2EffWithShort || 'With Stellar Cyber', e.withH, C.blue]].forEach(([l, v, c], k) => {
+    const by = y + k * 7
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.8)
+    doc.setTextColor(...C.text)
+    doc.text(l, ML, by + 3.8)
+    const w = Math.max(0.6, bw * v / max)
+    i(doc, c)
+    doc.rect(ML + lw, by, w, 5, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    const t = `${fmtNum(Math.round(v))} h`
+    const inside = w > doc.getTextWidth(t) + 4
+    doc.setTextColor(...(inside ? C.white : C.text))
+    doc.text(t, inside ? ML + lw + 2 : ML + lw + w + 1.5, by + 3.6)
+  })
+  y += 16
+  // saved banner
+  const bh = 12
+  const good = e.savedH > 0
+  i(doc, good ? [232, 246, 238] : T2C.tile)
+  doc.roundedRect(ML, y, CW, bh, 1.8, 1.8, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.setTextColor(...(good ? [18, 114, 60] : C.navy))
+  const big = `${fmtNum(Math.round(e.savedH))} h`
+  doc.text(big, ML + 4, y + 8)
+  const bigW = doc.getTextWidth(big)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...(good ? [30, 90, 54] : C.text))
+  const msg = good
+    ? fill(s.t2EffSaved || 'of analyst time avoided in the period ({p}%), about {f} analyst-months', { p: fmtDec(e.savedPct * 100, 0), f: fmtDec(e.savedFte) })
+    : (s.t2EffNoSaving || 'With these premises the time per case exceeds alert triage; review the premises.')
+  doc.text(trunc(msg, 120), ML + 7 + bigW, y + 7.6)
+  return y + bh + 1
+}
+
+// Draws the whole story; returns y.
+function t2CaseStory(doc, y, s, st, fmtVol) {
+  const total = st.questions.length
+  y = bodyText(doc, s.t2StoryIntro || 'This section answers, in five questions, what the platform found in the period and what it means for the operation.', y, { fontSize: 9, lineH: 4.6 })
+  y += 4
+  st.questions.forEach((q, k) => {
+    y = t2Question(doc, y, s, k + 1, total, q.question, q.answer, q.need)
+    if (q.kind === 'funnel')  y = t2Funnel(doc, y, s, st.funnel, fmtVol)
+    if (q.kind === 'threats') y = t2ThreatCards(doc, y, s, st.top)
+    if (q.kind === 'matrix')  y = t2PriorityMatrix(doc, y, s, st.matrix)
+    if (q.kind === 'response') y = t2ResponsePanel(doc, y, s, st.response)
+    if (q.kind === 'effort')  y = t2EffortBlock(doc, y, s, st.effort)
+    y = t2StoryNote(doc, y, q.note)
+    y += 3
+  })
+  return y
 }
 
 // ─── Template 2 section 5: tactic matrix + radar + XDR donut ─────────────────
@@ -1569,6 +2043,78 @@ export function generatePDFReport({
   const vol            = volumeStats(dailyVolume)
   const fmtVol         = n => `${Number(n).toLocaleString(_locStr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB`
   const totalIngestStr = vol ? fmtVol(vol.total) : '—'
+
+  // ── Template 2 section 4.1: the five questions (utils/caseStory) ────────────
+  // Q1 and Q5 need caseStats (alerts of every case of the period); without it they
+  // are left out and the questions are renumbered.
+  function t2BuildStory() {
+    const critHigh = [...critCases, ...highCases]
+    const top      = topThreats(critHigh, caseTactics?.byCase || {})
+    const ranks    = Object.fromEntries(top.map(c => [c.id, c.rank]))
+    const matrix   = priorityMatrix(cases, { ranks })
+    const funnel   = caseStats ? signalFunnel({ volumeGB: vol ? vol.total : null, alerts: caseStats.alerts, cases: caseStats.cases, critHigh }) : null
+    const response = responseScorecard({ critHigh, caseStats })
+    const effort   = caseStats ? effortEstimate({ alerts: caseStats.alerts, critHigh: critHigh.length, medium: mediumTotal, low: lowNum }, effortPremises(pocMeta)) : null
+    const capped   = caseStats && caseStats.total > caseStats.cases
+      ? ' ' + fill(s.t2CapNote || 'Statistics over the {n} most recent of {t} cases.', { n: fmtNum(caseStats.cases), t: fmtNum(caseStats.total) })
+      : ''
+    const q = []
+    if (funnel) {
+      q.push({
+        kind: 'funnel', need: 90,
+        question: s.t2Q1 || 'Did the platform separate what matters from the noise?',
+        answer: fill(funnel.pending ? (s.t2A1 || '{a} alerts were grouped into {c} cases ({r} per case). Only {ch} cases ({p}%) were Critical or High, and {n} are still pending.') : (s.t2A1Done || '{a} alerts were grouped into {c} cases ({r} per case). Only {ch} cases ({p}%) were Critical or High, and all of them were resolved.'),
+          { a: fmtNum(funnel.alerts), c: fmtNum(funnel.cases), r: fmtDec(funnel.alertsPerCase), ch: fmtNum(funnel.critHigh), p: fmtDec(funnel.critHighShare * 100), n: fmtNum(funnel.pending) }),
+        note: (s.t2N1 || 'Source: daily licensing volume (/storage-usages) and every case of the period (/cases; alerts = sum of the case size). Stage widths are illustrative, not to scale.') + capped,
+      })
+    }
+    if (top.length) {
+      const h = top[0]
+      q.push({
+        kind: 'threats', need: 74,
+        question: s.t2Q2 || 'What was found that needs attention?',
+        answer: fill(s.t2A2 || '{c} Critical and {h} High cases in the period. The most severe: {name} ({a} alerts, status {st}).',
+          { c: fmtNum(critCases.length), h: fmtNum(highCases.length), name: trunc(h.name, 70), a: fmtNum(h.alerts), st: t2Status(h.status) }),
+        note: fill(s.t2N2 || 'One card per threat (case name); cases with the same name are counted as similar. Order: severity, risk score, alerts. Tactics and techniques come from the alerts of each case (up to 500 per case). {rest} more Critical/High cases, {m} Medium and {l} Low in the period; the full list is in the Technical report.',
+          { rest: fmtNum(critHigh.length - top.reduce((t, c) => t + 1 + c.similar, 0)), m: fmtNum(mediumTotal), l: fmtNum(lowCount) }),
+      })
+    }
+    if (matrix.points.length) {
+      q.push({
+        kind: 'matrix', need: 100,
+        question: s.t2Q3 || 'Where should the team act first?',
+        answer: fill(s.t2A3 || '{n} cases are in the Act now quadrant (risk score {s} or more and {a} alerts or more); {ch} of them are Critical or High.',
+          { n: fmtNum(matrix.counts.act), s: matrix.scoreCut, a: fmtNum(matrix.alertCut), ch: fmtNum(matrix.actCritHigh) }),
+        note: fill(s.t2N3 || 'Plotted: {n} cases (Critical, High and the 100 most recent Medium) with a risk score. Alert cut = median of the plotted cases ({a}). Vertical axis in log scale.',
+          { n: fmtNum(matrix.points.length), a: fmtNum(matrix.alertCut) }),
+      })
+    }
+    q.push({
+      kind: 'response', need: 66,
+      question: s.t2Q4 || 'Is the operation under control?',
+      answer: response.rated
+        ? fill(response.critOpen + response.highOpen
+          ? (s.t2A4 || '{g} of {n} indicators are within target. {c} Critical and {h} High cases are still pending.')
+          : (s.t2A4Clear || '{g} of {n} indicators are within target, and no Critical or High case is pending.'),
+          { g: response.inTarget, n: response.rated, c: fmtNum(response.critOpen), h: fmtNum(response.highOpen) })
+        : (s.t2A4None || 'The API returned no response data for this period.'),
+      note: fill(s.t2N4 || 'Pending = status other than Resolved, Closed or Cancelled. Handled = status other than New. Times: median from case creation to acknowledgement / closing, every case of the period. Targets: Critical pending 0 (red from 1); High pending 0 (yellow up to {y}); handled {hp}% (yellow from {hy}%); acknowledge {am} min and resolve {ch} h (yellow up to 2x).',
+        { y: SOC_TARGETS.highOpenYellow, hp: SOC_TARGETS.handledPct, hy: 100 - 2 * (100 - SOC_TARGETS.handledPct), am: SOC_TARGETS.ackMin, ch: SOC_TARGETS.closeHours }) + capped,
+    })
+    if (effort) {
+      const p = effort.premises
+      q.push({
+        kind: 'effort', need: 70,
+        question: s.t2Q5 || 'How much analyst effort does it save?',
+        answer: effort.savedH > 0
+          ? fill(s.t2A5 || 'About {h} hours of analyst time avoided in the period ({p}%), roughly {f} analyst-months.', { h: fmtNum(Math.round(effort.savedH)), p: fmtDec(effort.savedPct * 100, 0), f: fmtDec(effort.savedFte) })
+          : (s.t2A5None || 'With the premises used, case work takes longer than alert triage; review the premises.'),
+        note: fill(p.custom ? (s.t2N5Custom || 'Estimate with premises set by the SE: {a} min per alert without correlation; per case {ch} min Critical/High, {m} min Medium, {l} min Low; {mh} h per analyst-month.') : (s.t2N5 || 'Estimate with default premises: {a} min per alert without correlation; per case {ch} min Critical/High, {m} min Medium, {l} min Low; {mh} h per analyst-month.'),
+          { a: fmtDec(p.alertMin), ch: fmtDec(p.critHighMin), m: fmtDec(p.mediumMin), l: fmtDec(p.lowMin), mh: fmtDec(p.monthHours) }) + capped,
+      })
+    }
+    return { questions: q, funnel, top, matrix, response, effort }
+  }
 
   // ── Create PDF ──────────────────────────────────────────────────────────────
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -2109,6 +2655,14 @@ export function generatePDFReport({
     y = infoNote(doc, s.noCases || 'No cases data available for this PoC period.', y)
     y += 4
   } else {
+    // ── 4.1 The detection story (Template 2 only) ────────────────────────────
+    // Replaces the case table of Template 1 and opens section 4.
+    if (T2) {
+      y = subTitle(doc, s.t2Sub4_1 || '4.1 The detection story', y)
+      y = t2CaseStory(doc, y, s, t2BuildStory(), fmtVol)
+      y += 2
+    }
+
     // ── 4.2 Detection Metrics ────────────────────────────────────────────────
     y = needsPage(doc, y, 40)
     y = subTitle(doc, s.sub4_2 || '4.2 Detection Metrics', y)
@@ -2168,7 +2722,8 @@ export function generatePDFReport({
       }
     }
 
-    // ── 4.1 Detected Cases table ─────────────────────────────────────────────
+    // ── 4.1 Detected Cases table (Template 1; Template 2 tells the story above) ──
+    if (!T2) {
     y = needsPage(doc, y, 40)
     y = subTitle(doc, s.sub4_1 || '4.1 Detected Cases', y)
 
@@ -2225,6 +2780,7 @@ export function generatePDFReport({
         y
       )
       y += 4
+    }
     }
   }
 

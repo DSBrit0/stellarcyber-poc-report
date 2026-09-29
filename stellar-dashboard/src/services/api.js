@@ -365,6 +365,7 @@ export function emptyTactics() {
   return {
     mitre:   { detectedTacticIds: new Set(), tactics: [], techniques: [] },
     stellar: { tactics: [], techniques: [] },
+    byCase:  {},
   }
 }
 
@@ -398,6 +399,9 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
   const mitreTch = new Map()
   const stellarT = new Map()
   const stellarTch = new Map()
+  // Per case: alerts by MITRE tactic, XDR tactic and technique (Executive 4.1 cards)
+  const perCase = new Map()
+  const bump = (m, id, name) => { const e = m.get(id) || { id, name, alerts: 0 }; e.alerts++; m.set(id, e) }
 
   function processAlerts(docs, caseId) {
     for (const doc of docs) {
@@ -413,6 +417,11 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
       const tacName  = tactic.name  || ''
       const techId   = techObj.id   || ''
       const techName = techObj.name || ''
+
+      if (!perCase.has(caseId)) perCase.set(caseId, { tactics: new Map(), xdr: new Map(), techniques: new Map() })
+      const pc = perCase.get(caseId)
+      bump(isMitre ? pc.tactics : pc.xdr, tacId, tacName)
+      if (techId && isMitre) bump(pc.techniques, techId, techName)
 
       if (!tacMap.has(tacId)) tacMap.set(tacId, { id: tacId, name: tacName, caseIds: new Set(), alertCount: 0 })
       const te = tacMap.get(tacId)
@@ -470,6 +479,10 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
       .sort((a, b) => b.caseCount - a.caseCount || b.alertCount - a.alertCount)
   }
 
+  const byAlerts = m => Array.from(m.values()).sort((a, b) => b.alerts - a.alerts)
+  const byCase = Object.fromEntries(Array.from(perCase, ([id, pc]) =>
+    [id, { tactics: byAlerts(pc.tactics), xdr: byAlerts(pc.xdr), techniques: byAlerts(pc.techniques) }]))
+
   const detectedTacticIds = new Set(mitreT.keys())
   info('api', `fetchCaseTactics ✅ ${cases.length} cases, ${fetched} | MITRE tactics: ${detectedTacticIds.size} | Stellar tactics: ${stellarT.size}`)
   return {
@@ -482,6 +495,7 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
       tactics:    toArray(stellarT),
       techniques: toArray(stellarTch),
     },
+    byCase,
   }
 }
 

@@ -12,7 +12,14 @@
  *
  *   Scoped API Key (Bearer) em vez de usuário/senha:
  *   node validate.mjs --url=... --apikey=<scoped-api-key> --tenant=...
+ *
+ *   Seção 4.1 do Relatório Executivo (história da detecção) sobre dados reais:
+ *   node validate.mjs ... --start=2026-08-29 --end=2026-09-27
+ *   Busca todos os cases do período direto na API e confere os números que
+ *   src/utils/caseStory.js calcula (funil, top ameaças, matriz, semáforo, esforço).
  */
+
+import { signalFunnel, topThreats, priorityMatrix, responseScorecard, effortEstimate, effortPremises, threatName } from './src/utils/caseStory.js'
 
 // ─── Args ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +38,8 @@ const PASSWORD     = args.password
 const API_KEY      = args.apikey
 const TENANT       = args.tenant
 const PROXY_HOST   = args.host || 'http://localhost:8080'
+const POC_START    = args.start
+const POC_END      = args.end
 
 if (!INSTANCE_URL || !TENANT || !(API_KEY || (USERNAME && PASSWORD))) {
   console.error(`
@@ -43,6 +52,7 @@ if (!INSTANCE_URL || !TENANT || !(API_KEY || (USERNAME && PASSWORD))) {
 
 Opcional:
     --host=http://localhost:8080   (endereço do servidor proxy local)
+    --start=AAAA-MM-DD --end=AAAA-MM-DD   (valida a seção 4.1 do Relatório Executivo)
 `)
   process.exit(1)
 }
@@ -80,7 +90,7 @@ async function proxyFetch(path, token, opts = {}) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(opts.authHeader || {}),
     },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(90_000),
   }
   const res = await fetch(url, init)
   const body = await res.json().catch(() => ({}))
@@ -336,6 +346,112 @@ function validatePdfData(cases, tenants, connectors) {
   ok('KPIs executivos', 'campos validados')
 }
 
+// ─── 4.1 Executive report: the detection story ───────────────────────────────
+// Pages every case of the period straight from the API (same filters as
+// fetchCases / fetchCaseStats) and checks that the caseStory builders agree with
+// counts computed here on their own.
+
+async function validateExecutiveStory(token) {
+  section(`7. RELATÓRIO EXECUTIVO 4.1 — ${POC_START} a ${POC_END}`)
+  const FROM = Date.parse(`${POC_START}T00:00:00.000Z`)
+  const TO   = Date.parse(`${POC_END}T23:59:59.999Z`)
+  if (!Number.isFinite(FROM) || !Number.isFinite(TO) || FROM > TO) { fail('Período inválido', `${POC_START} → ${POC_END}`); return }
+  const q = (params) => new URLSearchParams({ tenantid: TENANT, 'FROM~created_at': FROM, 'TO~created_at': TO, ...params }).toString()
+  const get = async (path) => {
+    const r = await proxyFetch(`/connect/api/v1${path}`, token)
+    if (!r.ok) throw new Error(`${path.split('?')[0]} HTTP ${r.status}`)
+    return r.body?.data
+  }
+  const pageAll = async (params, cap) => {
+    const out = []
+    for (let skip = 0; skip < cap; skip += 500) {
+      const d = await get(`/cases?${q({ ...params, sort: 'created_at', order: 'desc', limit: 500, skip })}`)
+      out.push(...(d?.cases || []))
+      if (!d?.cases?.length || out.length >= (d.total ?? 0)) break
+    }
+    return out
+  }
+  try {
+    const sevs   = ['Critical', 'High', 'Medium', 'Low']
+    const totals = Object.fromEntries(await Promise.all(sevs.map(async sv => [sv, (await get(`/cases?${q({ severity: sv, limit: 1 })}`)).total ?? 0])))
+    const total  = (await get(`/cases?${q({ limit: 1 })}`)).total ?? 0
+    const sumSev = sevs.reduce((t, sv) => t + totals[sv], 0)
+    sumSev === total ? ok('Cases por severidade somam o total', `${sevs.map(sv => `${sv}:${totals[sv]}`).join(' | ')} = ${total}`)
+      : fail('Soma por severidade ≠ total', `${sumSev} vs ${total}`)
+
+    const all = await pageAll({}, 10_000)
+    all.length === Math.min(total, 10_000) ? ok('Todos os cases paginados', `${all.length}`) : fail('Paginação incompleta', `${all.length} de ${total}`)
+
+    const rawCH = [...await pageAll({ severity: 'Critical' }, 5_000), ...await pageAll({ severity: 'High' }, 5_000)]
+    rawCH.length === totals.Critical + totals.High ? ok('Críticos + Altos carregados', `${rawCH.length}`) : fail('Críticos + Altos incompletos', `${rawCH.length} de ${totals.Critical + totals.High}`)
+
+    // Same fields normalizeCases gives the PDF
+    const norm = c => ({ id: c._id, name: c.name, severity: normalizeSeverity(c.severity), status: c.status || 'New', score: typeof c.score === 'number' ? c.score : null,
+      alertCount: c.size || 1, startedAt: typeof c.start_timestamp === 'number' ? c.start_timestamp : null, detectedAt: typeof c.created_at === 'number' ? c.created_at : null })
+    const critHigh = rawCH.map(norm)
+
+    // caseStats as fetchCaseStats computes it
+    const med = v => { const s = v.filter(Number.isFinite).sort((a, b) => a - b); if (!s.length) return null; const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
+    const byStatus = {}
+    for (const c of all) byStatus[c.status || 'New'] = (byStatus[c.status || 'New'] || 0) + 1
+    const caseStats = {
+      cases: all.length, total, alerts: all.reduce((t, c) => t + (Number(c.size) || 0), 0), byStatus,
+      handled: all.length - (byStatus.New || 0),
+      closed: all.filter(c => c.closed > 0 && c.closed >= c.created_at).length,
+      medianCloseHours: med(all.filter(c => c.closed > 0 && c.closed >= c.created_at).map(c => (c.closed - c.created_at) / 3_600_000)),
+      acknowledged: all.filter(c => c.acknowledged > 0 && c.acknowledged >= c.created_at).length,
+      medianAckMinutes: med(all.filter(c => c.acknowledged > 0 && c.acknowledged >= c.created_at).map(c => (c.acknowledged - c.created_at) / 60_000)),
+    }
+    ok('Status dos cases', Object.entries(byStatus).map(([k, v]) => `${k}:${v}`).join(' | '))
+
+    const su = (await get(`/storage-usages?${new URLSearchParams({ aggr_type: 'tenant', cust_id: TENANT })}`)) || []
+    const today = new Date().toISOString().slice(0, 10)
+    const volGB = su.map(d => ({ date: String(d.time || '').slice(0, 10), gb: (d.usages || []).reduce((t, u) => t + (Number(u.usage) || 0), 0) }))
+      .filter(d => d.date && d.date < today && d.date >= POC_START && d.date <= POC_END).reduce((t, d) => t + d.gb, 0)
+
+    // Q1 funnel
+    const f = signalFunnel({ volumeGB: volGB, alerts: caseStats.alerts, cases: caseStats.cases, critHigh })
+    const pendRaw = rawCH.filter(c => !['resolved', 'closed', 'cancelled', 'canceled'].includes(String(c.status || 'New').toLowerCase())).length
+    f.pending === pendRaw ? ok('Q1 funil', `${volGB.toFixed(2)} GB → ${f.alerts} alertas → ${f.cases} cases → ${f.critHigh} Crít./Altos → ${f.pending} pendentes`)
+      : fail('Q1 pendentes divergem', `${f.pending} vs ${pendRaw}`)
+
+    // Q2 top threats: one card per name, none repeated
+    const top = topThreats(critHigh)
+    const names = top.map(t => t.name.toLowerCase())
+    const grouped = top.reduce((t, c) => t + 1 + c.similar, 0)
+    new Set(names).size === names.length && names.every(n => !/ and \d+ others?$/.test(n))
+      ? ok('Q2 top ameaças', top.map(t => `#${t.rank} ${t.name} (${t.alerts} alertas, +${t.similar})`).join(' | '))
+      : fail('Q2 nomes repetidos ou com sufixo', names.join(' | '))
+    const sameName = top.map(t => critHigh.filter(c => threatName(c).toLowerCase() === t.name.toLowerCase()).length)
+    top.every((t, k) => t.similar === sameName[k] - 1) && grouped <= critHigh.length
+      ? ok('Q2 semelhantes conferem', sameName.map(n => n - 1).join(', ')) : fail('Q2 semelhantes divergem')
+    if (top[0]) {
+      const docs = (await get(`/cases/${top[0].id}/alerts?limit=50&skip=0`))?.docs || []
+      const tac = [...new Set(docs.map(d => d._source?.xdr_event?.tactic).filter(t => t?.id?.startsWith('TA')).map(t => t.name))]
+      ok('Q2 táticas MITRE do #1 (1ª página)', tac.join(', ') || 'nenhuma')
+    }
+
+    // Q3 matrix (Critical, High + 100 most recent Medium, as the PDF loads)
+    const medium = (await pageAll({ severity: 'Medium' }, 100)).slice(0, 100).map(norm)
+    const m = priorityMatrix([...critHigh, ...medium])
+    const qsum = Object.values(m.counts).reduce((t, v) => t + v, 0)
+    qsum === m.points.length ? ok('Q3 matriz', `corte score ${m.scoreCut}, alertas ${m.alertCut} | agir ${m.counts.act} · investigar ${m.counts.investigate} · monitorar ${m.counts.monitor} · ruído ${m.counts.noise}`)
+      : fail('Q3 quadrantes não somam os pontos', `${qsum} vs ${m.points.length}`)
+
+    // Q4 scorecard
+    const r = responseScorecard({ critHigh, caseStats })
+    r.critOpen + r.highOpen === pendRaw ? ok('Q4 semáforo', `${r.inTarget}/${r.rated} na meta | ${r.tiles.map(t => `${t.key}=${t.value == null ? '—' : Math.round(t.value * 10) / 10}(${t.lamp})`).join(' ')}`)
+      : fail('Q4 pendentes divergem', `${r.critOpen + r.highOpen} vs ${pendRaw}`)
+
+    // Q5 effort (default premises)
+    const e = effortEstimate({ alerts: caseStats.alerts, critHigh: critHigh.length, medium: totals.Medium, low: totals.Low }, effortPremises({}))
+    e.cases === total ? ok('Q5 esforço', `${Math.round(e.withoutH)} h sem correlação → ${Math.round(e.withH)} h com cases | ${Math.round(e.savedH)} h evitadas (${Math.round(e.savedPct * 100)}%)`)
+      : fail('Q5 cases ≠ total', `${e.cases} vs ${total}`)
+  } catch (e) {
+    fail('Erro na validação da 4.1', e.message)
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -362,6 +478,8 @@ async function main() {
   ])
 
   validatePdfData(cases, tenants, connectors)
+
+  if (POC_START && POC_END) await validateExecutiveStory(auth.token)
 
   section('RESULTADO FINAL')
   console.log(`\n  ✅  Aprovado: ${PASS}`)

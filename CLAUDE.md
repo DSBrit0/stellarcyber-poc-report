@@ -22,6 +22,8 @@ npm run lint      # ESLint
 node validate.mjs --url=https://<instance> --username=<u> --password=<p> --tenant=<id> [--host=http://localhost:8080]
 node validate.mjs --url=https://<instance> --apikey=<scoped-api-key> --tenant=<id> [--host=...]
                   # End-to-end check: auth → data endpoints → PDF normalization, via a running server
+node validate.mjs ... --start=YYYY-MM-DD --end=YYYY-MM-DD
+                  # + checks the Executive 4.1 story (utils/caseStory) against every case of the period
 ```
 
 - **`npm run dev` cannot reach the API.** `vite.config.js` has no proxy, so `/proxy/*` falls through to the SPA. To test against a real instance, run `npm run build && npm start` and open `localhost:8080`.
@@ -101,6 +103,7 @@ A new endpoint outside `/connect/api/v1` needs a change to `API_PATH_PREFIX`.
 Two report models, chosen next to the download button (`ReportTemplatePicker` in `Report.jsx`, remembered in `localStorage` `stellar_report_template`) and passed as `generatePDFReport({ template })`:
 - `1` — **Relatório Técnico** (default): the original layout. Must stay unchanged; every Template 2 change goes through `if (T2)` / `_tpl === 2`.
 - `2` — **Relatório Executivo**: same data, drawn by the `t2*` functions (dark cover, executive dashboard after 1.2, charts with values and explanatory notes, 2.2 as a phase flow, tactic matrix colored by alerts). Section 8 is drawn right after section 5, so its subsections are renumbered 8→6, 6→7, 7→8 (`t2Renumber`). Its strings live under `pdf.t2*`. The file name gets `_Executive`. It leaves out the architecture page, the 10.1 scorecard table (the scorecard is on its dashboard) and the "less than 30 days" notices of 7.3/7.4 (`hideShortPeriod`).
+- Template 2 section **4.1** replaces the case table with "the detection story": five questions (chip, question, one-sentence answer, visual, source note) drawn by `t2CaseStory` from the pure builders in `utils/caseStory.js` — signal funnel, top threats (one card per case name without the API's " and N others" suffix; `+N similar`), priority matrix (score × alerts log, alert cut = median), response scorecard (`SOC_TARGETS`; pending = not Resolved/Closed/Cancelled) and effort avoided (`EFFORT_DEFAULTS`, overridable by the `effort*` POC fields shown in the form only for Template 2). It opens section 4, before 4.2. Q1 and Q5 need `caseStats`. Tactics/techniques per case come from `caseTactics.byCase` (MITRE techniques only). Case status is translated in Template 2 only (`t2Status`, `pdf.t2StatusNames`).
 - Helvetica in jsPDF has no `≥`, `→` and similar glyphs; write them out in PDF strings.
 
 ### i18n
