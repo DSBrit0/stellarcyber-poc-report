@@ -366,6 +366,7 @@ export function emptyTactics() {
     mitre:   { detectedTacticIds: new Set(), tactics: [], techniques: [] },
     stellar: { tactics: [], techniques: [] },
     byCase:  {},
+    topAlerts: {},
   }
 }
 
@@ -402,9 +403,29 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
   // Per case: alerts by MITRE tactic, XDR tactic and technique (Executive 4.1 cards)
   const perCase = new Map()
   const bump = (m, id, name) => { const e = m.get(id) || { id, name, alerts: 0 }; e.alerts++; m.set(id, e) }
+  // Per case: the TOP_ALERTS distinct descriptions (xdr_event.description) with the
+  // highest event_score (Technical 4.1). One entry per text, with its highest score —
+  // the top alerts of a big case often repeat the same description.
+  const TOP_ALERTS = 3
+  const topAlerts = new Map()
+  function keepTopAlert(caseId, src) {
+    const description = src?.xdr_event?.description
+    if (!description) return
+    const score = Number(src.event_score) || 0
+    const list  = topAlerts.get(caseId) || []
+    const same  = list.find(a => a.description === description)
+    if (same) {
+      if (score > same.score) same.score = score
+    } else {
+      list.push({ score, description })
+    }
+    list.sort((a, b) => b.score - a.score)
+    topAlerts.set(caseId, list.slice(0, TOP_ALERTS))
+  }
 
   function processAlerts(docs, caseId) {
     for (const doc of docs) {
+      keepTopAlert(caseId, doc?._source)
       const xdr     = doc?._source?.xdr_event || {}
       const tactic  = xdr.tactic    || {}
       const techObj = xdr.technique || {}
@@ -496,6 +517,7 @@ export async function fetchCaseTactics(auth, cases, onProgress) {
       techniques: toArray(stellarTch),
     },
     byCase,
+    topAlerts: Object.fromEntries(topAlerts),
   }
 }
 

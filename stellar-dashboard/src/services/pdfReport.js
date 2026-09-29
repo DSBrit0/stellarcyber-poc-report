@@ -2733,14 +2733,26 @@ export function generatePDFReport({
       ...highCases,
       ...cases.filter(c => (c.severity || '').toLowerCase() === 'medium').slice(0, 100),
     ]
-    const caseRows = displayCases.map(c => [
-      trunc(c.name || c.id || '—', 35),
-      c.severity || '—',
-      c.status   || '—',
-      c.score    != null ? String(c.score) : '—',
-      c.alertCount != null ? String(c.alertCount) : '—',
-      fmtDate(c.rawDate || c.createdAt),
-    ])
+    // Under each Critical case: the descriptions of its 3 highest-score alerts
+    // (distinct texts, caseTactics.topAlerts), as the API returns them (English).
+    const topAlerts = caseTactics?.topAlerts || {}
+    const caseRows = displayCases.flatMap(c => {
+      const row = [
+        trunc(c.name || c.id || '—', 35),
+        c.severity || '—',
+        c.status   || '—',
+        c.score    != null ? String(c.score) : '—',
+        c.alertCount != null ? String(c.alertCount) : '—',
+        fmtDate(c.rawDate || c.createdAt),
+      ]
+      if ((c.severity || '').toLowerCase() !== 'critical') return [row]
+      const alertRows = (topAlerts[c.id] || []).map(a => [{
+        content: `\u2022 ${a.description}`,
+        colSpan: 6,
+        styles:  { fontSize: 6.3, textColor: [70, 70, 70], fillColor: [248, 249, 251], cellPadding: { top: 1.2, bottom: 1.2, left: 6, right: 2 } },
+      }])
+      return [row, ...alertRows]
+    })
     y = tableCompact(doc,
       [
         s.caseName   || 'Case',
