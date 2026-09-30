@@ -5,7 +5,7 @@ import { getMitreMitigation } from '../utils/mitreMapping'
 import { assetStats, assetCompliance } from '../utils/assetCompliance'
 import { verdictCode, verdictLabel } from '../utils/verdict'
 import { volumeStats, volumeCompliance } from '../utils/volumeStats'
-import { signalFunnel, topThreats, priorityMatrix, responseScorecard, effortEstimate, effortPremises, SOC_TARGETS } from '../utils/caseStory'
+import { signalFunnel, topThreats, priorityMatrix, responseScorecard, effortEstimate, effortPremises, effortFlags, SOC_TARGETS } from '../utils/caseStory'
 Chart.register(...registerables)
 
 // ─── Color palette ────────────────────────────────────────────────────────────
@@ -1719,76 +1719,117 @@ function t2ResponsePanel(doc, y, s, r) {
 }
 
 // Q5 — effort avoided: alert-by-alert triage versus case-based work.
+// Q5 — two bars on one scale: the same investigation block on both rows, and the
+// triage that shrinks from every alert to every case (the saved part is outlined).
+// Then four figures: triage hours avoided, share of the manual triage removed,
+// analyst-months freed and the hours still spent with Stellar Cyber.
 function t2EffortBlock(doc, y, s, e) {
-  const cw = (CW - 4) / 2, ch = 30
-  const cols = [
-    { x: ML, dark: false, h: s.t2EffWithout || 'WITHOUT CORRELATION', big: fill(s.t2EffAlerts || '{n} alerts', { n: fmtNum(e.alerts) }),
-      sub: s.t2EffWithoutSub || 'each alert triaged on its own', hrs: e.withoutH, fte: e.withoutFte },
-    { x: ML + cw + 4, dark: true, h: s.t2EffWith || 'WITH STELLAR CYBER', big: fill(s.t2EffCases || '{n} cases', { n: fmtNum(e.cases) }),
-      sub: fill(s.t2EffWithSub || '{n} need immediate action', { n: fmtNum(e.critHigh) }), hrs: e.withH, fte: e.withFte },
-  ]
-  for (const c of cols) {
-    i(doc, c.dark ? T2C.deep : T2C.tile)
-    doc.roundedRect(c.x, y, cw, ch, 1.8, 1.8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...(c.dark ? T2C.cyan : T2C.slate))
-    doc.text(c.h, c.x + 4, y + 5.5)
-    doc.setFontSize(13)
-    doc.setTextColor(...(c.dark ? C.white : C.navy))
-    doc.text(c.big, c.x + 4, y + 12.5)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...(c.dark ? T2C.light : T2C.slate))
-    doc.text(c.sub, c.x + 4, y + 17)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10.5)
-    doc.setTextColor(...(c.dark ? C.white : C.navy))
-    doc.text(fill(s.t2EffHours || '~{h} h', { h: fmtNum(Math.round(c.hrs)) }), c.x + 4, y + 24)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...(c.dark ? T2C.light : T2C.slate))
-    doc.text(fill(s.t2EffFte || '{f} analyst-months', { f: fmtDec(c.fte) }), c.x + 4, y + 27.5)
-  }
-  y += ch + 4
-  // bars to scale
-  const lw = 30, bw = CW - lw, max = Math.max(e.withoutH, e.withH, 1)
-  ;[[s.t2EffWithoutShort || 'Without correlation', e.withoutH, [143, 163, 191]], [s.t2EffWithShort || 'With Stellar Cyber', e.withH, C.blue]].forEach(([l, v, c], k) => {
-    const by = y + k * 7
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.8)
-    doc.setTextColor(...C.text)
-    doc.text(l, ML, by + 3.8)
-    const w = Math.max(0.6, bw * v / max)
-    i(doc, c)
-    doc.rect(ML + lw, by, w, 5, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
-    const t = `${fmtNum(Math.round(v))} h`
-    const inside = w > doc.getTextWidth(t) + 4
-    doc.setTextColor(...(inside ? C.white : C.text))
-    doc.text(t, inside ? ML + lw + 2 : ML + lw + w + 1.5, by + 3.6)
-  })
-  y += 16
-  // saved banner
-  const bh = 12
-  const good = e.savedH > 0
-  i(doc, good ? [232, 246, 238] : T2C.tile)
-  doc.roundedRect(ML, y, CW, bh, 1.8, 1.8, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
-  doc.setTextColor(...(good ? [18, 114, 60] : C.navy))
-  const big = `${fmtNum(Math.round(e.savedH))} h`
-  doc.text(big, ML + 4, y + 8)
-  const bigW = doc.getTextWidth(big)
+  const hrs = v => `${fmtNum(Math.round(v))} h`
+  const lw = 32, gapR = 44, bw = CW - lw - gapR, max = Math.max(e.withoutH, 1), bh = 11
+  const INV = [96, 125, 170], TRI_OFF = [205, 214, 228], TRI_ON = C.blue, SAVE = [34, 160, 90]
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...(good ? [30, 90, 54] : C.text))
-  const msg = good
-    ? fill(s.t2EffSaved || 'of analyst time avoided in the period ({p}%), about {f} analyst-months', { p: fmtDec(e.savedPct * 100, 0), f: fmtDec(e.savedFte) })
-    : (s.t2EffNoSaving || 'With these premises the time per case exceeds alert triage; review the premises.')
-  doc.text(trunc(msg, 120), ML + 7 + bigW, y + 7.6)
-  return y + bh + 1
+  doc.setFontSize(6.5)
+  doc.setTextColor(...C.muted)
+  doc.text(s.t2EffScale || 'Analyst hours in the period', ML + lw, y + 2)
+  y += 5
+  const row = (label, sub, tri, triColor, ry, saved) => {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...C.navy)
+    doc.text(label, ML, ry + 5)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6)
+    doc.setTextColor(...C.muted)
+    doc.text(sub, ML, ry + 8.6)
+    const wi = bw * e.invH / max, wt = bw * tri / max
+    i(doc, INV)
+    doc.rect(ML + lw, ry, Math.max(wi, 0.6), bh, 'F')
+    i(doc, triColor)
+    doc.rect(ML + lw + wi, ry, Math.max(wt, 0.6), bh, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    if (wi > 22) {
+      doc.setTextColor(...C.white)
+      doc.text(`${s.t2EffInv || 'Investigation'} ${hrs(e.invH)}`, ML + lw + 2, ry + 6.8)
+    }
+    if (wt > 22) {
+      doc.setTextColor(...(triColor === TRI_OFF ? C.navy : C.white))
+      doc.text(`${s.t2EffTriage || 'Triage'} ${hrs(tri)}`, ML + lw + wi + 2, ry + 6.8)
+    }
+    if (saved) {
+      const x = ML + lw + wi + wt, wg = bw * e.savedH / max
+      doc.setDrawColor(...SAVE)
+      doc.setLineWidth(0.5)
+      doc.setLineDashPattern([1.2, 0.8], 0)
+      doc.rect(x, ry, Math.max(wg, 0.6), bh, 'D')
+      doc.setLineDashPattern([], 0)
+      if (wg > 26) {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.5)
+        doc.setTextColor(...SAVE)
+        doc.text(`${s.t2EffAvoided || 'avoided'} ${hrs(e.savedH)}`, x + 2, ry + 6.8)
+      }
+    }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...C.navy)
+    doc.text(hrs(tri + e.invH), ML + CW, ry + 7, { align: 'right' })
+  }
+  row(s.t2EffWithoutShort || 'Without correlation', fill(s.t2EffAlerts || '{n} alerts', { n: fmtNum(e.alerts) }), e.triageWithoutH, TRI_OFF, y, false)
+  row(s.t2EffWithShort || 'With Stellar Cyber', fill(s.t2EffCases || '{n} cases', { n: fmtNum(e.cases) }), e.triageWithH, TRI_ON, y + bh + 5, true)
+  y += 2 * bh + 9
+
+  // legend
+  let lx = ML + lw
+  const legend = [
+    [INV, s.t2EffLegInv || 'Investigation'],
+    [TRI_OFF, s.t2EffLegTriAlerts || 'Alert triage'],
+    [TRI_ON, s.t2EffLegTriCases || 'Case triage'],
+    [SAVE, s.t2EffLegSaved || 'Triage avoided', true],
+  ]
+  for (const [c, t, dash] of legend) {
+    if (dash) {
+      doc.setDrawColor(...c)
+      doc.setLineWidth(0.5)
+      doc.setLineDashPattern([1.2, 0.8], 0)
+      doc.rect(lx, y - 2.4, 4, 2.8, 'D')
+      doc.setLineDashPattern([], 0)
+    } else {
+      i(doc, c)
+      doc.rect(lx, y - 2.4, 4, 2.8, 'F')
+    }
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.3)
+    doc.setTextColor(...C.text)
+    doc.text(t, lx + 5.5, y)
+    lx += 9 + doc.getTextWidth(t)
+  }
+  y += 5
+
+  // four figures
+  const kw = (CW - 12) / 4, kh = 19
+  const tiles = [
+    [`-${hrs(e.savedH)}`, s.t2EffKpiSaved || 'of triage in the period', SAVE],
+    [`${fmtDec(e.savedPct * 100, 0)}%`, s.t2EffKpiPct || 'of the manual triage removed', SAVE],
+    [e.savedFte > 0 && e.savedFte < 0.1 ? `< ${fmtDec(0.1)}` : fmtDec(e.savedFte), s.t2EffKpiFte || 'analyst-months freed', C.navy],
+    [hrs(e.withH), s.t2EffKpiWith || 'with Stellar Cyber (investigation + case triage)', C.blue],
+  ]
+  tiles.forEach(([v, l, c], k) => {
+    const x = ML + k * (kw + 4)
+    i(doc, T2C.tile)
+    doc.roundedRect(x, y, kw, kh, 1.8, 1.8, 'F')
+    i(doc, c)
+    doc.rect(x, y, kw, 1.1, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(v.length > 8 ? 12.5 : 15)
+    doc.setTextColor(...c)
+    doc.text(v, x + 3.5, y + 9.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.2)
+    doc.setTextColor(...T2C.slate)
+    doc.text(doc.splitTextToSize(l, kw - 6).slice(0, 2), x + 3.5, y + 13.8)
+  })
+  return y + kh + 1
 }
 
 // Draws the whole story; returns y.
@@ -2103,14 +2144,17 @@ export function generatePDFReport({
     })
     if (effort) {
       const p = effort.premises
+      const flags = effortFlags({ cases: caseStats.cases, alerts: caseStats.alerts, top5Alerts: caseStats.top5Alerts || 0 })
+      const notices = [
+        flags.small ? fill(s.t2EffFlagSmall || 'Small sample ({n} cases): read these figures as an indication.', { n: fmtNum(caseStats.cases) }) : '',
+        flags.concentrated ? fill(s.t2EffFlagConc || 'The 5 largest cases hold {p}% of the alerts; most of the triage avoided comes from them.', { p: fmtDec(flags.top5Pct * 100, 0) }) : '',
+      ].filter(Boolean).join(' ')
       q.push({
-        kind: 'effort', need: 70,
+        kind: 'effort', need: 95,
         question: s.t2Q5 || 'How much analyst effort does it save?',
-        answer: effort.savedH > 0
-          ? fill(s.t2A5 || 'About {h} hours of analyst time avoided in the period ({p}%), roughly {f} analyst-months.', { h: fmtNum(Math.round(effort.savedH)), p: fmtDec(effort.savedPct * 100, 0), f: fmtDec(effort.savedFte) })
-          : (s.t2A5None || 'With the premises used, case work takes longer than alert triage; review the premises.'),
-        note: fill(p.custom ? (s.t2N5Custom || 'Estimate with premises set by the SE: {a} min per alert without correlation; per case {ch} min Critical/High, {m} min Medium, {l} min Low; {mh} h per analyst-month.') : (s.t2N5 || 'Estimate with default premises: {a} min per alert without correlation; per case {ch} min Critical/High, {m} min Medium, {l} min Low; {mh} h per analyst-month.'),
-          { a: fmtDec(p.alertMin), ch: fmtDec(p.critHighMin), m: fmtDec(p.mediumMin), l: fmtDec(p.lowMin), mh: fmtDec(p.monthHours) }) + capped,
+        answer: fill(s.t2A5 || '{h} h less triage ({p}%) · {f}% of the cases need immediate action.', { h: fmtNum(Math.round(effort.savedH)), p: fmtDec(effort.savedPct * 100, 0), f: fmtDec(effort.focusPct * 100, 0) }),
+        note: [fill(p.custom ? (s.t2N5Custom || 'Estimate: real counts from the API; times are premises set by the SE — triage {a} min per alert or per case; investigation per case {ch} min Critical/High, {m} min Medium, {l} min Low (the same with and without correlation); {mh} h per analyst-month.') : (s.t2N5 || 'Estimate: real counts from the API; times are default premises — triage {a} min per alert or per case; investigation per case {ch} min Critical/High, {m} min Medium, {l} min Low (the same with and without correlation); {mh} h per analyst-month.'),
+          { a: fmtDec(p.alertMin), ch: fmtDec(p.critHighMin), m: fmtDec(p.mediumMin), l: fmtDec(p.lowMin), mh: fmtDec(p.monthHours) }), notices].filter(Boolean).join(' ') + capped,
       })
     }
     return { questions: q, funnel, top, matrix, response, effort }

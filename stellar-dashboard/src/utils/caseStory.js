@@ -183,20 +183,43 @@ export function responseScorecard({ critHigh, caseStats, targets = SOC_TARGETS }
 }
 
 // ─── 5. Effort avoided ────────────────────────────────────────────────────────
-// Without correlation every alert is triaged on its own; with the platform the team
-// works cases, with a time per severity. Estimate only: depends on the premises.
+// Same work on both sides, so the comparison is fair in every environment:
+//   triage        — without correlation every alert is triaged on its own; with the
+//                   platform each case is triaged once (alertMin per item)
+//   investigation — the cases still have to be investigated with or without the
+//                   platform (critHighMin / mediumMin / lowMin per case): equal on both
+// saved = (alerts − cases) × alertMin, never negative. Counts are real (API); the
+// minutes are premises — the API records no analyst effort, only timestamps.
+// focusPct: share of the cases that need immediate action (Critical/High) — the
+// prioritization value, strong where correlation is low (≈1 alert per case).
 export function effortEstimate({ alerts, critHigh, medium, low }, p = EFFORT_DEFAULTS) {
   if (!alerts) return null
-  const withoutH = alerts * p.alertMin / 60
-  const withH    = (critHigh * p.critHighMin + medium * p.mediumMin + low * p.lowMin) / 60
-  const savedH   = Math.max(0, withoutH - withH)
+  const cases          = critHigh + medium + low
+  const triageWithoutH = alerts * p.alertMin / 60
+  const triageWithH    = cases * p.alertMin / 60
+  const invH           = (critHigh * p.critHighMin + medium * p.mediumMin + low * p.lowMin) / 60
+  const savedH         = Math.max(0, triageWithoutH - triageWithH)
   return {
-    alerts, cases: critHigh + medium + low, critHigh,
-    withoutH, withH, savedH,
-    savedPct:   withoutH ? savedH / withoutH : 0,
-    withoutFte: withoutH / p.monthHours,
-    withFte:    withH / p.monthHours,
+    alerts, cases, critHigh, medium, low,
+    triageWithoutH, triageWithH, invH, savedH,
+    withoutH:   triageWithoutH + invH,        // total analyst hours without correlation
+    withH:      triageWithH + invH,           // total with Stellar Cyber (triage of cases + investigation)
+    savedPct:   triageWithoutH ? savedH / triageWithoutH : 0,   // share of the manual triage removed
     savedFte:   savedH / p.monthHours,
+    withFte:    (triageWithH + invH) / p.monthHours,
+    focusPct:   cases ? critHigh / cases : 0,
     premises:   p,
+  }
+}
+
+// Notices that tell the reader how far the effort numbers can be trusted.
+//   small        — fewer than SMALL_SAMPLE cases in the period
+//   concentrated — the 5 largest cases hold more than half of the alerts
+export const SMALL_SAMPLE = 30
+export function effortFlags({ cases, alerts, top5Alerts }) {
+  return {
+    small:        cases < SMALL_SAMPLE,
+    concentrated: alerts > 0 && top5Alerts / alerts > 0.5,
+    top5Pct:      alerts > 0 ? top5Alerts / alerts : 0,
   }
 }

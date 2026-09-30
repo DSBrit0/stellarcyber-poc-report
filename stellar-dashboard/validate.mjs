@@ -445,7 +445,7 @@ async function validateExecutiveStory(token) {
 
     // Q5 effort (default premises)
     const e = effortEstimate({ alerts: caseStats.alerts, critHigh: critHigh.length, medium: totals.Medium, low: totals.Low }, effortPremises({}))
-    e.cases === total ? ok('Q5 esforço', `${Math.round(e.withoutH)} h sem correlação → ${Math.round(e.withH)} h com cases | ${Math.round(e.savedH)} h evitadas (${Math.round(e.savedPct * 100)}%)`)
+    e.cases === total && e.savedH >= 0 ? ok('Q5 esforço', `${Math.round(e.withoutH)} h sem correlação → ${Math.round(e.withH)} h com Stellar (investigação ${Math.round(e.invH)} h igual nos dois) | ${Math.round(e.savedH)} h de triagem evitadas (${Math.round(e.savedPct * 100)}%) | ${Math.round(e.focusPct * 100)}% exigem ação`)
       : fail('Q5 cases ≠ total', `${e.cases} vs ${total}`)
   } catch (e) {
     fail('Erro na validação da 4.1', e.message)

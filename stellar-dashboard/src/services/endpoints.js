@@ -31,6 +31,7 @@ export const HTTP = {
 export const PAGING = {
   CASES_PAGE:      500,
   CASES_MAX:       5_000,  // teto por severidade (10 páginas)
+  CASES_SAFE_SKIP: 1_000,  // acima disso a janela de tempo é dividida (a API responde 500 com skip alto em alguns tenants)
   MEDIUM_TOP:      100,
   CASE_STATS_MAX:   10000, // todos os cases do período para as estatísticas (fetchCaseStats)
   CASE_ALERTS_PAGE: 50,

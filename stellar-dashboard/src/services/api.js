@@ -15,6 +15,42 @@ function handleError(err, endpoint) {
 function dayStart(dateStr) { return new Date(dateStr).getTime() }
 function dayEnd(dateStr)   { return new Date(dateStr).getTime() + 86_399_999 }
 
+// ─── Case paging by time window ────────────────────────────────────────────────
+// Some tenants answer /cases with HTTP 500 once `skip` goes past ~1,000 (seen on a
+// real tenant at every page size: 1,000–1,300 rows). Deep skips are never needed:
+// the range is split in halves until each window holds at most PAGING.CASES_SAFE_SKIP
+// cases, and each window is paged with small skips. Newest window first, so a cap
+// keeps the most recent cases. `params` carries tenantid / severity / sort.
+async function casesInRange(client, params, from, to, cap = Infinity) {
+  const out = []
+  const page = (a, b, skip) => client.get(ENDPOINTS.CASES, {
+    params: { ...params, 'FROM~created_at': a, 'TO~created_at': b, limit: PAGING.CASES_PAGE, skip },
+    timeout: 90_000,
+  }).then(res => ({ cases: res.data?.data?.cases ?? [], total: res.data?.data?.total ?? 0 }))
+
+  async function walk(a, b) {
+    if (out.length >= cap) return
+    const first = await page(a, b, 0)
+    if (first.total > PAGING.CASES_SAFE_SKIP && b - a > 60_000) {
+      const mid = Math.floor((a + b) / 2)
+      await walk(mid + 1, b)          // newer half first
+      await walk(a, mid)
+      return
+    }
+    out.push(...first.cases)
+    for (let skip = first.cases.length; skip < first.total && out.length < cap; skip += PAGING.CASES_PAGE) {
+      const next = await page(a, b, skip)
+      if (next.cases.length === 0) break
+      out.push(...next.cases)
+    }
+  }
+  await walk(from, to)
+  // a case created exactly on a split boundary cannot repeat (windows do not overlap),
+  // but keep the list unique anyway
+  const seen = new Set()
+  return out.filter(c => { const id = c._id || c.id; if (seen.has(id)) return false; seen.add(id); return true }).slice(0, cap)
+}
+
 // ─── Cases ────────────────────────────────────────────────────────────────────
 // GET /connect/api/v1/cases — o período do POC vai no servidor via FROM~created_at /
 // TO~created_at (epoch ms). Sem esses filtros a API devolve só as últimas ~24h.
@@ -43,6 +79,11 @@ export async function fetchCases(auth, { pocStartDate, pocEndDate } = {}) {
         }))
 
     async function all(severity) {
+      if (pocStartDate && pocEndDate) {
+        const { 'FROM~created_at': _f, 'TO~created_at': _t, ...rest } = base
+        const found = await casesInRange(client, { ...rest, severity }, dayStart(pocStartDate), dayEnd(pocEndDate), PAGING.CASES_MAX)
+        return found
+      }
       const first = await page(severity, PAGING.CASES_PAGE)
       const cases = [...first.cases]
       const max   = Math.min(first.total, PAGING.CASES_MAX)
@@ -119,14 +160,16 @@ export async function fetchCaseStats(auth, { pocStartDate, pocEndDate } = {}) {
       .then(res => ({ cases: res.data?.data?.cases ?? [], total: res.data?.data?.total ?? 0 }))
 
     const first = await page(0)
-    const want  = Math.min(first.total, PAGING.CASE_STATS_MAX)
-    const skips = []
-    for (let skip = PAGING.CASES_PAGE; skip < want; skip += PAGING.CASES_PAGE) skips.push(skip)
-    const rest  = []
-    for (let i = 0; i < skips.length; i += 4) {           // 4 pages at a time
-      rest.push(...(await Promise.all(skips.slice(i, i + 4).map(page))))
+    let all
+    if (pocStartDate && pocEndDate) {
+      const { 'FROM~created_at': _f, 'TO~created_at': _t, limit: _l, ...rest } = base
+      all = await casesInRange(client, rest, dayStart(pocStartDate), dayEnd(pocEndDate), PAGING.CASE_STATS_MAX)
+    } else {
+      const want  = Math.min(first.total, PAGING.CASE_STATS_MAX)
+      const pages = [first]
+      for (let skip = PAGING.CASES_PAGE; skip < want; skip += PAGING.CASES_PAGE) pages.push(await page(skip))
+      all = pages.flatMap(p => p.cases)
     }
-    const all = [first, ...rest].flatMap(p => p.cases)
     if (all.length === 0) return null
 
     const byStatus = {}, byResolution = {}
@@ -140,7 +183,9 @@ export async function fetchCaseStats(auth, { pocStartDate, pocEndDate } = {}) {
       if (c.closed > 0 && c.created_at > 0 && c.closed >= c.created_at) closeH.push((c.closed - c.created_at) / 3_600_000)
       if (c.acknowledged > 0 && c.created_at > 0 && c.acknowledged >= c.created_at) ackMin.push((c.acknowledged - c.created_at) / 60_000)
     }
+    const sizes = all.map(c => Number(c.size) || 0).sort((a, b) => b - a)
     const stats = {
+      top5Alerts:      sizes.slice(0, 5).reduce((t, v) => t + v, 0),   // alerts in the 5 largest cases
       cases:           all.length,
       total:           first.total,               // > cases when the cap was reached
       alerts,
