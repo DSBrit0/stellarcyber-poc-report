@@ -11,8 +11,9 @@ Este documento cobre o primeiro deploy, a configuração do Nginx com HTTPS e o 
 3. [Configurar Nginx + HTTPS](#3-configurar-nginx--https)
 4. [Atualizar o Dashboard](#4-atualizar-o-dashboard)
 5. [Arquitetura do Servidor](#5-arquitetura-do-servidor)
-6. [Alterar Domínio](#6-alterar-domínio)
-7. [Troubleshooting](#7-troubleshooting)
+6. [Alterar a config do Nginx](#6-alterar-a-config-do-nginx)
+7. [Alterar Domínio](#7-alterar-domínio)
+8. [Troubleshooting](#8-troubleshooting)
 
 ---
 
@@ -23,17 +24,21 @@ Este documento cobre o primeiro deploy, a configuração do Nginx com HTTPS e o 
 | Item | Versão mínima | Verificar |
 |---|---|---|
 | Ubuntu / Debian | 20.04 / 11 | `lsb_release -a` |
-| Node.js | 18+ | `node -v` |
+| Node.js | 20.19+ ou 22.12+ (exigido pelo Vite 8) | `node -v` |
 | npm | 9+ | `npm -v` |
 | PM2 | qualquer | `pm2 -v` |
 | Git | qualquer | `git --version` |
 
-**Instalar Node.js e PM2** (se necessário):
+**Instalar Node.js (via nvm) e PM2** (se necessário):
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-sudo npm install -g pm2
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc
+nvm install 22
+npm install -g pm2
 ```
+
+> **nvm e SSH não interativo:** o `node` e o `pm2` só entram no `PATH` em shell de login. Comandos remotos precisam de `bash -lic "…"`, por exemplo:
+> `ssh <host> 'bash -lic "cd ~/stellarcyber-poc-report/stellar-dashboard && bash update.sh"'`
 
 ### DNS
 
@@ -79,7 +84,9 @@ pm2 save
 
 ## 3. Configurar Nginx + HTTPS
 
-Execute apenas uma vez por servidor. Pode ser rerrodado com segurança.
+Execute apenas uma vez por servidor. O script é idempotente, mas **mexe no ufw** (veja abaixo): para só alterar a config do Nginx num servidor já configurado, use a [seção 6](#6-alterar-a-config-do-nginx) em vez de rerodar o setup.
+
+Alternativa: `bash deploy.sh` abre um menu (opção 1 = Nginx + SSL, opção 2 = atualizar); `bash deploy.sh 1` / `bash deploy.sh 2` pulam o menu.
 
 ```bash
 cd ~/stellarcyber-poc-report/stellar-dashboard
@@ -121,7 +128,7 @@ Fase 1 — HTTP
   └── certbot certonly --webroot → obtém certificado
 
 Fase 2 — HTTPS
-  ├── Gera config SSL a partir de nginx.conf.template
+  ├── Gera config SSL a partir de nginx.conf.template (HTTP/2 ativo)
   ├── nginx -t → reload
   └── Configura renovação automática (certbot.timer ou cron 03:00)
 ```
@@ -147,6 +154,8 @@ curl -I https://stellarcyber.sekuritylab.com
 # Deve retornar: HTTP/2 200
 ```
 
+> **Por que HTTP/2?** O Sync busca centenas de páginas de alerts dos cases. Com HTTP/1.1 o navegador abre só 6 conexões por host; com HTTP/2 o app detecta o protocolo e sobe para 16 requisições em paralelo (Sync ~2× mais rápido). A sintaxe `listen 443 ssl http2;` é do nginx 1.24; a partir do 1.25.1 o equivalente é uma linha separada `http2 on;`.
+
 ---
 
 ## 4. Atualizar o Dashboard
@@ -158,6 +167,8 @@ cd ~/stellarcyber-poc-report/stellar-dashboard
 bash update.sh
 ```
 
+> **`package-lock.json` local:** o `npm install` no servidor reescreve o lockfile. Se o `git pull` falhar porque o lockfile do repositório mudou, rode `git stash` (ou `git checkout -- package-lock.json`) e repita o `update.sh`.
+
 ### O que o script faz (em ordem)
 
 ```
@@ -166,11 +177,12 @@ npm install                   ← app ainda rodando, Nginx OK
 npm run build                 ← app ainda rodando, Nginx OK
 verifica dist/index.html      ← falha aqui se o build quebrou
 pm2 restart --update-env      ← ~3s de downtime (Nginx: 502 momentâneo)
-health check (15 tentativas)  ← confirma que o Nginx voltou a rotear OK
+pm2 save
+health check (30 tentativas)  ← GET /health a cada 1s até o app responder
 ```
 
 > **Por que não há `pm2 stop` antes do build?**
-> O script antigo parava o app antes de rodar `npm install` + `npm run build`, causando 1-3 minutos de downtime (502 no Nginx). Na versão atual, o app só para durante o `pm2 restart`, reduzindo o downtime para ~3 segundos.
+> O script antigo parava o app antes de rodar `npm install` + `npm run build`, causando 1-3 minutos de downtime (502 no Nginx). Na versão atual, o app só para durante o `pm2 restart`, reduzindo o downtime para ~3 segundos. No SIGTERM o `server.js` fecha as conexões keep-alive do Nginx (`closeAllConnections()`) antes do `server.close()`, o que evita `EADDRINUSE` no restart.
 
 ### Saída esperada
 
@@ -182,7 +194,7 @@ health check (15 tentativas)  ← confirma que o Nginx voltou a rotear OK
 ==> Reiniciando aplicação...
 ==> Salvando estado do PM2...
 ==> Verificando resposta do servidor (porta 8080)...
-==> App respondendo OK  (tentativa 2/15)
+==> App respondendo OK  (tentativa 2/30)
 
   status    │ online
   restarts  │ 1
@@ -204,7 +216,7 @@ Internet
 │  /etc/nginx/sites-available/    │
 │  stellarcyber.sekuritylab.com   │
 │                                 │
-│  ├── SSL termination            │
+│  ├── SSL termination + HTTP/2   │
 │  ├── HTTP → HTTPS redirect      │
 │  └── Security headers           │
 └──────────────┬──────────────────┘
@@ -217,6 +229,9 @@ Internet
 │  ├── Serve dist/ (React SPA)    │
 │  ├── GET /health                │
 │  └── /proxy/* → Stellar Cyber   │
+│      (só https, só              │
+│       /connect/api/v1/, bloqueia│
+│       IPs internos)             │
 └─────────────────────────────────┘
                │ HTTPS (X-Proxy-Target)
                ▼
@@ -229,7 +244,7 @@ Internet
 |---|---|---|
 | 80 | Nginx | Sim (redireciona para 443) |
 | 443 | Nginx | Sim (HTTPS) |
-| 8080 | Node.js | **Não** (bloqueado pelo ufw) |
+| 8080 | Node.js | **Não** (`HOST=127.0.0.1`; o setup também bloqueia no ufw, se ativo) |
 
 **Arquivos gerados pelo setup:**
 
@@ -242,7 +257,20 @@ Internet
 
 ---
 
-## 6. Alterar Domínio
+## 6. Alterar a config do Nginx
+
+Num servidor já configurado, edite a config gerada direto, em vez de rerodar o `setup-nginx.sh`. O setup roda `ufw allow` / `ufw deny`, e o firewall do host de produção não deve ser alterado: há outros serviços rodando nele.
+
+```bash
+sudo nano /etc/nginx/sites-available/<domínio>
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Leve a mesma mudança para o `nginx.conf.template`, para que um setup futuro gere a mesma config.
+
+---
+
+## 7. Alterar Domínio
 
 Para usar um domínio diferente (outros analistas que clonam o projeto):
 
@@ -262,7 +290,7 @@ O script salva o domínio no `.env` automaticamente. Na próxima execução, o v
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 ### Nginx retorna 502 Bad Gateway
 
@@ -313,7 +341,7 @@ tail -f /var/log/nginx/access.log # acessos
 
 ### Rerodar o setup do Nginx
 
-O script detecta que o certificado já existe e pula a Fase 1 (não pede novo certificado).
+O script detecta que o certificado já existe e pula a Fase 1 (não pede novo certificado). Ele também aplica as regras do ufw: no host de produção, prefira a [seção 6](#6-alterar-a-config-do-nginx).
 
 ```bash
 sudo bash setup-nginx.sh
